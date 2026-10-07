@@ -20,6 +20,8 @@ test('LAN room allows two players, forwards messages and rejects unauthenticated
     await post('/api/message', { token: host.token, message: { type: 'snapshot', value: 123 } });
     const received = new TextDecoder().decode((await reader.read()).value);
     assert.ok(received.includes('123'));
+    // EventSource only delivers an event once it is closed by a real blank line.
+    assert.ok(received.endsWith('\n\n'));
     controller.abort();
     await post('/api/leave', { token: host.token });
     assert.equal((await post('/api/join', { code: host.code })).status, 404);

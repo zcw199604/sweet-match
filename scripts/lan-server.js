@@ -4,7 +4,7 @@ const rooms = new Map();
 const json = (response, status, body) => { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); response.end(JSON.stringify(body)); };
 const code = () => randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
 const read = async (request) => { let text = ''; for await (const chunk of request) text += chunk; try { return JSON.parse(text || '{}'); } catch { return {}; } };
-function announce(room, message, except) { for (const client of room.clients) if (client.token !== except) { client.response.write(`data: ${JSON.stringify(message)}\\n\\n`); } }
+function announce(room, message, except) { for (const client of room.clients) if (client.token !== except) { client.response.write(`data: ${JSON.stringify(message)}\n\n`); } }
 export function createArcadeServer() {
   return createServer(async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
@@ -33,7 +33,7 @@ export function createArcadeServer() {
       const room = [...rooms.values()].find(item => item.host === url.searchParams.get('token') || item.guest === url.searchParams.get('token'));
       if (!room) return json(response, 401, { error: '无效令牌' });
       response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive', 'access-control-allow-origin': '*' });
-      const client = { token: url.searchParams.get('token'), response }; room.clients.add(client); response.write(': connected\\n\\n');
+      const client = { token: url.searchParams.get('token'), response }; room.clients.add(client); response.write(': connected\n\n');
       request.on('close', () => room.clients.delete(client)); return;
     }
     if (url.pathname === '/health') return json(response, 200, { ok: true, rooms: rooms.size });
