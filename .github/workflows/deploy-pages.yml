@@ -60,6 +60,14 @@ jobs:
             exit 1
           fi
 
+      - name: Create Pages project when missing
+        uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create "${{ env.CLOUDFLARE_PAGES_PROJECT }}" --production-branch "${{ github.ref_name }}"
+
       - name: Deploy static site
         id: deploy-pages
         uses: cloudflare/wrangler-action@v3
