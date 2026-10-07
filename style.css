@@ -4,3 +4,17 @@
 @media(orientation:landscape) and (max-height:600px){.home-hero{min-height:320px}.game-nav{height:80px}.stage{min-height:calc(100vh - 110px)}}
 
 .server-url{display:block;color:var(--muted);font-size:11px;margin-bottom:12px}.server-url input{display:block;width:min(520px,100%);margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;font:11px "DM Mono"}
+
+/* Game stage: the whole board and its controls stay on one screen, in either orientation. */
+.canvas-wrap{width:min(100%,860px,max(260px,calc(100vh - 330px)));width:min(100%,860px,max(260px,calc(100dvh - 330px)))}
+.stage{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.game-canvas{-webkit-tap-highlight-color:transparent}
+.mobile-controls button{touch-action:manipulation;padding:0 16px}
+.mobile-controls button:disabled{opacity:.4}
+.mobile-controls .beat{min-width:150px;min-height:58px;background:#58d4de30;border-color:#58d4de;font-size:16px}
+.mobile-controls .player-toggle{background:transparent;color:#aeb5c4}
+body.playing{overscroll-behavior:none}
+@media(max-width:800px){body.playing .topbar,body.playing footer{display:none}body.playing main{padding:0 10px}.stage{min-height:0;padding-bottom:max(14px,env(safe-area-inset-bottom))}.canvas-wrap{width:min(100%,max(260px,calc(100vh - 290px)));width:min(100%,max(260px,calc(100dvh - 290px)))}.mobile-controls{gap:8px}.mobile-controls button{min-width:0;flex:1 1 30%}.mobile-controls .player-toggle{flex-basis:100%;min-height:38px}}
+@media(orientation:landscape) and (max-height:600px){body.playing .topbar,body.playing footer{display:none}body.playing main{padding:0 max(10px,env(safe-area-inset-left))}.game-nav{height:48px}.game-name h1{font-size:17px;margin:0}.game-name span{display:none}.stage{min-height:0;padding:10px;display:grid;grid-template-columns:auto minmax(150px,1fr);grid-template-rows:auto auto 1fr;column-gap:14px}.canvas-wrap{grid-column:1;grid-row:1/4;margin:0;width:max(200px,calc(100vh - 78px));width:max(200px,calc(100dvh - 78px))}.stage-top{grid-column:2;flex-direction:column;align-items:flex-start;gap:8px}.mobile-controls{grid-column:2;justify-content:flex-start;margin-top:0}.mobile-controls button{flex:1 1 40%}.game-help{grid-column:2;text-align:left;align-self:start}}
+.stage-top>div{min-width:0}.stage-top span{display:block;margin-bottom:3px}.stage-top button{flex:none;white-space:nowrap}
+@media(max-width:800px){.stage-top strong{font-size:15px}}
