@@ -10,7 +10,7 @@ import {
 } from './themes.js';
 
 const MODE_META = {
-  pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；别让任何彩球碰到中间的星球。' },
+  pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；飞船可以直接穿过星球，但彩球碰到星球就失败。' },
   pop3: { label: 'ARCADE 02', title: '泡噗 3', help: '拖动飞船接住落下的音符，三个同色相连消除。漏掉的音符会让底部的怪鼠上升，消除能把它压回去；跟着光圈点「打拍」累积连击倍率。' },
   surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' }
 };
@@ -205,7 +205,7 @@ const newGame = () => createGame(mode, (Date.now() ^ Math.floor(Math.random() * 
 // the current theme actually put on the board.
 function pop2Help() {
   const skin = themeById(theme);
-  return `拖动屏幕驾驶${skin.craftName}，接住飘来的${skin.pieceName}。三个同色相连就会消除，挂在上面的也一起掉；别让任何${skin.pieceName}碰到中间的${skin.baseName}。`;
+  return `拖动屏幕驾驶${skin.craftName}，接住飘来的${skin.pieceName}。三个同色相连就会消除，挂在上面的也一起掉；${skin.craftName}可以直接飞过${skin.baseName}，但飘来的和挂在身上的${skin.pieceName}碰到${skin.baseName}都会失败。`;
 }
 function stageHelp() { return mode === 'pop2' ? pop2Help() : MODE_META[mode].help; }
 
@@ -417,8 +417,11 @@ function renderPop2(ctx) {
   const ball = (x, y, color, radius, alpha = 1) => drawBall(ctx, x, y, color, radius, alpha, shades, paint);
   drawThemeBackdrop(ctx, skin.backdrop, WIDTH, HEIGHT, t);
 
-  // The base flares once anything loose drifts close to it.
-  const threat = state.balls.some(item => Math.hypot(item.x - CX, item.y - CY) < HOME_R + R + 70);
+  // The base flares once anything loose — or anything stuck to a ship, now that
+  // a ship may fly over the base — drifts close to it.
+  const near = (x, y) => Math.hypot(x - CX, y - CY) < HOME_R + R + 70;
+  const threat = state.balls.some(item => near(item.x, item.y))
+    || state.players.some(p => Object.keys(p.cells).some(cell => { const o = hexOffset(...cell.split(',').map(Number)); return near(p.x + o.x, p.y + o.y); }));
   drawThemeArena(ctx, skin.arena, CX, CY, ARENA_R + 4, t, threat);
   drawThemeBase(ctx, skin.base, CX, CY, HOME_R, t);
 

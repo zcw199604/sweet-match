@@ -43,13 +43,21 @@ test('泡噗2: balls stick to the ship and a third matching ball clears the chai
   // Three reds plus the blue they carried: 4 balls, worth 100 × 4 × (4 − 2).
   assert.deepEqual(p.cells, {}); assert.equal(state.cleared, 4); assert.equal(state.score, 800);
 });
-test('泡噗2: the ship follows its target but stays inside the arena and off the planet', () => {
+test('泡噗2: the ship follows its target, stays inside the arena and flies over the planet', () => {
   const state = quiet(createGame('pop2', 2, { players: 1 })), p = state.players[0];
   assert.equal(act(state, 0, { type: 'move', x: 5000, y: POP2.CY }), true); run(state, 3);
   assert.ok(Math.abs(Math.hypot(p.x - POP2.CX, p.y - POP2.CY) - POP2.ARENA_R) < 1);
+  // The planet is no longer solid: an empty ship crosses it instead of going around.
   act(state, 0, { type: 'move', x: POP2.CX, y: POP2.CY }); run(state, 3);
-  assert.ok(Math.hypot(p.x - POP2.CX, p.y - POP2.CY) >= POP2.HOME_R + POP2.SHIP_R);
+  assert.ok(Math.hypot(p.x - POP2.CX, p.y - POP2.CY) < 1);
   assert.equal(state.phase, 'playing');
+});
+test('泡噗2: a ball stuck to the ship that touches the planet ends the round', () => {
+  const state = quiet(createGame('pop2', 4, { players: 1 })), p = state.players[0];
+  ballAt(state, p, 1, 0, 'red'); tickGame(state);
+  assert.deepEqual(p.cells, { '1,0': 'red' });
+  act(state, 0, { type: 'move', x: POP2.CX, y: POP2.CY }); run(state, 3);
+  assert.equal(state.phase, 'lost');
 });
 test('泡噗2: any ball reaching the planet ends the round', () => {
   const state = quiet(createGame('pop2', 3));

@@ -123,18 +123,12 @@ function movePop2Ship(p, dt) {
   const dx = p.tx - p.x, dy = p.ty - p.y, distance = Math.hypot(dx, dy);
   if (distance < 0.5) return;
   const step = Math.min(distance, POP2.SPEED * dt), nx = p.x + dx / distance * step, ny = p.y + dy / distance * step;
-  // The planet is solid: neither the ship nor its cargo may be steered into it.
-  const fits = (x, y) => {
-    const ship = fromHome(x, y);
-    if (ship > POP2.ARENA_R || (ship < POP2.HOME_R + POP2.SHIP_R + 4 && ship < fromHome(p.x, p.y))) return false;
-    for (const cell of Object.keys(p.cells)) {
-      const o = hexOffset(...unkey(cell)), d = fromHome(x + o.x, y + o.y);
-      if (d < POP2.HOME_R + POP2.R + 2 && d < fromHome(p.x + o.x, p.y + o.y)) return false;
-    }
-    return true;
-  };
+  // The planet is not solid for the ship itself, so the ship flies straight over
+  // the base instead of swinging around it. Whatever is stuck to the hull is a
+  // different matter: touching the base with it ends the round — see tickPop2.
+  const fits = (x, y) => fromHome(x, y) <= POP2.ARENA_R;
   if (fits(nx, ny)) { p.x = nx; p.y = ny; return; }
-  // Blocked by the planet: swing around it on whichever side ends up nearer the target.
+  // Held back by the arena rim: slide along it on whichever side ends up nearer the target.
   const heading = Math.atan2(dy, dx);
   for (const turn of [0.9, 1.5]) {
     const sides = [turn, -turn].map(angle => ({ x: p.x + Math.cos(heading + angle) * step, y: p.y + Math.sin(heading + angle) * step }))
@@ -154,10 +148,7 @@ function touchesPop2(p, ball) {
 function dockPop2(state, p, ball) {
   const [q, r] = dockingCell(p.cells, HEX_DIRS, (a, b) => { const o = hexOffset(a, b); return Math.hypot(ball.x - p.x - o.x, ball.y - p.y - o.y); });
   const spot = hexOffset(q, r), cleared = attachToCluster(p.cells, q, r, ball.color, HEX_DIRS);
-  if (!cleared.length) {
-    if (fromHome(p.x + spot.x, p.y + spot.y) < POP2.HOME_R + POP2.R * 0.8) state.phase = 'lost';
-    return;
-  }
+  if (!cleared.length) return;
   // Big clears are worth far more than the same balls popped three at a time.
   const count = cleared.length, gain = 100 * count * Math.max(1, count - 2);
   state.score += gain; state.cleared += count;
@@ -179,6 +170,18 @@ function tickPop2(state, dt) {
     if (home < 640 || ball.vx * (POP2.CX - ball.x) + ball.vy * (POP2.CY - ball.y) > 0) kept.push(ball);
   }
   state.balls = kept;
+  // The ship may cross the base, but nothing stuck to it may: a ball on the hull
+  // that touches the planet still ends the round.
+  for (const p of state.players) {
+    for (const cell of Object.keys(p.cells)) {
+      const o = hexOffset(...unkey(cell));
+      if (fromHome(p.x + o.x, p.y + o.y) < POP2.HOME_R + POP2.R * 0.8) {
+        state.phase = 'lost';
+        effect(state, { type: 'pop', x: p.x + o.x, y: p.y + o.y, color: p.cells[cell] });
+        return;
+      }
+    }
+  }
 }
 
 // --- 泡噗 3 ---
