@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SHADES } from '../art.js';
 import { BLAST_SHAPES } from '../blast-shapes.js';
-import { act, BLAST, BLAST_COLORS, blastCanPlace, blastCellAt, blastCellCentre, blastHasValidPlacement, blastMultiplier, blastSnap, createGame, tickGame } from '../game-core.js';
+import { act, BLAST, BLAST_COLORS, blastCanPlace, blastCellAt, blastCellCentre, blastHasValidPlacement, blastMultiplier, blastPreviewLines, blastSnap, createGame, tickGame } from '../game-core.js';
 
 const run = (state, seconds) => { for (let t = 0; t < seconds; t += 1 / 60) tickGame(state, 1 / 60); };
 // Replace a tray slot with a hand-built piece so a test can place an exact shape.
@@ -108,6 +108,46 @@ test('a row and a column clearing together count the crossing cell once', () => 
   assert.equal(state.cleared, 2); assert.equal(state.score, 190);
   assert.equal(state.board[3][3], null);
   assert.equal(pops(state), 15, '8 + 8 cells minus the shared crossing cell');
+});
+
+test('the drag preview names exactly the lines a placement would clear', () => {
+  const state = createGame('blast', 5);
+  for (let col = 0; col < 8; col += 1) if (col !== 3) state.board[3][col] = 'coral';
+  for (let row = 0; row < 8; row += 1) if (row !== 3) state.board[row][3] = 'coral';
+  const dot = shape([0, 0]);
+  assert.deepEqual(blastPreviewLines(state, dot, 3, 3), { rows: [3], cols: [3] });
+  assert.deepEqual(blastPreviewLines(state, dot, 0, 0), { rows: [], cols: [] }, 'a quiet spot clears nothing');
+  assert.deepEqual(blastPreviewLines(state, dot, 2, 3), { rows: [], cols: [] }, 'an occupied spot previews nothing');
+  const before = structuredClone(state.board);
+  blastPreviewLines(state, dot, 3, 3);
+  assert.deepEqual(state.board, before, 'previewing never touches the board');
+  one(state, 0, 'amber'); place(state, 0, 3, 3);
+  assert.equal(state.cleared, 2, 'the preview agreed with the real clear');
+});
+
+test('a clear tells the view where the piece landed and how to animate it', () => {
+  const state = createGame('blast', 5);
+  for (let col = 0; col < 7; col += 1) state.board[0][col] = 'coral';
+  one(state, 0, 'cyan');
+  place(state, 0, 7, 0);
+  const landed = state.effects.find(item => item.type === 'place');
+  assert.deepEqual(landed.cells, [{ col: 7, row: 0 }]); assert.equal(landed.color, 'cyan');
+  assert.deepEqual(state.effects.filter(item => item.type === 'line').map(item => [item.axis, item.index]), [['row', 0]]);
+  const bursts = state.effects.filter(item => item.type === 'pop');
+  assert.ok(bursts.every(item => item.color === 'cyan'), 'cleared cells burst in the placed colour');
+  const delayOf = (col) => bursts.find(item => item.x === blastCellCentre(col, 0).x).delay;
+  assert.equal(delayOf(7), 0, 'the ripple starts under the placed piece');
+  assert.ok(delayOf(0) > delayOf(4) && delayOf(4) > delayOf(6), 'and spreads outward from it');
+  const text = state.effects.find(item => item.type === 'text');
+  assert.equal(text.lines, 1); assert.equal(text.streak, 1);
+});
+
+test('the tray records when each fresh triple was dealt', () => {
+  const state = createGame('blast', 5);
+  assert.equal(state.dealtAt, 0);
+  run(state, 0.5);
+  for (let slot = 0; slot < 3; slot += 1) { one(state, slot); place(state, slot, slot * 2, 7); }
+  assert.ok(Math.abs(state.dealtAt - state.elapsed) < 1e-9, 'the refill is stamped with the current time');
 });
 
 test('consecutive clearing moves raise the multiplier, a quiet move resets it', () => {

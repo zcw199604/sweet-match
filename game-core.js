@@ -41,7 +41,7 @@ export const SURGE = {
 export const BLAST = {
   COLS: 8, ROWS: 8, CELL: 60,
   LEFT: 120, TOP: 104,                 // the board spans 120..600 × 104..584
-  TRAY_Y: 648, TRAY_CELL: 36,          // the tray band is 584..720
+  TRAY_Y: 648, TRAY_CELL: 30,          // the tray band is 584..720
   TRAY_SLOT_X: [168, 360, 552], TRAY_SLOT_W: 176, TRAY_SLOT_H: 116,
   STREAK_STEP: 0.05,
   // The drop cell is tried first, then its eight neighbours, as [dcol, drow].
@@ -504,6 +504,28 @@ export function blastHasValidPlacement(state, cells) {
   for (let row = 0; row < BLAST.ROWS; row += 1) for (let col = 0; col < BLAST.COLS; col += 1) if (blastCanPlace(state, cells, col, row)) return true;
   return false;
 }
+// Which rows and columns are full once `filled(col, row)` says so. Shared by the
+// clear itself and the drag preview, so the highlighted lines are the ones that go.
+function blastFullLines(filled) {
+  const rows = [], cols = [];
+  for (let row = 0; row < BLAST.ROWS; row += 1) {
+    let full = true;
+    for (let col = 0; col < BLAST.COLS && full; col += 1) full = filled(col, row);
+    if (full) rows.push(row);
+  }
+  for (let col = 0; col < BLAST.COLS; col += 1) {
+    let full = true;
+    for (let row = 0; row < BLAST.ROWS && full; row += 1) full = filled(col, row);
+    if (full) cols.push(col);
+  }
+  return { rows, cols };
+}
+// The lines a placement at (col, row) would clear, without touching the board.
+export function blastPreviewLines(state, cells, col, row) {
+  if (!blastCanPlace(state, cells, col, row)) return { rows: [], cols: [] };
+  const added = new Set(cells.map(cell => (row + cell.dy) * BLAST.COLS + col + cell.dx));
+  return blastFullLines((c, r) => Boolean(state.board[r][c]) || added.has(r * BLAST.COLS + c));
+}
 // Draw order is a contract: shape then colour, slots 0→1→2. Changing it later is
 // not a determinism bug, but it silently re-deals every seed.
 function refillTray(state) {
@@ -511,16 +533,14 @@ function refillTray(state) {
     const shape = pick(state, BLAST_SHAPES), color = pick(state, BLAST_COLORS);
     return { id: state.nextId++, name: shape.name, cells: shape.cells.map(cell => ({ dx: cell.dx, dy: cell.dy, color })) };
   });
+  // The view deals the new triple in from this moment.
+  state.dealtAt = state.elapsed;
 }
 const COMBO_BONUS = { 1: 20, 2: 30, 3: 40, 4: 50, 5: 60, 6: 70, 7: 80, 8: 90, 9: 100 };
-function clearBlastLines(state) {
-  const rows = [], cols = [];
-  for (let row = 0; row < BLAST.ROWS; row += 1) if (state.board[row].every(Boolean)) rows.push(row);
-  for (let col = 0; col < BLAST.COLS; col += 1) {
-    let full = true;
-    for (let row = 0; row < BLAST.ROWS; row += 1) if (!state.board[row][col]) { full = false; break; }
-    if (full) cols.push(col);
-  }
+// `from` is the placed piece's centre in cell units: the clear ripples outward from
+// it, and the score callout appears there.
+function clearBlastLines(state, from, color) {
+  const { rows, cols } = blastFullLines((col, row) => Boolean(state.board[row][col]));
   const lines = rows.length + cols.length;
   if (!lines) { state.streak = 0; return 0; }
   // Scoring counts lines, but the cells must be deduped: the cell where a cleared
@@ -530,13 +550,20 @@ function clearBlastLines(state) {
   for (const col of cols) for (let row = 0; row < BLAST.ROWS; row += 1) hit.add(row * BLAST.COLS + col);
   for (const index of hit) {
     const row = Math.floor(index / BLAST.COLS), col = index % BLAST.COLS, centre = blastCellCentre(col, row);
-    effect(state, { type: 'pop', x: centre.x, y: centre.y, color: state.board[row][col] });
+    const delay = Math.min(0.24, Math.hypot(col - from.col, row - from.row) * 0.035);
+    // Cleared cells burst in the placed piece's colour, matching the drag preview
+    // that tinted these lines while the piece was held over them.
+    effect(state, { type: 'pop', x: centre.x, y: centre.y, color, delay });
     state.board[row][col] = null;
   }
+  for (const row of rows) effect(state, { type: 'line', axis: 'row', index: row, color });
+  for (const col of cols) effect(state, { type: 'line', axis: 'col', index: col, color });
   state.streak += 1; state.cleared += lines;
   const gain = Math.floor((lines * BLAST.COLS * 10 + (COMBO_BONUS[Math.min(lines, 9)] || 100)) * blastMultiplier(state.streak));
   state.score += gain;
-  effect(state, { type: 'text', x: WIDTH / 2, y: BLAST.TOP + BLAST.ROWS * BLAST.CELL / 2, text: `+${gain}` });
+  // Kept clear of the board's edges so the enlarged callout never spills off it.
+  const at = blastCellCentre(Math.min(5.5, Math.max(1.5, from.col)), Math.min(6, Math.max(1, from.row)));
+  effect(state, { type: 'text', x: at.x, y: at.y, text: `+${gain}`, lines, streak: state.streak });
   return lines;
 }
 function blastIsOver(state) {
@@ -552,9 +579,12 @@ function placeBlastPiece(state, slot, col, row) {
   if (!at) return false;
   for (const cell of piece.cells) state.board[at.row + cell.dy][at.col + cell.dx] = cell.color;
   state.tray[slot] = null;
+  const color = piece.cells[0].color;
+  effect(state, { type: 'place', color, cells: piece.cells.map(cell => ({ col: at.col + cell.dx, row: at.row + cell.dy })) });
+  const width = Math.max(...piece.cells.map(cell => cell.dx)), height = Math.max(...piece.cells.map(cell => cell.dy));
   // Clear before refilling and refill before the game-over check, so the verdict is
   // made against the post-clear board and a full tray.
-  clearBlastLines(state);
+  clearBlastLines(state, { col: at.col + width / 2, row: at.row + height / 2 }, color);
   if (state.tray.every(item => !item)) refillTray(state);
   if (blastIsOver(state)) state.phase = 'lost';
   return true;

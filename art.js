@@ -906,7 +906,7 @@ export function drawStat(ctx, text, x, y, { size = 20, color = '#ffffff', align 
 //
 // No volumes, no faces, no gradients: a tile is a flat slab with a hard highlight
 // bar along the top and a darker band at the bottom, so it reads as a lit arcade
-// button rather than a lump of clay.
+// button rather than a lump of clay, and a soft halo in its own colour makes it neon.
 
 export function drawBlastBackdrop(ctx, w, h, t) {
   backdrop(ctx, 'blast', w, h, (c) => {
@@ -932,33 +932,48 @@ export function drawBlastBackdrop(ctx, w, h, t) {
   ctx.fillStyle = sweep; ctx.fillRect(0, y - 90, w, 180);
 }
 
+// The slab carries a faint cyan halo, so the play area lifts off the backdrop; the
+// sprite is padded to leave the halo room.
 export function drawBlastBoard(ctx, x, y, w, h, cell, cols, rows) {
-  blit(ctx, `blast-board:${cols}x${rows}`, x + w / 2, y + h / 2, w, h, (c) => {
-    const r = 18, inset = 4;
-    // The slab has to sit clearly above the backdrop, and the sockets clearly below
-    // it, or the 8×8 grid disappears into the indigo.
+  const pad = 18;
+  blit(ctx, `blast-board:${cols}x${rows}`, x + w / 2, y + h / 2, w + pad * 2, h + pad * 2, (c) => {
+    const r = 18, inset = 3, k = c.getTransform().a;
+    c.translate(pad, pad);
+    c.save();
+    c.shadowColor = withAlpha('#3fd0e0', .32); c.shadowBlur = 18 * k;
     roundRect(c, 0, 0, w, h, r); c.fillStyle = '#26224e'; c.fill();
+    c.restore();
     c.save(); roundRect(c, 0, 0, w, h, r); c.clip();
-    // One inset socket per cell, so an empty cell still reads as a slot.
+    // One inset socket per cell: darker at the top lip, a touch lighter at the
+    // bottom, so an empty cell reads as a recess rather than a black hole.
     for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
       const sx = col * cell + inset, sy = row * cell + inset, size = cell - inset * 2;
-      roundRect(c, sx, sy, size, size, 10); c.fillStyle = 'rgba(6,5,18,.92)'; c.fill();
-      roundRect(c, sx + 1, sy + 1, size - 2, size - 2, 9); c.strokeStyle = 'rgba(255,255,255,.09)'; c.lineWidth = 1; c.stroke();
+      const g = c.createLinearGradient(0, sy, 0, sy + size);
+      g.addColorStop(0, '#0a0820'); g.addColorStop(1, '#19163d');
+      roundRect(c, sx, sy, size, size, 9); c.fillStyle = g; c.fill();
+      roundRect(c, sx + .5, sy + .5, size - 1, size - 1, 8.5); c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 1; c.stroke();
     }
     c.restore();
     roundRect(c, 1, 1, w - 2, h - 2, r - 1);
-    c.strokeStyle = withAlpha('#3fd0e0', .6); c.lineWidth = 2; c.stroke();
+    c.strokeStyle = withAlpha('#3fd0e0', .65); c.lineWidth = 2; c.stroke();
   });
 }
 
-export function drawBlastTile(ctx, x, y, size, color, alpha = 1) {
-  const s = shade(color);
-  ctx.save(); ctx.globalAlpha *= alpha;
+// One cached sprite per colour and size; animation scales and rotates the bitmap
+// rather than asking for a new size, which would churn the shared sprite cache.
+// The sprite is padded for the neon halo baked around the slab.
+export function drawBlastTile(ctx, x, y, size, color, { alpha = 1, scale = 1, flash = 0, angle = 0 } = {}) {
+  if (alpha <= 0 || scale <= 0) return;
+  const s = shade(color), pad = Math.round(size * .3), full = size + pad * 2, r = Math.max(3, size * .22);
   // The `blast:` prefix keeps these from colliding with drawBlock's candy sprites
   // when a size happens to match, and `s.base` invalidates them if the palette moves.
-  blit(ctx, `blast:${color}:${s.base}`, x, y, size, size, (c, w, h) => {
-    const r = Math.max(3, w * .22), top = Math.max(2, h * .15), bottom = Math.max(3, h * .2);
+  const image = sprite(`blast:${color}:${s.base}`, full, full, deviceScale(ctx), (c) => {
+    const w = size, h = size, top = Math.max(2, h * .15), bottom = Math.max(3, h * .2), k = c.getTransform().a;
+    c.translate(pad, pad);
+    c.save();
+    c.shadowColor = withAlpha(s.glow, .55); c.shadowBlur = size * .3 * k;
     roundRect(c, 0, 0, w, h, r); c.fillStyle = s.base; c.fill();
+    c.restore();
     c.save(); roundRect(c, 0, 0, w, h, r); c.clip();
     c.fillStyle = s.light; c.fillRect(0, 0, w, top);
     c.fillStyle = s.dark; c.fillRect(0, h - bottom, w, bottom);
@@ -967,6 +982,100 @@ export function drawBlastTile(ctx, x, y, size, color, alpha = 1) {
     roundRect(c, 3.5, 3.5, w - 7, h - 7, Math.max(2, r - 3));
     c.strokeStyle = withAlpha(s.rim, .32); c.lineWidth = 1; c.stroke();
   });
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.translate(x, y); if (angle) ctx.rotate(angle);
+  const d = full * scale;
+  ctx.drawImage(image, -d / 2, -d / 2, d, d);
+  if (flash > 0) {
+    ctx.globalAlpha *= Math.min(1, flash);
+    roundRect(ctx, -size * scale / 2, -size * scale / 2, size * scale, size * scale, r * scale);
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Where the dragged piece will land: a tinted socket with a solid rim in the
+// piece's own colour, so the preview never clashes with the piece.
+export function drawBlastGhost(ctx, x, y, size, color) {
+  const s = shade(color), r = Math.max(3, size * .22);
+  ctx.save();
+  roundRect(ctx, x - size / 2, y - size / 2, size, size, r);
+  ctx.fillStyle = withAlpha(s.base, .3); ctx.fill();
+  roundRect(ctx, x - size / 2 + 1.5, y - size / 2 + 1.5, size - 3, size - 3, r - 1);
+  ctx.strokeStyle = withAlpha(s.light, .9); ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.restore();
+}
+
+// A line that the current drag would clear: a breathing wash along the whole row
+// or column, under the tiles that get recoloured on top of it.
+export function drawBlastLineHint(ctx, x, y, w, h, color, t) {
+  const s = shade(color), pulse = .5 + .5 * Math.sin(t * 9);
+  ctx.save();
+  roundRect(ctx, x + 1, y + 1, w - 2, h - 2, 12);
+  ctx.fillStyle = withAlpha(s.glow, .12 + .1 * pulse); ctx.fill();
+  ctx.strokeStyle = withAlpha(s.light, .45 + .35 * pulse); ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+}
+
+// The beam that runs along a cleared line. `age` runs 0→1: the beam shoots out
+// from the middle, swells, and burns off.
+export function drawBlastBeam(ctx, x, y, w, h, color, age) {
+  if (age < 0 || age > 1) return;
+  const s = shade(color), horiz = w >= h, fade = (1 - age) * (1 - age);
+  const length = (horiz ? w : h) * (.25 + .75 * Math.min(1, age * 5)), thick = (horiz ? h : w) * (.45 + age * 1.1);
+  const cx = x + w / 2, cy = y + h / 2;
+  const g = horiz ? ctx.createLinearGradient(0, cy - thick / 2, 0, cy + thick / 2) : ctx.createLinearGradient(cx - thick / 2, 0, cx + thick / 2, 0);
+  g.addColorStop(0, withAlpha(s.glow, 0)); g.addColorStop(.32, withAlpha(s.glow, .55 * fade));
+  g.addColorStop(.5, `rgba(255,255,255,${.95 * fade})`);
+  g.addColorStop(.68, withAlpha(s.glow, .55 * fade)); g.addColorStop(1, withAlpha(s.glow, 0));
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g;
+  if (horiz) ctx.fillRect(cx - length / 2, cy - thick / 2, length, thick);
+  else ctx.fillRect(cx - thick / 2, cy - length / 2, thick, length);
+  ctx.restore();
+}
+
+// One cleared cell. `age` runs 0→1: the tile charges up white, then shrinks,
+// spins and sheds square shards. `seed` varies the spin and shard angles per cell.
+export function drawBlastShatter(ctx, x, y, size, color, age, seed = 0) {
+  if (age > 1) return;
+  if (age < .28) { drawBlastTile(ctx, x, y, size, color, { scale: 1 + .1 * age / .28, flash: age / .28 * .85 }); return; }
+  const q = (age - .28) / .72, s = shade(color), spin = seed % 2 ? 1 : -1;
+  drawBlastTile(ctx, x, y, size, color, { scale: 1.1 * (1 - q) ** 1.6, flash: .85 * (1 - q), angle: spin * q * 1.1, alpha: 1 - q * .4 });
+  ctx.save(); ctx.globalAlpha *= 1 - q;
+  for (let i = 0; i < 5; i++) {
+    const a = seed * 1.7 + i * Math.PI * 2 / 5, dist = size * (.2 + q * 1.05), bit = size * .2 * (1 - q * .6);
+    ctx.save();
+    ctx.translate(x + Math.cos(a) * dist, y + Math.sin(a) * dist + q * q * size * .7);
+    ctx.rotate(a + q * 4 * spin);
+    ctx.fillStyle = i % 2 ? s.light : s.base;
+    ctx.fillRect(-bit / 2, -bit / 2, bit, bit);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// The score callout over a clear: pops in, hangs, then drifts up and fades.
+// Bigger clears get bigger type; `sub` names the multi-line clear or the streak.
+export function drawBlastCallout(ctx, text, sub, x, y, age, size = 34) {
+  if (age < 0 || age > 1) return;
+  const pop = age < .14 ? .55 + .7 * (age / .14) : age < .24 ? 1.25 - .25 * ((age - .14) / .1) : 1;
+  const fade = age > .62 ? Math.max(0, 1 - (age - .62) / .38) : 1;
+  ctx.save();
+  ctx.globalAlpha *= fade;
+  ctx.translate(x, y - age * 34); ctx.scale(pop, pop);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.font = `900 ${size}px Manrope, sans-serif`;
+  const g = ctx.createLinearGradient(0, -size / 2, 0, size / 2);
+  g.addColorStop(0, '#fff7cf'); g.addColorStop(.55, '#ffd543'); g.addColorStop(1, '#ff9d3c');
+  ctx.shadowColor = 'rgba(255,180,61,.7)'; ctx.shadowBlur = 18;
+  ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(14,10,34,.92)'; ctx.strokeText(text, 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = g; ctx.fillText(text, 0, 0);
+  if (sub) {
+    ctx.font = '800 17px Manrope, sans-serif';
+    ctx.lineWidth = 5; ctx.strokeText(sub, 0, size * .78);
+    ctx.fillStyle = '#7ff0ff'; ctx.fillText(sub, 0, size * .78);
+  }
   ctx.restore();
 }
 

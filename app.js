@@ -1,6 +1,7 @@
-import { act, beatPhase, BLAST, blastCellAt, blastCellCentre, blastMultiplier, blastSnap, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
+import { act, beatPhase, BLAST, blastCellAt, blastCellCentre, blastHasValidPlacement, blastMultiplier, blastPreviewLines, blastSnap, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
 import {
-  drawBall, drawBlastBackdrop, drawBlastBoard, drawBlastSlot, drawBlastTile, drawBlock, drawBelt, drawBurst,
+  drawBall, drawBlastBackdrop, drawBlastBeam, drawBlastBoard, drawBlastCallout, drawBlastGhost, drawBlastLineHint, drawBlastShatter,
+  drawBlastSlot, drawBlastTile, drawBlock, drawBelt, drawBurst,
   drawClubBackdrop, drawDefence, drawEnemy, drawField,
   drawFloatingText, drawMeadowBackdrop, drawPortal, drawRabbit, drawShip, drawSparkle,
   drawStat, drawThruster, drawWell, glow, panel, resetArtCaches, roundRect, SHADES, withAlpha
@@ -37,6 +38,11 @@ let hover = null;
 // placement, never where the finger was.
 let blastDrag = null;
 let blastBest = 0;
+// The best score as it stood when this round began, so the end card can tell a
+// new record from an old one; and the on-canvas score, which rolls up to the real one.
+let blastPrevBest = 0;
+let blastShown = 0;
+let blastShownAt = 0;
 let controlsKey = '';
 let hudText = '';
 let lastMove = null;
@@ -236,14 +242,15 @@ function startGame(nextMode) {
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
-  state = lan.role === 'guest' ? null : newGame();
+  state = lan.role === 'guest' ? null : newGame(); resetBlastView();
   if (lan.role === 'guest') setHint('已进入房间，等待房主同步棋盘。');
   buildStage(); showScreen('game'); renderGame(); if (lan.role === 'host') broadcastSnapshot(true);
 }
 function restartGame() {
   if (lan.role === 'guest') return setHint('请由房主重新开始。', true);
-  state = newGame(); axeMode = false; hover = null; blastDrag = null; controlsKey = ''; broadcastSnapshot(true); renderGame();
+  state = newGame(); axeMode = false; hover = null; controlsKey = ''; resetBlastView(); broadcastSnapshot(true); renderGame();
 }
+function resetBlastView() { blastDrag = null; blastShown = 0; blastPrevBest = blastBest; }
 // Every player this device steers: both seats when two people share one screen.
 const localPlayers = () => (lan.role === 'solo' ? state.players.map(p => p.id) : [activePlayer]);
 function wellRect(index, count) {
@@ -294,7 +301,7 @@ function surgePointer(entry, point, release) {
   else if (!entry.piece) sendAction(entry.player, { type: 'move', x: point.x, y: point.y });
 }
 // Hit-test the whole slot rather than the piece's own cells: a tray cell is about
-// 36 logical px — roughly 18 CSS px on a phone, well under a comfortable touch target.
+// 30 logical px — roughly 15 CSS px on a phone, well under a comfortable touch target.
 function blastTraySlot(point) {
   const { TRAY_SLOT_X, TRAY_Y, TRAY_SLOT_W, TRAY_SLOT_H } = BLAST;
   for (let slot = 0; slot < TRAY_SLOT_X.length; slot += 1) {
@@ -303,10 +310,26 @@ function blastTraySlot(point) {
   }
   return -1;
 }
+const blastSpan = (cells) => ({ w: Math.max(...cells.map(c => c.dx)) + 1, h: Math.max(...cells.map(c => c.dy)) + 1 });
+// Cells of clearance between a fingertip and the lifted piece's lower edge.
+const BLAST_LIFT = 1.1;
+// The floating piece's centre. A finger would hide the piece it holds, so touch
+// lifts it clear above the fingertip; a mouse pointer holds it by the middle.
+function blastFloat(drag) {
+  const { h } = blastSpan(drag.piece.cells);
+  return { x: drag.x, y: drag.y - (drag.touch ? (h / 2 + BLAST_LIFT) * BLAST.CELL : 0) };
+}
+// The cell under the floating piece's top-left tile: placement and the ghost both
+// snap from here, so the piece lands where it is seen, not where the finger is.
+function blastDragCell(drag) {
+  const { w, h } = blastSpan(drag.piece.cells), centre = blastFloat(drag);
+  return blastCellAt(centre.x - (w - 1) / 2 * BLAST.CELL, centre.y - (h - 1) / 2 * BLAST.CELL);
+}
 function blastPointer(entry, point, release) {
   if (release) {
     if (blastDrag && blastDrag.pointerId === entry.pointerId) {
-      const cell = blastCellAt(point.x, point.y);
+      blastDrag.x = point.x; blastDrag.y = point.y;
+      const cell = blastDragCell(blastDrag);
       sendAction(entry.player, { type: 'place', slot: blastDrag.slot, col: cell.col, row: cell.row });
       blastDrag = null;
     }
@@ -318,20 +341,21 @@ function blastPointer(entry, point, release) {
   if (!blastDrag) {
     const slot = blastTraySlot(point);
     if (slot < 0) return;
-    blastDrag = { pointerId: entry.pointerId, slot, piece: state.tray[slot] };
+    blastDrag = { pointerId: entry.pointerId, slot, piece: state.tray[slot], touch: entry.touch, since: performance.now() };
   }
+  blastDrag.x = point.x; blastDrag.y = point.y;
   // The ghost snaps through the same rule the model places with, so it never lies.
-  const raw = blastCellAt(point.x, point.y), at = blastSnap(state, blastDrag.piece.cells, raw.col, raw.row);
+  const raw = blastDragCell(blastDrag), at = blastSnap(state, blastDrag.piece.cells, raw.col, raw.row);
   hover = { col: (at || raw).col, row: (at || raw).row, cells: blastDrag.piece.cells, ok: Boolean(at) };
 }
 function pointerDown(event) {
   if (!state) return;
   event.preventDefault();
   // Ignore the tap that was already on its way down when the round ended.
-  if (state.phase !== 'playing') { if (performance.now() - endedAt > 700) restartGame(); return; }
+  if (state.phase !== 'playing') { if (performance.now() - endedAt > 700 + (mode === 'blast' ? BLAST_END_DELAY : 0)) restartGame(); return; }
   const canvas = event.currentTarget, point = canvasPoint(canvas, event), player = playerAt(point), p = state.players[player];
   canvas.setPointerCapture?.(event.pointerId);
-  const entry = { player, start: point, last: point, base: { x: p.x, y: p.y }, moved: false, time: performance.now() };
+  const entry = { pointerId: event.pointerId, touch: event.pointerType !== 'mouse', player, start: point, last: point, base: { x: p.x, y: p.y }, moved: false, time: performance.now() };
   pointers.set(event.pointerId, entry);
   if (mode === 'surge') surgePointer(entry, point, false);
   if (mode === 'blast') blastPointer(entry, point, false);
@@ -633,66 +657,138 @@ function renderSurge(ctx) {
   drawBanner(ctx);
 }
 
-// Tray pieces are shrunk to fit their slot. The scale is quantised to quarter steps
-// so the sprite cache gains a handful of entries rather than one per distinct size —
-// overflowing it clears every cached sprite, including the other boards'.
-function blastTraySize(piece) {
-  const cell = BLAST.TRAY_CELL;
-  const width = Math.max(...piece.cells.map(c => c.dx)) + 1, height = Math.max(...piece.cells.map(c => c.dy)) + 1;
-  const fit = Math.min(1, (BLAST.TRAY_SLOT_W - 26) / (width * cell), (BLAST.TRAY_SLOT_H - 22) / (height * cell));
-  return cell * Math.max(0.25, Math.round(fit * 4) / 4);
+// Every tray piece shares one cell size; only the tall four- and five-cell pieces
+// shrink to fit, in whole pixels, so the sprite cache gains a handful of entries
+// rather than one per piece — overflowing it clears every board's cached sprites.
+function blastTrayCell(piece) {
+  const { w, h } = blastSpan(piece.cells);
+  return Math.min(BLAST.TRAY_CELL, Math.floor((BLAST.TRAY_SLOT_W - 26) / w), Math.floor((BLAST.TRAY_SLOT_H - 16) / h));
 }
-function drawBlastTrayPiece(ctx, piece, cx, cy) {
-  const size = blastTraySize(piece);
-  const width = (Math.max(...piece.cells.map(c => c.dx)) + 1) * size, height = (Math.max(...piece.cells.map(c => c.dy)) + 1) * size;
-  const left = cx - width / 2, top = cy - height / 2;
-  for (const cell of piece.cells) drawBlastTile(ctx, left + (cell.dx + .5) * size, top + (cell.dy + .5) * size, size - 4, cell.color);
-}
-function renderBlast(ctx) {
-  const { COLS, ROWS, CELL, LEFT, TOP, TRAY_Y, TRAY_SLOT_X, TRAY_SLOT_W, TRAY_SLOT_H } = BLAST;
-  drawBlastBackdrop(ctx, WIDTH, HEIGHT, state.elapsed);
-  drawStat(ctx, '方块爆破', 24, 42, { size: 21, align: 'left' });
-  drawStat(ctx, `${state.score} 分`, WIDTH - 24, 42, { size: 21, color: '#ffd543', align: 'right' });
-  // The best score and the line count live in the HUD line above the board; only the
-  // streak needs a place on the canvas, and only once it is actually running.
-  if (state.streak > 1) drawStat(ctx, `连击 ×${blastMultiplier(state.streak).toFixed(2)}`, WIDTH - 24, 76, { size: 13, color: '#3fd0e0', align: 'right', outline: 3 });
-
-  drawBlastBoard(ctx, LEFT, TOP, COLS * CELL, ROWS * CELL, CELL, COLS, ROWS);
-  for (let row = 0; row < ROWS; row += 1) for (let col = 0; col < COLS; col += 1) {
-    if (!state.board[row][col]) continue;
-    const at = blastCellCentre(col, row);
-    drawBlastTile(ctx, at.x, at.y, CELL - 6, state.board[row][col]);
-  }
-  // The piece follows the finger, but the outline marks where it will really land.
-  // Clipped to the board: a piece that does not fit must not spill over the tray.
-  if (blastDrag) {
-    const origin = blastCellCentre(hover.col, hover.row);
-    ctx.save();
-    roundRect(ctx, LEFT, TOP, COLS * CELL, ROWS * CELL, 18); ctx.clip();
-    for (const cell of blastDrag.piece.cells) drawBlastTile(ctx, origin.x + cell.dx * CELL, origin.y + cell.dy * CELL, CELL - 6, cell.color, .55);
-    ctx.strokeStyle = hover.ok ? '#44c986' : '#8b93a5'; ctx.lineWidth = 3; ctx.setLineDash([7, 5]);
-    for (const cell of blastDrag.piece.cells) {
-      const at = blastCellCentre(hover.col + cell.dx, hover.row + cell.dy);
-      roundRect(ctx, at.x - CELL / 2 + 2, at.y - CELL / 2 + 2, CELL - 4, CELL - 4, 10); ctx.stroke();
-    }
-    ctx.setLineDash([]);
+// Lay a piece out around (cx, cy) at `pitch` per cell, `scale` times over. Tiles
+// keep one sprite size and are scaled, so animating never asks the cache for new sizes.
+function drawBlastPiece(ctx, cells, cx, cy, base, tile, scale, { color, alpha = 1, shadow = false } = {}) {
+  const { w, h } = blastSpan(cells), pitch = base * scale, k = scale;
+  const left = cx - w * pitch / 2, top = cy - h * pitch / 2;
+  if (shadow) {
+    ctx.save(); ctx.fillStyle = 'rgba(4,3,14,.42)';
+    for (const cell of cells) { roundRect(ctx, left + cell.dx * pitch + pitch * .1, top + cell.dy * pitch + pitch * .26, pitch * .9, pitch * .9, pitch * .2); ctx.fill(); }
     ctx.restore();
   }
-  for (let slot = 0; slot < TRAY_SLOT_X.length; slot += 1) {
-    const active = blastDrag?.slot === slot;
-    drawBlastSlot(ctx, TRAY_SLOT_X[slot], TRAY_Y, TRAY_SLOT_W, TRAY_SLOT_H, active);
-    if (state.tray[slot] && !active) drawBlastTrayPiece(ctx, state.tray[slot], TRAY_SLOT_X[slot], TRAY_Y);
+  for (const cell of cells) drawBlastTile(ctx, left + (cell.dx + .5) * pitch, top + (cell.dy + .5) * pitch, tile, color || cell.color, { alpha, scale: k });
+}
+const easeOutBack = (t) => 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2;
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+const BLAST_WORDS = { 2: '双消', 3: '三消', 4: '四消' };
+// How long the board takes to grey out row by row before the end card shows, in ms.
+const BLAST_END_DELAY = 700;
+function renderBlast(ctx) {
+  const { COLS, ROWS, CELL, LEFT, TOP, TRAY_Y, TRAY_SLOT_X, TRAY_SLOT_W, TRAY_SLOT_H } = BLAST;
+  const now = performance.now(), tile = CELL - 6;
+  // The model stops ticking once the round ends; the view clock runs on so the last
+  // clear finishes and the board can grey out.
+  const endAge = state.phase === 'playing' || !endedAt ? 0 : (now - endedAt) / 1000;
+  const clock = state.elapsed + endAge, ended = state.phase !== 'playing';
+  drawBlastBackdrop(ctx, WIDTH, HEIGHT, clock);
+
+  // The canvas score rolls up to the real one rather than jumping.
+  const step = blastShownAt ? Math.min(.05, (now - blastShownAt) / 1000) : 0; blastShownAt = now;
+  if (blastShown > state.score) blastShown = state.score;
+  else blastShown = state.score - blastShown < .5 ? state.score : blastShown + (state.score - blastShown) * Math.min(1, step * 8);
+  const rolling = Math.min(5, (state.score - blastShown) / 20);
+  drawStat(ctx, `最高 ${Math.max(blastBest, state.score)}`, 24, 42, { size: 17, color: '#aeb5c4', align: 'left', outline: 3 });
+  drawStat(ctx, `${Math.round(blastShown)} 分`, WIDTH - 24, 42, { size: 21 + rolling, color: '#ffd543', align: 'right' });
+  if (state.streak > 1) drawStat(ctx, `连击 ×${blastMultiplier(state.streak).toFixed(2)}`, WIDTH - 24, 76, { size: 13, color: '#3fd0e0', align: 'right', outline: 3 });
+
+  const fresh = state.effects.filter(item => clock - item.time < .9);
+  // A multi-line clear or a long streak shakes the board, not the HUD.
+  const kick = fresh.findLast(item => item.type === 'text');
+  ctx.save();
+  if (kick && clock - kick.time < .35) {
+    const a = (clock - kick.time) / .35, m = Math.min(9, (kick.lines - 1) * 3 + (kick.streak >= 3 ? 2 : 0)) * (1 - a);
+    if (m > 0) ctx.translate(Math.sin(a * 60) * m, Math.cos(a * 47) * m * .7);
   }
-  drawEffects(ctx);
+  drawBlastBoard(ctx, LEFT, TOP, COLS * CELL, ROWS * CELL, CELL, COLS, ROWS);
+
+  // A freshly placed piece lands with a small squash and a white glint.
+  const landed = new Map();
+  for (const item of fresh) if (item.type === 'place') for (const cell of item.cells) landed.set(cell.row * COLS + cell.col, (clock - item.time) / .22);
+  // Lines the current drag would clear take on the dragged piece's colour.
+  const preview = blastDrag && hover?.ok ? blastPreviewLines(state, blastDrag.piece.cells, hover.col, hover.row) : null;
+  const dragColor = blastDrag?.piece.cells[0].color;
+  const lit = (col, row) => preview && (preview.rows.includes(row) || preview.cols.includes(col));
+  for (let row = 0; row < ROWS; row += 1) for (let col = 0; col < COLS; col += 1) {
+    if (!state.board[row][col]) continue;
+    const at = blastCellCentre(col, row), land = landed.get(row * COLS + col);
+    // Game over drains the colour out of the board from the bottom row up.
+    const grey = ended && endAge > (ROWS - 1 - row) * .07;
+    const t = land === undefined ? 1 : clamp01(land);
+    drawBlastTile(ctx, at.x, at.y, tile, grey ? 'slate' : lit(col, row) ? dragColor : state.board[row][col], {
+      scale: 1 + .14 * (1 - t) ** 2, flash: .5 * (1 - t), alpha: grey ? .8 : 1
+    });
+  }
+  if (preview) {
+    for (const row of preview.rows) drawBlastLineHint(ctx, LEFT, TOP + row * CELL, COLS * CELL, CELL, dragColor, clock);
+    for (const col of preview.cols) drawBlastLineHint(ctx, LEFT + col * CELL, TOP, CELL, ROWS * CELL, dragColor, clock);
+  }
+  // The outline marks where the lifted piece will really land.
+  if (blastDrag && hover?.ok) for (const cell of blastDrag.piece.cells) {
+    const at = blastCellCentre(hover.col + cell.dx, hover.row + cell.dy);
+    if (lit(hover.col + cell.dx, hover.row + cell.dy)) drawBlastTile(ctx, at.x, at.y, tile, dragColor, { alpha: .9 });
+    else drawBlastGhost(ctx, at.x, at.y, tile, cell.color);
+  }
+
+  // Clears ripple outward from the placed piece: each cell holds until its delay,
+  // then charges up and shatters, while a beam runs down every cleared line.
+  for (const item of fresh) {
+    if (item.type === 'pop') {
+      const a = (clock - item.time - (item.delay || 0)) / .5;
+      if (a < 0) drawBlastTile(ctx, item.x, item.y, tile, item.color);
+      else drawBlastShatter(ctx, item.x, item.y, tile, item.color, a, Math.round(item.x + item.y * 3));
+    } else if (item.type === 'line') {
+      const a = (clock - item.time - .08) / .45;
+      if (item.axis === 'row') drawBlastBeam(ctx, LEFT, TOP + item.index * CELL, COLS * CELL, CELL, item.color, a);
+      else drawBlastBeam(ctx, LEFT + item.index * CELL, TOP, CELL, ROWS * CELL, item.color, a);
+    }
+  }
+  ctx.restore();
+
+  for (let slot = 0; slot < TRAY_SLOT_X.length; slot += 1) {
+    const active = blastDrag?.slot === slot, piece = state.tray[slot];
+    drawBlastSlot(ctx, TRAY_SLOT_X[slot], TRAY_Y, TRAY_SLOT_W, TRAY_SLOT_H, active);
+    if (!piece || active) continue;
+    // A fresh triple deals in one after another with a little overshoot.
+    const deal = clamp01((clock - (state.dealtAt || 0) - slot * .07) / .32);
+    if (deal <= 0) continue;
+    const cell = blastTrayCell(piece), grow = easeOutBack(deal);
+    // A piece that fits nowhere is drained to slate, so the player sees the danger coming.
+    const stuck = !ended && !blastHasValidPlacement(state, piece.cells);
+    drawBlastPiece(ctx, piece.cells, TRAY_SLOT_X[slot], TRAY_Y + (1 - deal) * 26, cell, cell - 4, grow, { color: stuck || ended ? 'slate' : null, alpha: stuck ? .55 : clamp01(deal * 2) });
+  }
+
+  for (const item of fresh) if (item.type === 'text') {
+    const sub = [item.lines >= 2 ? `${BLAST_WORDS[item.lines] || '超级消除'}！` : '', item.streak >= 2 ? `连击 ×${item.streak}` : ''].filter(Boolean).join(' · ');
+    drawBlastCallout(ctx, item.text, sub, item.x, item.y, (clock - item.time) / .9, 32 + 6 * Math.min(3, (item.lines || 1) - 1));
+  }
+
+  // The held piece grows from tray size to board size as it is picked up, and
+  // rides above everything else.
+  if (blastDrag) {
+    const centre = blastFloat(blastDrag), from = blastTrayCell(blastDrag.piece) / CELL;
+    const k = from + (1 - from) * (1 - (1 - clamp01((now - blastDrag.since) / 140)) ** 3);
+    drawBlastPiece(ctx, blastDrag.piece.cells, centre.x, centre.y, CELL, tile, k, { alpha: hover?.ok ? 1 : .88, shadow: true });
+  }
 }
 
-function renderEnd(ctx) {
+function renderEnd(ctx, alpha = 1) {
+  ctx.save(); ctx.globalAlpha = alpha;
   ctx.fillStyle = 'rgba(8,12,22,.82)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
   const w = 440, h = 190;
   panel(ctx, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h, 24, { fill: 'rgba(13,18,32,.9)', stroke: 'rgba(255,213,67,.4)', shadow: 30 });
   drawStat(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, HEIGHT / 2 - 34, { size: 42, outline: 0 });
-  drawStat(ctx, `${state.score} 分${mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : ''}`, WIDTH / 2, HEIGHT / 2 + 18, { size: 24, color: '#ffd543' });
+  const extra = mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : mode === 'blast' ? (state.score > blastPrevBest ? ' · 新纪录！' : ` · 最高 ${blastBest}`) : '';
+  drawStat(ctx, `${state.score} 分${extra}`, WIDTH / 2, HEIGHT / 2 + 18, { size: 24, color: '#ffd543' });
   drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, HEIGHT / 2 + 62, { size: 15, color: '#aeb5c4', outline: 0 });
+  ctx.restore();
 }
 function hudLine() {
   const tail = state.phase === 'playing' ? '' : state.phase === 'won' ? ' · 完成！' : ' · 回合结束';
@@ -712,7 +808,13 @@ function renderGame() {
   // The score only moves on a clearing placement, so this writes at most once per
   // scoring event rather than once per frame.
   if (mode === 'blast' && state.score > blastBest) { blastBest = state.score; saveBlastBest(blastBest); }
-  if (state.phase === 'playing') endedAt = 0; else { endedAt ||= performance.now(); renderEnd(ctx); }
+  if (state.phase === 'playing') endedAt = 0;
+  else {
+    endedAt ||= performance.now();
+    // 方块爆破 lets the board grey out first, then fades the end card in.
+    const fade = mode === 'blast' ? clamp01((performance.now() - endedAt - BLAST_END_DELAY) / 250) : 1;
+    if (fade > 0) renderEnd(ctx, fade);
+  }
   const text = hudLine();
   if (text !== hudText) { hudText = text; $('#score-text').textContent = text; }
   // A short buzz on every clear, where the device supports it.
