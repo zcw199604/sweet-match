@@ -10,12 +10,14 @@ export const POP2_COLORS = [...COLORS, 'purple'];
 export const POP2 = { R: 15, D: 30, SHIP_R: 16, HOME_R: 30, CX: 360, CY: 360, ARENA_R: 332, SPEED: 320 };
 // 泡噗 3: one vertical well per player, measured in well-local pixels.
 export const POP3 = {
-  COLS: 11, ROWS: 20, CELL: 30, W: 330, H: 600, SPEED: 360, BASE: 54,
+  COLS: 11, WIDE_COLS: 14, ROWS: 20, CELL: 30, W: 330, H: 600, SPEED: 360, BASE: 54,
   STAGES: [
     { name: '摇摇晃舞池', bpm: 96, fall: 70, gap: 1.25, time: 80 },
     { name: '熙熙攘桃园', bpm: 112, fall: 86, gap: 1.05, time: 80 },
     { name: '喧喧哗空间', bpm: 128, fall: 104, gap: 0.9, time: 80 }
-  ]
+  ],
+  // 无尽模式: no clock and no stages. Notes start at 70 px/s and fall RAMP px/s faster every second, up to MAX_FALL.
+  ENDLESS: { name: '无尽舞池', bpm: 112, fall: 70, gap: 1.15, RAMP: 0.9, MAX_FALL: 260 }
 };
 export const RANKS = ['C', 'B', 'A', 'S', 'SS'];
 // 山山兔队长大作战: conveyor on top, 12×6 field below, enemies walk in from the right.
@@ -204,7 +206,17 @@ function tickPop2(state, dt) {
 }
 
 // --- 泡噗 3 ---
-export const pop3Stage = (state) => POP3.STAGES[state.level - 1];
+// Seconds into the current stage; 无尽 has just the one, so this is also how long the player has survived.
+export const pop3Clock = (state) => state.elapsed - state.stageStart;
+export function pop3Stage(state) {
+  if (!state.endless) return POP3.STAGES[state.level - 1];
+  const { name, bpm, gap, fall, RAMP, MAX_FALL } = POP3.ENDLESS;
+  return { name, bpm, gap, time: 0, fall: Math.min(MAX_FALL, fall + RAMP * pop3Clock(state)) };
+}
+// How much faster than the opening notes fall right now (1 at the start of 无尽).
+export const pop3Speed = (state) => pop3Stage(state).fall / POP3.ENDLESS.fall;
+// A lone player may ask for a wider well (a phone held upright has room for it); shared play keeps the standard one.
+export const pop3Width = (state) => (state.cols ?? POP3.COLS) * POP3.CELL;
 export const pop3Multiplier = (combo) => Math.min(9.9, 1 + Math.floor(combo / 4) / 10);
 export function pop3Rank(state) {
   const reached = [2500, 5000, 8000, 12000].filter(score => state.stageScore >= score * state.players.length).length;
@@ -216,22 +228,24 @@ export function beatPhase(state) {
   return beats - Math.floor(beats);
 }
 function startPop3Stage(state) {
-  state.notes = []; state.stageScore = 0; state.stageStart = state.elapsed; state.timeLeft = pop3Stage(state).time;
+  state.notes = []; state.stageScore = 0; state.stageStart = state.elapsed; state.timeLeft = state.endless ? 0 : pop3Stage(state).time;
   state.banner = { text: pop3Stage(state).name, time: state.elapsed };
   for (const p of state.players) {
-    Object.assign(p, { x: POP3.W / 2, y: POP3.H * 0.6, tx: POP3.W / 2, ty: POP3.H * 0.6, cells: {}, out: false,
+    Object.assign(p, { x: pop3Width(state) / 2, y: POP3.H * 0.6, tx: pop3Width(state) / 2, ty: POP3.H * 0.6, cells: {}, out: false,
       monster: POP3.BASE, monsterTo: POP3.BASE, spawnIn: 0.6 + p.id * 0.3, lastBeat: -1 });
   }
 }
-function createPop3(state, count) {
+function createPop3(state, count, { cols, endless } = {}) {
+  state.cols = count === 1 && Number.isInteger(cols) ? clamp(cols, POP3.COLS, POP3.WIDE_COLS) : POP3.COLS;
+  state.endless = endless === true;
   state.players = Array.from({ length: count }, (_, id) => ({ id, combo: 0, judge: '', judgeAt: -9 }));
   startPop3Stage(state);
 }
 function spawnNotes(state, well) {
-  const col = Math.floor(random(state) * POP3.COLS), x = (col + 0.5) * POP3.CELL, y = -POP3.CELL / 2;
+  const col = Math.floor(random(state) * (state.cols ?? POP3.COLS)), x = (col + 0.5) * POP3.CELL, y = -POP3.CELL / 2;
   state.notes.push({ id: state.nextId++, well, x, y, color: pick(state, COLORS) });
   if (random(state) < 0.35) {
-    const side = random(state) < 0.5, next = col + (col === POP3.COLS - 1 ? -1 : 1);
+    const side = random(state) < 0.5, next = col + (col === (state.cols ?? POP3.COLS) - 1 ? -1 : 1);
     state.notes.push({ id: state.nextId++, well, x: side ? (next + 0.5) * POP3.CELL : x, y: side ? y : y - POP3.CELL, color: pick(state, COLORS) });
   }
 }
@@ -244,11 +258,11 @@ function pop3Extent(p) {
   }
   return extent;
 }
-function movePop3Ship(p, dt) {
+function movePop3Ship(state, p, dt) {
   const dx = p.tx - p.x, dy = p.ty - p.y, distance = Math.hypot(dx, dy);
   if (distance < 0.5) return;
   const step = Math.min(distance, POP3.SPEED * dt), extent = pop3Extent(p), half = POP3.CELL / 2;
-  p.x = clamp(p.x + dx / distance * step, half - extent.minC * POP3.CELL, POP3.W - half - extent.maxC * POP3.CELL);
+  p.x = clamp(p.x + dx / distance * step, half - extent.minC * POP3.CELL, pop3Width(state) - half - extent.maxC * POP3.CELL);
   // Steering stops just above the spikes. A tall stack may poke out of the top of the well.
   p.y = clamp(p.y + dy / distance * step, half, POP3.H - p.monster - 1 - (extent.maxR + 0.5) * POP3.CELL);
 }
@@ -271,14 +285,14 @@ function finishPop3Stage(state) {
 }
 function tickPop3(state, dt) {
   const stage = pop3Stage(state), beats = (state.elapsed - state.stageStart) * stage.bpm / 60;
-  state.timeLeft -= dt;
+  if (!state.endless) state.timeLeft -= dt;
   for (const p of state.players) {
     if (p.out) continue;
     p.spawnIn -= dt;
     if (p.spawnIn <= 0) { spawnNotes(state, p.id); p.spawnIn = stage.gap * (0.8 + random(state) * 0.4); }
     p.monster += clamp(p.monsterTo - p.monster, -60 * dt, 30 * dt);
     if (p.combo && beats - p.lastBeat > 4.5) p.combo = 0;
-    movePop3Ship(p, dt);
+    movePop3Ship(state, p, dt);
   }
   const kept = [];
   for (const note of state.notes) {
@@ -304,7 +318,7 @@ function tickPop3(state, dt) {
   }
   state.rank = pop3Rank(state);
   if (state.players.every(p => p.out)) state.phase = 'lost';
-  else if (state.timeLeft <= 0) finishPop3Stage(state);
+  else if (!state.endless && state.timeLeft <= 0) finishPop3Stage(state);
 }
 function tapBeat(state, p) {
   if (p.out) return false;
@@ -625,7 +639,7 @@ export function createGame(mode = 'pop2', seed = Date.now(), options = {}) {
   if (!MODES.includes(mode)) throw new Error('未知游戏');
   const state = { mode, rng: seed >>> 0, phase: 'playing', score: 0, elapsed: 0, level: 1, effects: [], nextId: 1 };
   const count = options.players === 1 ? 1 : 2;
-  if (mode === 'pop2') createPop2(state, count); else if (mode === 'pop3') createPop3(state, count); else if (mode === 'surge') createSurge(state, count); else createBlast(state, count);
+  if (mode === 'pop2') createPop2(state, count); else if (mode === 'pop3') createPop3(state, count, options); else if (mode === 'surge') createSurge(state, count); else createBlast(state, count);
   return state;
 }
 export function act(state, player, action = {}) {
@@ -638,7 +652,7 @@ export function act(state, player, action = {}) {
       p.tx = POP2.CX + dx * scale; p.ty = POP2.CY + dy * scale;
     } else if (state.mode === 'pop3') {
       if (p.out) return false;
-      p.tx = clamp(action.x, 0, POP3.W); p.ty = clamp(action.y, 0, POP3.H);
+      p.tx = clamp(action.x, 0, pop3Width(state)); p.ty = clamp(action.y, 0, POP3.H);
     } else if (state.mode === 'surge') {
       p.cmd = null; p.tx = clamp(action.x, 14, WIDTH - 14); p.ty = clamp(action.y, SURGE.BELT_TOP, SURGE.TOP + SURGE.ROWS * SURGE.CELL);
     } else {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { act, attachToCluster, cellCentre, createGame, hexOffset, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, tickGame } from '../game-core.js';
+import { act, attachToCluster, cellCentre, createGame, hexOffset, pieceCentre, POP2, POP3, pop3Multiplier, pop3Speed, pop3Stage, pop3Width, SURGE, tickGame } from '../game-core.js';
 
 const HEX = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
 const run = (state, seconds) => { for (let t = 0; t < seconds; t += 1 / 60) tickGame(state, 1 / 60); };
@@ -178,4 +178,48 @@ test('ended games and malformed input are ignored', () => {
     state.phase = 'lost'; const before = structuredClone(state);
     assert.equal(act(state, 0, { type: 'move', x: 1, y: 1 }), false); tickGame(state, 0.1); assert.deepEqual(state, before);
   }
+});
+
+test('泡噗3: a lone player can widen the well, shared play always gets the standard one', () => {
+  const wide = createGame('pop3', 3, { players: 1, cols: POP3.WIDE_COLS }), p = wide.players[0];
+  assert.equal(pop3Width(wide), POP3.WIDE_COLS * POP3.CELL);
+  assert.equal(p.x, pop3Width(wide) / 2);
+  // The ship reaches the far wall of the wider well and no further.
+  act(wide, 0, { type: 'move', x: 1e4, y: p.y }); wide.notes = []; p.spawnIn = 1e9; run(wide, 2);
+  assert.equal(p.x, pop3Width(wide) - POP3.CELL / 2);
+  // Notes land in every column of the wide well, including the new ones.
+  const seen = new Set();
+  for (let seed = 1; seed < 400; seed++) { const s = createGame('pop3', seed * 2654435761, { players: 1, cols: POP3.WIDE_COLS }); s.players[0].spawnIn = 0; tickGame(s, 1 / 60); for (const n of s.notes) seen.add(Math.floor(n.x / POP3.CELL)); }
+  assert.deepEqual([...seen].sort((a, b) => a - b), Array.from({ length: POP3.WIDE_COLS }, (_, i) => i));
+  assert.equal(createGame('pop3', 3, { players: 2, cols: POP3.WIDE_COLS }).cols, POP3.COLS);
+  assert.equal(createGame('pop3', 3, { players: 1, cols: 99 }).cols, POP3.WIDE_COLS);
+  assert.equal(createGame('pop3', 3, { players: 1 }).cols, POP3.COLS);
+});
+
+test('泡噗3 无尽模式: the notes fall faster the longer you survive, up to a cap, and the round has no clock', () => {
+  const state = createGame('pop3', 9, { players: 1, endless: true }), p = state.players[0];
+  assert.equal(state.endless, true);
+  assert.equal(pop3Stage(state).fall, POP3.ENDLESS.fall);
+  p.spawnIn = 1e9; // keep the well empty so nothing can reach the spikes
+  run(state, 30);
+  const early = pop3Stage(state).fall;
+  assert.ok(Math.abs(early - (POP3.ENDLESS.fall + POP3.ENDLESS.RAMP * 30)) < 1);
+  run(state, 60);
+  assert.ok(pop3Stage(state).fall > early);
+  // Far past the three classic stages (80 s each) the game is still on stage one and still running.
+  run(state, 300);
+  assert.equal(state.phase, 'playing'); assert.equal(state.level, 1);
+  assert.equal(pop3Stage(state).fall, POP3.ENDLESS.MAX_FALL);
+  assert.equal(pop3Speed(state), POP3.ENDLESS.MAX_FALL / POP3.ENDLESS.fall);
+  // Everything a guest needs survives a JSON snapshot (no Infinity in the clock).
+  assert.deepEqual(JSON.parse(JSON.stringify(state)).timeLeft, state.timeLeft);
+});
+
+test('泡噗3 无尽模式: classic play is unchanged and a missed note still ends the round', () => {
+  const classic = createGame('pop3', 9, { players: 1 });
+  assert.equal(classic.endless, false);
+  assert.equal(pop3Stage(classic), POP3.STAGES[0]);
+  const state = createGame('pop3', 9, { players: 1, endless: true }), p = state.players[0];
+  p.spawnIn = 1e9; p.monsterTo = POP3.H; run(state, 20);
+  assert.equal(p.out, true); assert.equal(state.phase, 'lost');
 });

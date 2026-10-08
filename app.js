@@ -1,4 +1,4 @@
-import { act, beatPhase, BLAST, blastCellAt, blastCellCentre, blastHasValidPlacement, blastMultiplier, blastPreviewLines, blastSnap, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
+import { act, beatPhase, BLAST, blastCellAt, blastCellCentre, blastHasValidPlacement, blastMultiplier, blastPreviewLines, blastSnap, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Clock, pop3Multiplier, pop3Speed, pop3Stage, pop3Width, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
 import {
   drawBall, drawBlastBackdrop, drawBlastBeam, drawBlastBoard, drawBlastCallout, drawBlastGhost, drawBlastLineHint, drawBlastShatter,
   drawBlastSlot, drawBlastTile, drawBlock, drawBelt, drawBurst,
@@ -51,6 +51,10 @@ let blastShownAt = 0;
 let goose = null;
 let gooseToken = 0;
 let gooseMode = 'classic';
+// 泡噗3 无尽模式: the choice is remembered, and so is the best single-player score.
+let pop3Endless = false;
+let pop3Best = 0;
+let pop3PrevBest = 0;
 let controlsKey = '';
 let hudText = '';
 let lastMove = null;
@@ -222,14 +226,19 @@ async function finishAnswer() {
 }
 
 // 方块爆破 is a solo puzzle, so it always gets one seat whatever the co-op toggle says.
-const newGame = () => createGame(mode, (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0, { players: mode === 'blast' ? 1 : lan.role === 'solo' ? soloPlayers : 2 });
+const newGame = () => {
+  const players = mode === 'blast' ? 1 : lan.role === 'solo' ? soloPlayers : 2;
+  // Alone on an upright phone, 泡噗3 widens its well to use the screen's width.
+  return createGame(mode, (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0, { players, endless: mode === 'pop3' && pop3Endless && lan.role === 'solo', cols: players === 1 && phoneUpright.matches ? POP3.WIDE_COLS : POP3.COLS });
+};
 // 泡噗2's rules read the same whatever the skin, so the help line names whatever
 // the current theme actually put on the board.
 function pop2Help() {
   const skin = themeById(theme);
   return `拖动屏幕驾驶${skin.craftName}，接住飘来的${skin.pieceName}。三个同色相连就会消除，挂在上面的也一起掉；${skin.craftName}可以直接飞过${skin.baseName}，但飘来的和挂在身上的${skin.pieceName}碰到${skin.baseName}都会失败。`;
 }
-function stageHelp() { return mode === 'pop2' ? pop2Help() : MODE_META[mode].help; }
+const POP3_ENDLESS_HELP = '无尽模式没有倒计时和关卡：音符会越落越快，一直玩到碰到尖刺为止。照样拖动飞船接音符、三个同色相连消除，点「打拍」累积连击倍率；单人的最高分会记在本机。';
+function stageHelp() { return mode === 'pop2' ? pop2Help() : mode === 'pop3' && state?.endless ? POP3_ENDLESS_HELP : MODE_META[mode].help; }
 
 function buildStage() {
   const meta = MODE_META[mode], stage = $('#game-stage');
@@ -240,7 +249,7 @@ function buildStage() {
   if (mode === 'goose') return buildGooseStage(stage, meta);
   // Only 泡噗2 is reskinned, so only that board gets the picker.
   const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
-  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap${mode === 'blast' ? ' portrait' : ''}"><canvas class="game-canvas" width="720" height="${viewHeight()}" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap${viewHeight() === HEIGHT ? '' : ' portrait'}" style="--h:${viewHeight()}"><canvas class="game-canvas" width="720" height="${viewHeight()}" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
   const canvas = stage.querySelector('canvas');
   canvas.addEventListener('pointerdown', pointerDown);
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -300,15 +309,26 @@ async function mountGooseView(wrap) {
     wrap.querySelector('button').addEventListener('click', () => mountGooseView(wrap));
   }
 }
-function resetBlastView() { blastDrag = null; blastShown = 0; blastPrevBest = blastBest; }
+function resetBlastView() { blastDrag = null; blastShown = 0; blastPrevBest = blastBest; pop3PrevBest = pop3Best; }
 // Every player this device steers: both seats when two people share one screen.
 const localPlayers = () => (lan.role === 'solo' ? state.players.map(p => p.id) : [activePlayer]);
+// A phone held upright: 方块爆破 and 泡噗3 give up their square board for a taller one.
+const phoneUpright = window.matchMedia('(max-width: 800px) and (orientation: portrait)');
+// 泡噗3 alone on a phone: one tall canvas, a thin score strip on top, the well scaled to the full width below it.
+const POP3_TALL = { TOP: 84, GAP: 10, MARGIN: 14 };
+const tallPop3 = () => mode === 'pop3' && state?.players.length === 1 && phoneUpright.matches;
+const tallScale = () => (WIDTH - 2 * POP3_TALL.MARGIN) / pop3Width(state);
 function wellRect(index, count) {
-  if (count === 1) return { x: 20, y: 10, s: 700 / POP3.H };
+  if (tallPop3()) {
+    const s = tallScale();
+    return { x: (WIDTH - pop3Width(state) * s) / 2, y: POP3_TALL.TOP, s };
+  }
+  // The side panel starts at x 424, so a widened well shrinks a little to stay clear of it.
+  if (count === 1) return { x: 20, y: 10, s: Math.min(700 / POP3.H, 396 / pop3Width(state)) };
   return { x: index ? 375 : 15, y: 104, s: 1 };
 }
-// 方块爆破 draws on a portrait canvas; every other board is the square WIDTH × HEIGHT.
-const viewHeight = () => (mode === 'blast' ? BLAST.HEIGHT : HEIGHT);
+// 方块爆破 and a phone-sized 泡噗3 draw on a portrait canvas; every other board is the square WIDTH × HEIGHT.
+const viewHeight = () => (mode === 'blast' ? BLAST.HEIGHT : tallPop3() ? Math.round(POP3_TALL.TOP + POP3_TALL.GAP + POP3.H * tallScale()) : HEIGHT);
 function canvasPoint(canvas, event) {
   const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * WIDTH / rect.width, y: (event.clientY - rect.top) * viewHeight() / rect.height };
 }
@@ -515,6 +535,18 @@ function loadBlastBest() {
 function saveBlastBest(value) {
   try { localStorage.setItem('pao-blast-best', String(value)); } catch { /* private mode */ }
 }
+function loadPop3Prefs() {
+  try {
+    pop3Endless = localStorage.getItem('pao-pop3-mode') === 'endless';
+    pop3Best = Math.max(0, Number(localStorage.getItem('pao-pop3-endless-best')) || 0);
+  } catch { /* private mode */ }
+}
+function savePop3(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch { /* private mode */ }
+}
+const mmss = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+// A score only counts toward the 无尽 record when one person played it.
+const pop3Record = () => state.endless && state.players.length === 1;
 
 // Clears animate from the effect's own timestamp, so host and guest agree.
 function drawEffects(ctx, well) {
@@ -531,9 +563,9 @@ function drawBanner(ctx) {
   if (age > 2.2) return;
   const alpha = Math.min(1, (2.2 - age) * 2), w = 420, h = 96;
   ctx.save(); ctx.globalAlpha = alpha;
-  panel(ctx, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h, 22, { fill: 'rgba(10,15,28,.86)', stroke: 'rgba(255,213,67,.5)', shadow: 26 });
-  panel(ctx, WIDTH / 2 - w / 2 + 8, HEIGHT / 2 - h / 2 + 8, w - 16, h - 16, 16, { fill: 'rgba(255,255,255,.04)', stroke: 'rgba(255,255,255,.08)' });
-  drawStat(ctx, state.banner.text, WIDTH / 2, HEIGHT / 2 + 12, { size: 34, outline: 0, color: '#ffe9a3' });
+  panel(ctx, WIDTH / 2 - w / 2, viewHeight() / 2 - h / 2, w, h, 22, { fill: 'rgba(10,15,28,.86)', stroke: 'rgba(255,213,67,.5)', shadow: 26 });
+  panel(ctx, WIDTH / 2 - w / 2 + 8, viewHeight() / 2 - h / 2 + 8, w - 16, h - 16, 16, { fill: 'rgba(255,255,255,.04)', stroke: 'rgba(255,255,255,.08)' });
+  drawStat(ctx, state.banner.text, WIDTH / 2, viewHeight() / 2 + 12, { size: 34, outline: 0, color: '#ffe9a3' });
   ctx.restore();
 }
 
@@ -573,7 +605,7 @@ function renderPop2(ctx) {
 }
 
 function renderWell(ctx, p, count) {
-  const rect = wellRect(p.id, count), { W, H, CELL } = POP3, t = state.elapsed, spike = H - p.monster;
+  const rect = wellRect(p.id, count), { H, CELL } = POP3, W = pop3Width(state), t = state.elapsed, spike = H - p.monster;
   ctx.save(); ctx.translate(rect.x, rect.y); ctx.scale(rect.s, rect.s);
   drawWell(ctx, 0, 0, W, H, 1, { color: PLAYER_HEX[p.id], spike, t, alive: !p.out });
   ctx.save(); roundRect(ctx, 0, 0, W, H, 12); ctx.clip();
@@ -597,14 +629,25 @@ function renderWell(ctx, p, count) {
   ctx.restore();
 }
 function renderPop3(ctx) {
-  const count = state.players.length, time = Math.max(0, Math.ceil(state.timeLeft)), t = state.elapsed;
-  drawClubBackdrop(ctx, WIDTH, HEIGHT, t);
+  const count = state.players.length, time = Math.max(0, Math.ceil(state.timeLeft)), t = state.elapsed, endless = state.endless;
+  const gauge = endless ? (pop3Stage(state).fall - POP3.ENDLESS.fall) / (POP3.ENDLESS.MAX_FALL - POP3.ENDLESS.fall) : Math.min(1, state.timeLeft / pop3Stage(state).time);
+  drawClubBackdrop(ctx, WIDTH, viewHeight(), t);
   for (const p of state.players) renderWell(ctx, p, count);
   const combo = (p, x, y, align) => {
     drawStat(ctx, `COMBO ${String(p.combo).padStart(3, '0')}`, x, y, { size: 15, color: PLAYER_HEX[p.id], align, font: '"DM Mono"', outline: 3 });
     drawStat(ctx, `×${pop3Multiplier(p.combo).toFixed(1)}`, x, y + 26, { size: 22, color: '#ffe9a3', align, outline: 4 });
   };
-  if (count === 1) {
+  if (tallPop3()) {
+    const stage = pop3Stage(state), p = state.players[0];
+    drawStat(ctx, stage.name, WIDTH / 2, 24, { size: 15, color: '#cfc6ea', outline: 0 });
+    drawStat(ctx, String(state.score), WIDTH / 2, 64, { size: 36 });
+    combo(p, 24, 34, 'left');
+    drawStat(ctx, endless ? `×${pop3Speed(state).toFixed(1)}` : state.rank || 'C', WIDTH - 24, 52, { size: endless ? 34 : 40, color: '#ffd543', align: 'right' });
+    drawStat(ctx, endless ? mmss(pop3Clock(state)) : `${time}s`, WIDTH - 24, 76, { size: 17, color: !endless && state.timeLeft < 15 ? '#ff8794' : '#d8d2ee', align: 'right', font: '"DM Mono"', outline: 3 });
+    // The clock (or, in 无尽, how close the notes are to full speed) runs along the very top edge.
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(0, 0, WIDTH, 6);
+    ctx.fillStyle = endless ? '#ff9d5c' : state.timeLeft < 15 ? '#ff5d6c' : '#58d4de'; ctx.fillRect(0, 0, WIDTH * gauge, 6);
+  } else if (count === 1) {
     const x = 560;
     panel(ctx, 424, 34, 272, 476, 22, { fill: 'rgba(12,10,28,.62)', stroke: 'rgba(167,139,250,.28)', shadow: 24 });
     drawStat(ctx, pop3Stage(state).name, x, 82, { size: 21, outline: 0 });
@@ -619,16 +662,17 @@ function renderPop3(ctx) {
     ctx.fillStyle = disc; ctx.fill();
     ctx.strokeStyle = 'rgba(255,213,67,.75)'; ctx.lineWidth = 3; ctx.stroke();
     ctx.beginPath(); ctx.arc(x, 272, 48, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.stroke();
-    drawStat(ctx, rank, x, 272 + 24, { size: 68, color: '#ffd543' });
-    drawStat(ctx, `${time}s`, x, 372, { size: 22, color: '#d8d2ee', font: '"DM Mono"' });
+    if (endless) drawStat(ctx, `×${pop3Speed(state).toFixed(1)}`, x, 272 + 14, { size: 40, color: '#ffd543' });
+    else drawStat(ctx, rank, x, 272 + 24, { size: 68, color: '#ffd543' });
+    drawStat(ctx, endless ? mmss(pop3Clock(state)) : `${time}s`, x, 372, { size: 22, color: '#d8d2ee', font: '"DM Mono"' });
     panel(ctx, x - 100, 394, 200, 8, 4, { fill: 'rgba(255,255,255,.12)', stroke: null });
-    roundRect(ctx, x - 100, 394, 200 * Math.min(1, state.timeLeft / pop3Stage(state).time), 8, 4);
-    ctx.fillStyle = state.timeLeft < 15 ? '#ff5d6c' : '#58d4de'; ctx.fill();
+    roundRect(ctx, x - 100, 394, Math.max(8, 200 * gauge), 8, 4);
+    ctx.fillStyle = endless ? '#ff9d5c' : state.timeLeft < 15 ? '#ff5d6c' : '#58d4de'; ctx.fill();
     combo(state.players[0], x, 450, 'center');
   } else {
     drawStat(ctx, pop3Stage(state).name, WIDTH / 2, 28, { size: 15, color: '#cfc6ea', outline: 0 });
     drawStat(ctx, String(state.score), WIDTH / 2, 66, { size: 32 });
-    drawStat(ctx, `${state.rank || 'C'} · ${time}s`, WIDTH / 2, 92, { size: 15, color: '#ffd543', outline: 3 });
+    drawStat(ctx, endless ? `×${pop3Speed(state).toFixed(1)} · ${mmss(pop3Clock(state))}` : `${state.rank || 'C'} · ${time}s`, WIDTH / 2, 92, { size: 15, color: '#ffd543', outline: 3 });
     combo(state.players[0], 20, 44, 'left'); combo(state.players[1], WIDTH - 20, 44, 'right');
   }
   drawBanner(ctx);
@@ -835,23 +879,28 @@ function renderEnd(ctx, alpha = 1) {
   const H = viewHeight(), mid = H / 2;
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.fillStyle = 'rgba(8,12,22,.82)'; ctx.fillRect(0, 0, WIDTH, H);
-  const w = 440, h = 190;
+  const w = 440, h = mode === 'pop3' && state.endless ? 214 : 190;
   panel(ctx, WIDTH / 2 - w / 2, mid - h / 2, w, h, 24, { fill: 'rgba(13,18,32,.9)', stroke: 'rgba(255,213,67,.4)', shadow: 30 });
   drawStat(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, mid - 34, { size: 42, outline: 0 });
-  const extra = mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : mode === 'blast' ? (state.score > blastPrevBest ? ' · 新纪录！' : ` · 最高 ${blastBest}`) : '';
+  const endless = mode === 'pop3' && state.endless;
+  const extra = endless ? ` · 坚持 ${mmss(pop3Clock(state))}` : mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : mode === 'blast' ? (state.score > blastPrevBest ? ' · 新纪录！' : ` · 最高 ${blastBest}`) : '';
   drawStat(ctx, `${state.score} 分${extra}`, WIDTH / 2, mid + 18, { size: 24, color: '#ffd543' });
-  drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, mid + 62, { size: 15, color: '#aeb5c4', outline: 0 });
+  if (endless && pop3Record()) drawStat(ctx, state.score > pop3PrevBest ? '新纪录！' : `最高 ${pop3Best} 分`, WIDTH / 2, mid + 46, { size: 17, color: state.score > pop3PrevBest ? '#ff9d5c' : '#aeb5c4', outline: 0 });
+  drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, mid + (endless ? 76 : 62), { size: 15, color: '#aeb5c4', outline: 0 });
   ctx.restore();
 }
 function hudLine() {
   const tail = state.phase === 'playing' ? '' : state.phase === 'won' ? ' · 完成！' : ' · 回合结束';
   if (mode === 'pop2') return `${state.score} 分 · 已消除 ${state.cleared}${tail}`;
+  if (mode === 'pop3' && state.endless) return `${state.score} 分 · 速度 ×${pop3Speed(state).toFixed(1)} · ${mmss(pop3Clock(state))}${tail}`;
   if (mode === 'pop3') return `${state.score} 分 · 评价 ${state.rank || 'C'} · ${Math.max(0, Math.ceil(state.timeLeft))}s${tail}`;
   if (mode === 'blast') return `${state.score} 分 · 最高 ${Math.max(blastBest, state.score)} · 消除 ${state.cleared} 行${state.streak > 1 ? ` · ×${blastMultiplier(state.streak).toFixed(2)}` : ''}${tail}`;
   return `${state.score} 分 · 防线 ${state.lives} · 击退 ${state.defeated}/${surgeStage(state).total || '∞'}${tail}`;
 }
 function renderGame() {
   const canvas = $('.game-canvas'); if (!canvas) return;
+  // Toggling solo/shared play or turning the phone changes the board's shape.
+  if (viewHeight() !== shownHeight) resizeCanvas();
   const ctx = canvas.getContext('2d');
   if (!state) {
     ctx.fillStyle = '#111824'; ctx.fillRect(0, 0, WIDTH, HEIGHT); label(ctx, '等待房主同步棋盘……', WIDTH / 2, HEIGHT / 2, 24);
@@ -860,6 +909,7 @@ function renderGame() {
   if (mode === 'pop2') renderPop2(ctx); else if (mode === 'pop3') renderPop3(ctx); else if (mode === 'surge') renderSurge(ctx); else renderBlast(ctx);
   // The score only moves on a clearing placement, so this writes at most once per
   // scoring event rather than once per frame.
+  if (mode === 'pop3' && pop3Record() && state.score > pop3Best) { pop3Best = state.score; savePop3('pao-pop3-endless-best', pop3Best); }
   if (mode === 'blast' && state.score > blastBest) { blastBest = state.score; saveBlastBest(blastBest); }
   if (state.phase === 'playing') endedAt = 0;
   else {
@@ -878,11 +928,12 @@ function renderGame() {
 function setupControls() {
   const controls = $('#mobile-controls'); if (!controls || !state) return;
   const affordable = mode === 'surge' && state.energy >= SURGE.AXE_COST;
-  const next = [mode, lan.role, state.players.length, activePlayer, axeMode, affordable, theme].join('|');
+  const next = [mode, lan.role, state.players.length, activePlayer, axeMode, affordable, theme, state.endless].join('|');
   if (next === controlsKey) return;
   controlsKey = next; controls.innerHTML = '';
   const seat = lan.role === 'guest' ? '玩家 2' : lan.role === 'host' ? '房主 / 玩家 1' : state.players.length === 1 ? '单人' : '同屏双人';
-  $('#seat-text').textContent = `${MODE_META[mode].label} · ${seat}`;
+  $('#seat-text').textContent = `${MODE_META[mode].label} · ${seat}${state.endless ? ' · 无尽' : ''}`;
+  const help = $('.game-help'); if (help) help.textContent = stageHelp();
   const button = (text, run, className = '', instant = false) => {
     const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.className = className;
     // Rhythm taps fire on touch-down; waiting for the click would cost the beat.
@@ -891,6 +942,9 @@ function setupControls() {
   if (mode === 'pop2') themeChips($('#theme-row'));
   // 方块爆破 is solo-only, so it never gets the seat toggle.
   if (lan.role === 'solo' && mode !== 'blast') button(state.players.length === 1 ? '单人 · 切换同屏双人' : '同屏双人 · 切换单人', () => { soloPlayers = soloPlayers === 1 ? 2 : 1; activePlayer = 0; restartGame(); }, 'player-toggle');
+  if (mode === 'pop3' && lan.role === 'solo') button(pop3Endless ? '无尽 · 切换经典' : '经典 · 切换无尽', () => {
+    pop3Endless = !pop3Endless; savePop3('pao-pop3-mode', pop3Endless ? 'endless' : 'classic'); restartGame();
+  }, 'player-toggle mode-toggle');
   if (mode === 'pop3') for (const seat of localPlayers()) button(localPlayers().length > 1 ? `P${seat + 1} 打拍` : '打拍', () => sendAction(seat, { type: 'beat' }), 'beat', true);
   if (mode === 'surge') {
     if (lan.role === 'solo' && state.players.length > 1) button(`操作 P${activePlayer + 1}`, () => { activePlayer = activePlayer ? 0 : 1; }, 'player-toggle');
@@ -900,8 +954,11 @@ function setupControls() {
   }
 }
 
+let shownHeight = HEIGHT;
 function resizeCanvas() {
-  const canvas = $('.game-canvas'); if (!canvas) return; const ratio = Math.min(2, window.devicePixelRatio || 1), h = viewHeight(); canvas.width = WIDTH * ratio; canvas.height = h * ratio; canvas.style.aspectRatio = `${WIDTH} / ${h}`; canvas.getContext('2d').setTransform(ratio, 0, 0, ratio, 0, 0);
+  const canvas = $('.game-canvas'); if (!canvas) return; const ratio = Math.min(2, window.devicePixelRatio || 1), h = shownHeight = viewHeight();
+  const wrap = canvas.parentElement; wrap.classList.toggle('portrait', h !== HEIGHT); wrap.style.setProperty('--h', h);
+  canvas.width = WIDTH * ratio; canvas.height = h * ratio; canvas.style.aspectRatio = `${WIDTH} / ${h}`; canvas.getContext('2d').setTransform(ratio, 0, 0, ratio, 0, 0);
 }
 function loop(time) {
   const dt = lastFrame ? Math.min(.05, (time - lastFrame) / 1000) : 1 / 60; lastFrame = time;
@@ -923,7 +980,7 @@ $('#make-offer').addEventListener('click', makeOffer); $('#make-answer').addEven
 $$('[data-copy]').forEach((node) => node.addEventListener('click', async () => { const target = $(`#${node.dataset.copy}`); await navigator.clipboard?.writeText(target.value); setHint('已复制到剪贴板。'); }));
 $$('.tab').forEach((tab) => tab.addEventListener('click', () => { $$('.tab').forEach((other) => other.classList.toggle('active', other === tab)); $('#server-panel').classList.toggle('active', tab.dataset.tab === 'server'); $('#webrtc-panel').classList.toggle('active', tab.dataset.tab === 'webrtc'); }));
 $('#lan-server-url').value = new URLSearchParams(location.search).get('lan') || localStorage.getItem('pao-lan-server') || location.origin;
-loadBlastBest();
+loadBlastBest(); loadPop3Prefs();
 try { gooseMode = localStorage.getItem('pao-goose-mode') === 'endless' ? 'endless' : 'classic'; } catch { /* private mode */ }
 for (const type of ['pointermove', 'pointerup', 'pointercancel']) document.addEventListener(type, type === 'pointermove' ? pointerMove : pointerUp, { passive: false });
 document.addEventListener('keydown', keyboard); document.addEventListener('keyup', keyboard);

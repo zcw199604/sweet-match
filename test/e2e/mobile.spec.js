@@ -26,6 +26,9 @@ test('home page fits narrow screens and exposes five arcade cards', async ({ pag
 test('each game shows its whole board and controls without scrolling', async ({ page }) => {
   for (const mode of ['pop2', 'pop3', 'surge', 'blast']) {
     await open(page, mode);
+    // Opening a game smooth-scrolls the page back to the top; on a phone the boards sit close
+    // to the top edge, so measure once the scroll has landed.
+    if (page.viewportSize().width <= 800) await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     // The last on-screen control: a board without extra controls (方块爆破) ends at the header's restart.
     const button = page.locator('#restart-game, #mobile-controls button').last();
     await expect(button).toBeVisible();
@@ -61,6 +64,35 @@ test('泡噗3: the beat button is judged and dragging moves the ship inside its 
   await page.mouse.up();
 });
 
+test('泡噗3: on a phone held upright the lone well is widened and fills the width of a tall canvas', async ({ page }) => {
+  const view = page.viewportSize();
+  test.skip(view.width > 800 || view.height < view.width, 'only phone-sized portrait screens get the tall board');
+  await open(page, 'pop3');
+  const box = await page.locator('.game-canvas').boundingBox();
+  expect(box.height / box.width).toBeGreaterThan(1.4);
+  expect((await game(page)).cols).toBe(14);
+  // The widened well (14 columns) spans nearly the whole canvas width, with cells of at least 20 css px.
+  expect(box.width * (692 / 720) / 14).toBeGreaterThan(20);
+  // Sharing the screen goes back to the square board with two wells.
+  await page.locator('.player-toggle:not(.mode-toggle)').click();
+  await expect.poll(async () => (await page.locator('.game-canvas').boundingBox()).height).toBeLessThan(box.height * 0.8);
+});
+
+test('泡噗3: the mode button switches to 无尽, remembers it, and the notes speed up', async ({ page }) => {
+  await open(page, 'pop3');
+  expect((await game(page)).endless).toBe(false);
+  await page.locator('.mode-toggle').click();
+  await expect.poll(async () => (await game(page)).endless).toBe(true);
+  await expect(page.locator('.mode-toggle')).toContainText('无尽');
+  expect(await page.evaluate(() => localStorage.getItem('pao-pop3-mode'))).toBe('endless');
+  // The choice survives a reload.
+  await page.reload(); await page.locator('body[data-ready]').waitFor();
+  await page.locator('[data-mode="pop3"]').click();
+  await expect.poll(async () => (await game(page)).endless).toBe(true);
+  await page.locator('.mode-toggle').click();
+  await expect.poll(async () => (await game(page)).endless).toBe(false);
+});
+
 test('山山兔: tapping a belt piece and then a cell carries the piece onto the field', async ({ page }) => {
   await open(page, 'surge');
   const state = await game(page), piece = state.belt.find(item => item.x > 150 && item.x < 560);
@@ -78,7 +110,7 @@ test('山山兔: tapping a belt piece and then a cell carries the piece onto the
 test('one device can switch between solo and shared-screen play', async ({ page }) => {
   await open(page, 'pop3');
   expect((await game(page)).players).toHaveLength(1);
-  await page.locator('.player-toggle').click();
+  await page.locator('.player-toggle:not(.mode-toggle)').click();
   await expect.poll(async () => (await game(page)).players.length).toBe(2);
   await expect(page.locator('#mobile-controls .beat')).toHaveCount(2);
 });

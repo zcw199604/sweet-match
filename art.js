@@ -411,11 +411,11 @@ export function drawArena(ctx, cx, cy, r, t, threat) {
 // --- 泡噗 3: the night club, the well, the monster ---------------------------
 
 export function drawClubBackdrop(ctx, w, h, t) {
-  backdrop(ctx, 'club', w, h, (c) => {
+  backdrop(ctx, `club-${h}`, w, h, (c) => {
     const base = c.createLinearGradient(0, 0, 0, h);
     base.addColorStop(0, '#191430'); base.addColorStop(.55, '#1c1738'); base.addColorStop(1, '#241a3d');
     c.fillStyle = base; c.fillRect(0, 0, w, h);
-    for (const [x, y, r, color] of [[120, 90, 250, '#7b4fd8'], [610, 160, 240, '#c14bb0'], [360, 660, 300, '#4b3ad8']]) {
+    for (const [x, y, r, color] of [[120, 90, 250, '#7b4fd8'], [610, 160, 240, '#c14bb0'], [360, h - 60, 300, '#4b3ad8']]) {
       const g = c.createRadialGradient(x, y, 0, x, y, r);
       g.addColorStop(0, withAlpha(color, .3)); g.addColorStop(1, withAlpha(color, 0));
       c.fillStyle = g; c.fillRect(0, 0, w, h);

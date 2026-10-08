@@ -36,7 +36,7 @@ body.playing{overscroll-behavior:none}
 .blast .art-beam{position:absolute;right:26px;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#3fd0e000,#3fd0e0,#ff5d8000)}
 /* 方块爆破's canvas is portrait (720 × 936): cap its width so its height still fits the
    screen alongside the page chrome above it and the controls below. */
-.canvas-wrap.portrait{max-width:min(860px,max(280px,calc((100vh - 300px) * 720 / 936)));max-width:min(860px,max(280px,calc((100dvh - 300px) * 720 / 936)))}
+.canvas-wrap.portrait{max-width:min(860px,max(280px,calc((100vh - 300px) * 720 / var(--h,936))));max-width:min(860px,max(280px,calc((100dvh - 300px) * 720 / var(--h,936))))}
 .mobile-controls:empty{display:none}
 /* On a phone held upright, 方块爆破 takes the full screen width: one-line nav, no
    gutters, and no seat label (it is always solo). Restart lives in the stage header. */
@@ -50,11 +50,37 @@ body.playing:is([data-mode=blast],[data-mode=goose]) .stage-top{padding:0 12px;m
 body.playing:is([data-mode=blast],[data-mode=goose]) #seat-text{display:none}
 body.playing:is([data-mode=blast],[data-mode=goose]) .stage-top strong{font-size:13px}
 body.playing:is([data-mode=blast],[data-mode=goose]) .stage-top button{padding:7px 12px}
-body.playing[data-mode=blast] .canvas-wrap.portrait{width:100%;max-width:max(250px,calc((100vh - 120px) * 720 / 936));max-width:max(250px,calc((100dvh - 120px) * 720 / 936))}
+body.playing[data-mode=blast] .canvas-wrap.portrait{width:100%;max-width:max(250px,calc((100vh - 120px) * 720 / var(--h,936)));max-width:max(250px,calc((100dvh - 120px) * 720 / var(--h,936)))}
 body.playing[data-mode=blast] .game-canvas{border-radius:0}
 body.playing:is([data-mode=blast],[data-mode=goose]) .game-help{padding:0 14px}
+/* 泡噗3 goes edge to edge too (the seat label stays: online play needs it). Alone, its board is the
+   tall 9:16 canvas, so the width is capped by the height left after the header and the one control row. */
+body.playing[data-mode=pop3] main{padding:0}
+body.playing[data-mode=pop3] .game-nav{height:52px;padding:0 12px}
+body.playing[data-mode=pop3] .game-name span{display:none}
+body.playing[data-mode=pop3] .game-name h1{font-size:18px;margin:0}
+body.playing[data-mode=pop3] .stage{border-radius:0;box-shadow:none;padding:8px 0 max(12px,env(safe-area-inset-bottom))}
+body.playing[data-mode=pop3] .stage-top{padding:0 12px;margin-bottom:8px}
+body.playing[data-mode=pop3] .stage-top strong{font-size:13px}
+body.playing[data-mode=pop3] .stage-top button{padding:7px 12px}
+body.playing[data-mode=pop3] .game-canvas{border-radius:0}
+body.playing[data-mode=pop3] .mobile-controls{padding:0 12px}
+body.playing[data-mode=pop3] .game-help{padding:0 14px}
+/* Alone on the tall board the seat label and score line are redundant (the canvas has its own strip), so the
+   restart button moves up beside 联机 and the header row is the only chrome above the board. */
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait){position:relative}
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .game-nav{height:48px}
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .game-name{display:none}
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage-top{position:absolute;top:7px;right:64px;margin:0;padding:0;z-index:1}
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage-top>div:first-child{display:none}
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage-top button{background:#fff;color:var(--ink);border-color:var(--line);font-size:11px;font-weight:700;padding:8px 12px;border-radius:9px}
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage{padding-top:0}
+body.playing[data-mode=pop3] .canvas-wrap.portrait{width:100%;max-width:max(250px,calc((100vh - 120px) * 720 / var(--h,1280)));max-width:max(250px,calc((100dvh - 120px) * 720 / var(--h,1280)))}
+/* The beat button is the one control that matters mid-song: make it the big one and keep the seat toggle beside it. */
+body.playing[data-mode=pop3] .canvas-wrap.portrait+.mobile-controls .player-toggle{flex:2 1 0;min-height:52px;font-size:12px;line-height:1.25;padding:0 6px}
+body.playing[data-mode=pop3] .canvas-wrap.portrait+.mobile-controls .beat{flex:3 1 0;min-height:52px;font-size:17px}
 }
-@media(orientation:landscape) and (max-height:600px){.canvas-wrap.portrait{max-width:none;width:max(160px,calc((100vh - 78px) * 720 / 936));width:max(160px,calc((100dvh - 78px) * 720 / 936))}}
+@media(orientation:landscape) and (max-height:600px){.canvas-wrap.portrait{max-width:none;width:max(160px,calc((100vh - 78px) * 720 / var(--h,936)));width:max(160px,calc((100dvh - 78px) * 720 / var(--h,936)))}}
 
 /* 抓大鹅: five cards on the home grid, and a portrait 3D stage (720 × 820) over a gingham tablecloth. */
 .arcade-grid{grid-template-columns:repeat(5,1fr)}
