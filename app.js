@@ -331,9 +331,17 @@ function wellRect(index, count) {
   return { x: index ? 375 : 15, y: 104, s: 1 };
 }
 // 方块爆破 and a phone-sized 泡噗3 draw on a portrait canvas; every other board is the square WIDTH × HEIGHT.
-const viewHeight = () => (mode === 'blast' ? BLAST.HEIGHT : tallPop3() ? Math.round(POP3_TALL.TOP + POP3_TALL.GAP + POP3.H * tallScale()) : HEIGHT);
+// 山山兔 on a phone held sideways: the belt and the field only fill y 96–576 of the square world, so the
+// square canvas wastes the little height there is. Show just that band on a wide canvas instead — a pure
+// view change (the world, snapshots and co-op are untouched), with the title and stats moved into the side column.
+const phoneSideways = window.matchMedia('(orientation: landscape) and (max-height: 600px)');
+const SURGE_VIEW = { TOP: 84, BOTTOM: 600 };
+const surgeSideways = () => mode === 'surge' && phoneSideways.matches;
+// World y of the canvas's top edge.
+const viewTop = () => (surgeSideways() ? SURGE_VIEW.TOP : 0);
+const viewHeight = () => (mode === 'blast' ? BLAST.HEIGHT : surgeSideways() ? SURGE_VIEW.BOTTOM - SURGE_VIEW.TOP : tallPop3() ? Math.round(POP3_TALL.TOP + POP3_TALL.GAP + POP3.H * tallScale()) : HEIGHT);
 function canvasPoint(canvas, event) {
-  const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * WIDTH / rect.width, y: (event.clientY - rect.top) * viewHeight() / rect.height };
+  const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * WIDTH / rect.width, y: (event.clientY - rect.top) * viewHeight() / rect.height + viewTop() };
 }
 function sendAction(player, action) {
   if (!state) return false;
@@ -706,10 +714,15 @@ function outlineCells(ctx, cells, col, row, color) {
 }
 function renderSurge(ctx) {
   const { COLS, ROWS, CELL, LEFT, TOP, BELT_TOP, BELT_BOTTOM, BELT_Y, BELT_CELL } = SURGE, right = LEFT + COLS * CELL, bottom = TOP + ROWS * CELL, stage = surgeStage(state), t = state.elapsed;
+  // Everything below is in world coordinates; sideways, the canvas is a window onto the middle of it.
+  const side = surgeSideways();
+  ctx.save(); ctx.translate(0, -viewTop());
   drawMeadowBackdrop(ctx, WIDTH, HEIGHT);
-  drawStat(ctx, `${state.level > SURGE.STAGES.length ? '∞' : `第 ${state.level} 关`} · ${stage.name}`, 24, 44, { size: 21, align: 'left' });
-  drawStat(ctx, `${state.score} 分`, WIDTH - 24, 44, { size: 21, color: '#ffd543', align: 'right' });
-  drawStat(ctx, '← 传送带 · 点拼块抓取', 24, 78, { size: 11, color: '#a9b4c8', align: 'left', font: '"DM Mono"', weight: 500, outline: 0, letter: 1 });
+  if (!side) {
+    drawStat(ctx, `${state.level > SURGE.STAGES.length ? '∞' : `第 ${state.level} 关`} · ${stage.name}`, 24, 44, { size: 21, align: 'left' });
+    drawStat(ctx, `${state.score} 分`, WIDTH - 24, 44, { size: 21, color: '#ffd543', align: 'right' });
+    drawStat(ctx, '← 传送带 · 点拼块抓取', 24, 78, { size: 11, color: '#a9b4c8', align: 'left', font: '"DM Mono"', weight: 500, outline: 0, letter: 1 });
+  }
 
   drawBelt(ctx, 0, BELT_TOP, WIDTH, BELT_BOTTOM - BELT_TOP, t);
   for (const piece of state.belt) drawPiece(ctx, piece.cells, piece.x, BELT_Y, BELT_CELL);
@@ -748,26 +761,29 @@ function renderSurge(ctx) {
   }
   drawEffects(ctx);
 
-  const hud = bottom + 44;
-  panel(ctx, 16, hud - 24, WIDTH - 32, 86, 16, { fill: 'rgba(8,13,24,.6)', stroke: 'rgba(255,255,255,.1)' });
-  drawStat(ctx, '防线', 36, hud, { size: 13, color: '#a9b4c8', align: 'left', outline: 0 });
-  for (let i = 0; i < SURGE.LIVES; i++) drawStat(ctx, '♥', 88 + i * 26, hud + 3, { size: 23, color: i < state.lives ? '#ff5d6c' : 'rgba(255,255,255,.14)', outline: i < state.lives ? 3 : 0 });
-  drawStat(ctx, `击退 ${state.defeated} / ${stage.total || '∞'}`, WIDTH / 2, hud, { size: 16, outline: 3 });
-  drawStat(ctx, `⚡ ${state.energy} / ${SURGE.MAX_ENERGY}`, WIDTH - 36, hud, { size: 16, color: '#ffd543', align: 'right', outline: 3 });
-  panel(ctx, 36, hud + 16, WIDTH - 72, 14, 7, { fill: 'rgba(255,255,255,.1)', stroke: 'rgba(255,255,255,.12)' });
-  const ratio = state.energy / SURGE.MAX_ENERGY, bar = (WIDTH - 72) * ratio;
-  if (bar > 2) {
-    roundRect(ctx, 36, hud + 16, bar, 14, 7);
-    const fill = ctx.createLinearGradient(36, 0, 36 + bar, 0);
-    fill.addColorStop(0, '#ffb347'); fill.addColorStop(1, '#ffd543');
-    ctx.fillStyle = fill; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
-  }
-  for (let i = 1; i < SURGE.MAX_ENERGY / SURGE.AXE_COST; i++) {
-    const x = 36 + (WIDTH - 72) * (i * SURGE.AXE_COST / SURGE.MAX_ENERGY);
-    ctx.fillStyle = 'rgba(8,13,24,.55)'; ctx.fillRect(x, hud + 16, 2, 14);
-  }
-  if (axeMode) drawStat(ctx, '消消斧头：点一个方块，把它变成泡姆发射出去', WIDTH / 2, hud + 54, { size: 13, color: '#ffd543', outline: 3 });
+  if (!side) {
+    const hud = bottom + 44;
+    panel(ctx, 16, hud - 24, WIDTH - 32, 86, 16, { fill: 'rgba(8,13,24,.6)', stroke: 'rgba(255,255,255,.1)' });
+    drawStat(ctx, '防线', 36, hud, { size: 13, color: '#a9b4c8', align: 'left', outline: 0 });
+    for (let i = 0; i < SURGE.LIVES; i++) drawStat(ctx, '♥', 88 + i * 26, hud + 3, { size: 23, color: i < state.lives ? '#ff5d6c' : 'rgba(255,255,255,.14)', outline: i < state.lives ? 3 : 0 });
+    drawStat(ctx, `击退 ${state.defeated} / ${stage.total || '∞'}`, WIDTH / 2, hud, { size: 16, outline: 3 });
+    drawStat(ctx, `⚡ ${state.energy} / ${SURGE.MAX_ENERGY}`, WIDTH - 36, hud, { size: 16, color: '#ffd543', align: 'right', outline: 3 });
+    panel(ctx, 36, hud + 16, WIDTH - 72, 14, 7, { fill: 'rgba(255,255,255,.1)', stroke: 'rgba(255,255,255,.12)' });
+    const ratio = state.energy / SURGE.MAX_ENERGY, bar = (WIDTH - 72) * ratio;
+    if (bar > 2) {
+      roundRect(ctx, 36, hud + 16, bar, 14, 7);
+      const fill = ctx.createLinearGradient(36, 0, 36 + bar, 0);
+      fill.addColorStop(0, '#ffb347'); fill.addColorStop(1, '#ffd543');
+      ctx.fillStyle = fill; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+    for (let i = 1; i < SURGE.MAX_ENERGY / SURGE.AXE_COST; i++) {
+      const x = 36 + (WIDTH - 72) * (i * SURGE.AXE_COST / SURGE.MAX_ENERGY);
+      ctx.fillStyle = 'rgba(8,13,24,.55)'; ctx.fillRect(x, hud + 16, 2, 14);
+    }
+    if (axeMode) drawStat(ctx, '消消斧头：点一个方块，把它变成泡姆发射出去', WIDTH / 2, hud + 54, { size: 13, color: '#ffd543', outline: 3 });
+  } else if (axeMode) drawStat(ctx, '消消斧头：点一个方块，把它变成泡姆发射出去', WIDTH / 2, bottom + 14, { size: 13, color: '#ffd543', outline: 3 });
+  ctx.restore();
   drawBanner(ctx);
 }
 
@@ -917,6 +933,8 @@ function hudLine() {
   if (mode === 'pop3' && state.endless) return `${state.score} 分 · 速度 ×${pop3Speed(state).toFixed(1)} · ${mmss(pop3Clock(state))}${tail}`;
   if (mode === 'pop3') return `${state.score} 分 · 评价 ${state.rank || 'C'} · ${Math.max(0, Math.ceil(state.timeLeft))}s${tail}`;
   if (mode === 'blast') return `${state.score} 分 · 最高 ${Math.max(blastBest, state.score)} · 消除 ${state.cleared} 行${state.streak > 1 ? ` · ×${blastMultiplier(state.streak).toFixed(2)}` : ''}${tail}`;
+  // Sideways the canvas has no title bar or stats row, so the level and energy move into this line.
+  if (surgeSideways()) return `${state.level > SURGE.STAGES.length ? '∞' : `第 ${state.level} 关`} · ${state.score} 分 · 防线 ${state.lives} · 击退 ${state.defeated}/${surgeStage(state).total || '∞'} · ⚡${state.energy}/${SURGE.MAX_ENERGY}${tail}`;
   return `${state.score} 分 · 防线 ${state.lives} · 击退 ${state.defeated}/${surgeStage(state).total || '∞'}${tail}`;
 }
 function renderGame() {

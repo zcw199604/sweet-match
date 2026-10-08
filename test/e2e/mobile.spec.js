@@ -294,3 +294,35 @@ test('榜单: 连不上服务时游戏照常结算', async ({ page }) => {
   await page.locator('#game-board').click();
   await expect(page.locator('#board-hint')).not.toHaveText('加载中……');
 });
+
+// ---- 山山兔横屏：手机横过来时只显示传送带和棋盘的宽画布 ----
+test.describe('山山兔 sideways on a phone', () => {
+  test.use({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+
+  test('the canvas turns wide, fits the screen, and taps land on the right world spot', async ({ page }) => {
+    await open(page, 'surge');
+    const box = await page.locator('.game-canvas').boundingBox();
+    // 720 × 516 的视窗，比原来的正方形更宽，而且整块画布和按钮都在屏幕内。
+    expect(box.width / box.height).toBeCloseTo(720 / 516, 1);
+    expect(box.height).toBeGreaterThan(300);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    expect(await page.locator('#mobile-controls button').last().evaluate((node) => node.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
+    // 画布顶边对应世界坐标 y=84：点第 7 列第 5 行（世界中心 x=36+6.5*54, y=252+4.5*54）。
+    const k = box.width / 720;
+    await page.mouse.click(box.x + (36 + 6.5 * 54) * k, box.y + (252 + 4.5 * 54 - 84) * k);
+    await expect.poll(async () => (await game(page)).players[0].ty).toBeGreaterThan(480);
+    const rabbit = (await game(page)).players[0];
+    expect(rabbit.tx).toBeCloseTo(36 + 6.5 * 54, -1);
+    expect(rabbit.ty).toBeCloseTo(252 + 4.5 * 54, -1);
+    // 画布不再画标题和状态栏，关卡、防线、能量都在侧栏文字里。
+    await expect(page.locator('#score-text')).toContainText('第 1 关');
+    await expect(page.locator('#score-text')).toContainText('⚡');
+  });
+
+  test('turning the phone upright goes back to the square board', async ({ page }) => {
+    await open(page, 'surge');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(async () => { const b = await page.locator('.game-canvas').boundingBox(); return Math.round(b.width / b.height * 100); }).toBe(100);
+    await expect(page.locator('#score-text')).not.toContainText('⚡');
+  });
+});
