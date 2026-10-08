@@ -8,8 +8,8 @@ const quiet = (state) => { state.balls = []; state.spawnIn = 1e9; return state; 
 // Just inside the lattice spot, so the ball is touching rather than merely adjacent.
 const ballAt = (state, p, q, r, color) => { const o = hexOffset(q, r); state.balls.push({ id: state.nextId++, x: p.x + o.x * 0.97, y: p.y + o.y * 0.97, vx: 0, vy: 0, color }); };
 
-test('all three modes start playable, reproducible and for one or two players', () => {
-  for (const mode of ['pop2', 'pop3', 'surge']) {
+test('all four modes start playable, reproducible and for one or two players', () => {
+  for (const mode of ['pop2', 'pop3', 'surge', 'blast']) {
     const a = createGame(mode, 42), b = createGame(mode, 42);
     assert.equal(a.phase, 'playing'); assert.deepEqual(a, b); assert.equal(a.players.length, 2);
     assert.equal(createGame(mode, 42, { players: 1 }).players.length, 1);
@@ -17,7 +17,7 @@ test('all three modes start playable, reproducible and for one or two players', 
   assert.throws(() => createGame('nope'));
 });
 test('a snapshot sent over the network keeps ticking exactly like the original', () => {
-  for (const mode of ['pop2', 'pop3', 'surge']) {
+  for (const mode of ['pop2', 'pop3', 'surge', 'blast']) {
     const host = createGame(mode, 7); run(host, 3);
     const guest = JSON.parse(JSON.stringify(host));
     run(host, 2); run(guest, 2);
@@ -169,7 +169,7 @@ test('山山兔: the grab key picks up the nearest piece and drops it where the 
 });
 
 test('ended games and malformed input are ignored', () => {
-  for (const mode of ['pop2', 'pop3', 'surge']) {
+  for (const mode of ['pop2', 'pop3', 'surge', 'blast']) {
     const state = createGame(mode, 1);
     assert.equal(act(state, 99, { type: 'move', x: 1, y: 1 }), false);
     assert.equal(act(state, 0, { type: 'move', x: NaN, y: 0 }), false);

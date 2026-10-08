@@ -1,10 +1,12 @@
-// Original vector artwork for the three arcade boards.
+// Original vector artwork for the arcade boards.
 //
 // One visual language across all games: candy-clay volumes lit from the top left,
 // a chunky dark outline so shapes stay readable at phone size, a soft contact
 // shadow under everything, and a coloured glow on whatever the player must react
 // to. Nothing here is loaded from the network — every shape is drawn with canvas
 // paths so the boards stay crisp at any device pixel ratio.
+//
+// 方块爆破 is the one deliberate exception: it is flat neon arcade, not candy clay.
 
 export const SHADES = {
   red: { base: '#ff5d6c', light: '#ffb0b8', dark: '#bf2a44', edge: '#7d1528', rim: '#ffd7db', glow: '#ff5d6c' },
@@ -12,6 +14,15 @@ export const SHADES = {
   green: { base: '#44c986', light: '#a8f3ce', dark: '#1d8a58', edge: '#0f5437', rim: '#d0fbe6', glow: '#44c986' },
   blue: { base: '#58a8f0', light: '#badcff', dark: '#1f63b6', edge: '#123f74', rim: '#d9edff', glow: '#58a8f0' },
   purple: { base: '#a78bfa', light: '#ded3ff', dark: '#6a46d4', edge: '#3f2889', rim: '#ece4ff', glow: '#a78bfa' },
+  // 方块爆破's six neon tiles. Registered here rather than in a parallel map so
+  // drawBurst, which resolves colours through SHADES, animates a clear in the
+  // piece's own colour instead of falling back to slate.
+  coral: { base: '#ff5d80', light: '#ffb3c4', dark: '#c22a52', edge: '#5e0f28', rim: '#ffd9e2', glow: '#ff5d80' },
+  amber: { base: '#ffb43d', light: '#ffe0a6', dark: '#c4720a', edge: '#63380a', rim: '#fff0d2', glow: '#ffb43d' },
+  lime: { base: '#8fd94a', light: '#d6f7a8', dark: '#4f9116', edge: '#274d0c', rim: '#eaffd2', glow: '#8fd94a' },
+  cyan: { base: '#3fd0e0', light: '#b0f2fa', dark: '#137f96', edge: '#0a4450', rim: '#dcfbff', glow: '#3fd0e0' },
+  violet: { base: '#9b7bff', light: '#d8c9ff', dark: '#5b39cc', edge: '#2d1a70', rim: '#ece5ff', glow: '#9b7bff' },
+  azure: { base: '#4f9dff', light: '#bcdcff', dark: '#1a5fbe', edge: '#0d2f63', rim: '#dcecff', glow: '#4f9dff' },
   slate: { base: '#798093', light: '#c2c8d6', dark: '#454b5c', edge: '#262a37', rim: '#dbe0ea', glow: '#798093' }
 };
 export const PLAYER_SHADES = [
@@ -75,7 +86,7 @@ export function backdrop(ctx, key, w, h, paint) {
     canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     paint(canvas.getContext('2d'), w, h);
-    if (backdrops.size > 4) backdrops.clear();
+    if (backdrops.size > 8) backdrops.clear();
     backdrops.set(key, canvas);
   }
   ctx.drawImage(canvas, 0, 0, w, h);
@@ -889,4 +900,82 @@ export function drawStat(ctx, text, x, y, { size = 20, color = '#ffffff', align 
   if (outline) { ctx.lineWidth = outline; ctx.strokeStyle = 'rgba(6,10,20,.8)'; ctx.strokeText(text, x, y); }
   ctx.fillStyle = color; ctx.fillText(text, x, y);
   ctx.restore();
+}
+
+// --- 方块爆破: flat neon arcade, the deliberate opposite of the candy-clay set ---
+//
+// No volumes, no faces, no gradients: a tile is a flat slab with a hard highlight
+// bar along the top and a darker band at the bottom, so it reads as a lit arcade
+// button rather than a lump of clay.
+
+export function drawBlastBackdrop(ctx, w, h, t) {
+  backdrop(ctx, 'blast', w, h, (c) => {
+    const base = c.createLinearGradient(0, 0, 0, h);
+    base.addColorStop(0, '#12102a'); base.addColorStop(.6, '#0e0c22'); base.addColorStop(1, '#0b0a18');
+    c.fillStyle = base; c.fillRect(0, 0, w, h);
+    // A faint diagonal lattice, so the deep indigo reads as a grid and not a void.
+    c.strokeStyle = 'rgba(255,255,255,.035)'; c.lineWidth = 1;
+    for (let d = -h; d < w; d += 40) { c.beginPath(); c.moveTo(d, 0); c.lineTo(d + h, h); c.stroke(); }
+    for (let d = 0; d < w + h; d += 40) { c.beginPath(); c.moveTo(d, 0); c.lineTo(d - h, h); c.stroke(); }
+    for (const [x, y, r, color] of [[90, 660, 320, '#ff5d80'], [640, 90, 300, '#3fd0e0']]) {
+      const g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, withAlpha(color, .22)); g.addColorStop(1, withAlpha(color, 0));
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }
+  });
+  // A slow sweep of light, drawn live so it is not frozen into the cached canvas.
+  const y = ((t * 42) % (h + 240)) - 120;
+  const sweep = ctx.createLinearGradient(0, y - 90, 0, y + 90);
+  sweep.addColorStop(0, withAlpha('#3fd0e0', 0));
+  sweep.addColorStop(.5, withAlpha('#3fd0e0', .05));
+  sweep.addColorStop(1, withAlpha('#3fd0e0', 0));
+  ctx.fillStyle = sweep; ctx.fillRect(0, y - 90, w, 180);
+}
+
+export function drawBlastBoard(ctx, x, y, w, h, cell, cols, rows) {
+  blit(ctx, `blast-board:${cols}x${rows}`, x + w / 2, y + h / 2, w, h, (c) => {
+    const r = 18, inset = 4;
+    // The slab has to sit clearly above the backdrop, and the sockets clearly below
+    // it, or the 8×8 grid disappears into the indigo.
+    roundRect(c, 0, 0, w, h, r); c.fillStyle = '#26224e'; c.fill();
+    c.save(); roundRect(c, 0, 0, w, h, r); c.clip();
+    // One inset socket per cell, so an empty cell still reads as a slot.
+    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+      const sx = col * cell + inset, sy = row * cell + inset, size = cell - inset * 2;
+      roundRect(c, sx, sy, size, size, 10); c.fillStyle = 'rgba(6,5,18,.92)'; c.fill();
+      roundRect(c, sx + 1, sy + 1, size - 2, size - 2, 9); c.strokeStyle = 'rgba(255,255,255,.09)'; c.lineWidth = 1; c.stroke();
+    }
+    c.restore();
+    roundRect(c, 1, 1, w - 2, h - 2, r - 1);
+    c.strokeStyle = withAlpha('#3fd0e0', .6); c.lineWidth = 2; c.stroke();
+  });
+}
+
+export function drawBlastTile(ctx, x, y, size, color, alpha = 1) {
+  const s = shade(color);
+  ctx.save(); ctx.globalAlpha *= alpha;
+  // The `blast:` prefix keeps these from colliding with drawBlock's candy sprites
+  // when a size happens to match, and `s.base` invalidates them if the palette moves.
+  blit(ctx, `blast:${color}:${s.base}`, x, y, size, size, (c, w, h) => {
+    const r = Math.max(3, w * .22), top = Math.max(2, h * .15), bottom = Math.max(3, h * .2);
+    roundRect(c, 0, 0, w, h, r); c.fillStyle = s.base; c.fill();
+    c.save(); roundRect(c, 0, 0, w, h, r); c.clip();
+    c.fillStyle = s.light; c.fillRect(0, 0, w, top);
+    c.fillStyle = s.dark; c.fillRect(0, h - bottom, w, bottom);
+    c.restore();
+    roundRect(c, 1, 1, w - 2, h - 2, r - 1); c.strokeStyle = s.edge; c.lineWidth = 2; c.stroke();
+    roundRect(c, 3.5, 3.5, w - 7, h - 7, Math.max(2, r - 3));
+    c.strokeStyle = withAlpha(s.rim, .32); c.lineWidth = 1; c.stroke();
+  });
+  ctx.restore();
+}
+
+export function drawBlastSlot(ctx, x, y, w, h, active = false) {
+  blit(ctx, `blast-slot:${active ? 1 : 0}`, x, y, w, h, (c) => {
+    roundRect(c, 1.5, 1.5, w - 3, h - 3, 14);
+    c.fillStyle = active ? 'rgba(63,208,224,.10)' : 'rgba(10,9,24,.5)'; c.fill();
+    c.setLineDash([7, 6]);
+    c.strokeStyle = active ? withAlpha('#3fd0e0', .85) : 'rgba(255,255,255,.13)';
+    c.lineWidth = 2; c.stroke(); c.setLineDash([]);
+  });
 }

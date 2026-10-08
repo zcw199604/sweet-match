@@ -1,7 +1,8 @@
 // Deterministic, host-authoritative rules shared by browser and tests.
+import { BLAST_SHAPES } from './blast-shapes.js';
 export const WIDTH = 720;
 export const HEIGHT = 720;
-export const MODES = ['pop2', 'pop3', 'surge'];
+export const MODES = ['pop2', 'pop3', 'surge', 'blast'];
 export const COLORS = ['red', 'yellow', 'green', 'blue'];
 export const POP2_COLORS = [...COLORS, 'purple'];
 
@@ -36,6 +37,19 @@ export const SURGE = {
   // total 0 means the wave never ends.
   ENDLESS: { name: '无尽嘉年华', total: 0, gap: 3, mix: { bug: 4, sheep: 3, hound: 3 } }
 };
+// 方块爆破: an 8×8 well, three pieces in the tray, a full row or column clears.
+export const BLAST = {
+  COLS: 8, ROWS: 8, CELL: 60,
+  LEFT: 120, TOP: 104,                 // the board spans 120..600 × 104..584
+  TRAY_Y: 648, TRAY_CELL: 36,          // the tray band is 584..720
+  TRAY_SLOT_X: [168, 360, 552], TRAY_SLOT_W: 176, TRAY_SLOT_H: 116,
+  STREAK_STEP: 0.05,
+  // The drop cell is tried first, then its eight neighbours, as [dcol, drow].
+  SNAP: [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]]
+};
+// Bound separately from POP2_COLORS: if pop2 ever gains a sixth colour, blast's
+// random stream must not shift.
+export const BLAST_COLORS = ['coral', 'amber', 'lime', 'cyan', 'violet', 'azure'];
 
 const HEX_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
 const SQUARE_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -472,11 +486,97 @@ function actSurge(state, p, action) {
   return false;
 }
 
+// --- 方块爆破 ---
+export const blastCellCentre = (col, row) => ({ x: BLAST.LEFT + (col + 0.5) * BLAST.CELL, y: BLAST.TOP + (row + 0.5) * BLAST.CELL });
+export const blastCellAt = (x, y) => ({ col: Math.floor((x - BLAST.LEFT) / BLAST.CELL), row: Math.floor((y - BLAST.TOP) / BLAST.CELL) });
+const blastInField = (col, row) => Number.isInteger(col) && Number.isInteger(row) && col >= 0 && col < BLAST.COLS && row >= 0 && row < BLAST.ROWS;
+export const blastMultiplier = (streak) => 1 + (streak - 1) * BLAST.STREAK_STEP;
+export function blastCanPlace(state, cells, col, row) {
+  return cells.every(cell => blastInField(col + cell.dx, row + cell.dy) && !state.board[row + cell.dy][col + cell.dx]);
+}
+// The single source of truth for the nine-cell drop search: the model places with
+// it and the view previews with it, so the ghost always shows where the piece lands.
+export function blastSnap(state, cells, col, row) {
+  for (const [dc, dr] of BLAST.SNAP) if (blastCanPlace(state, cells, col + dc, row + dr)) return { col: col + dc, row: row + dr };
+  return null;
+}
+export function blastHasValidPlacement(state, cells) {
+  for (let row = 0; row < BLAST.ROWS; row += 1) for (let col = 0; col < BLAST.COLS; col += 1) if (blastCanPlace(state, cells, col, row)) return true;
+  return false;
+}
+// Draw order is a contract: shape then colour, slots 0→1→2. Changing it later is
+// not a determinism bug, but it silently re-deals every seed.
+function refillTray(state) {
+  state.tray = Array.from({ length: 3 }, () => {
+    const shape = pick(state, BLAST_SHAPES), color = pick(state, BLAST_COLORS);
+    return { id: state.nextId++, name: shape.name, cells: shape.cells.map(cell => ({ dx: cell.dx, dy: cell.dy, color })) };
+  });
+}
+const COMBO_BONUS = { 1: 20, 2: 30, 3: 40, 4: 50, 5: 60, 6: 70, 7: 80, 8: 90, 9: 100 };
+function clearBlastLines(state) {
+  const rows = [], cols = [];
+  for (let row = 0; row < BLAST.ROWS; row += 1) if (state.board[row].every(Boolean)) rows.push(row);
+  for (let col = 0; col < BLAST.COLS; col += 1) {
+    let full = true;
+    for (let row = 0; row < BLAST.ROWS; row += 1) if (!state.board[row][col]) { full = false; break; }
+    if (full) cols.push(col);
+  }
+  const lines = rows.length + cols.length;
+  if (!lines) { state.streak = 0; return 0; }
+  // Scoring counts lines, but the cells must be deduped: the cell where a cleared
+  // row and a cleared column cross belongs to both.
+  const hit = new Set();
+  for (const row of rows) for (let col = 0; col < BLAST.COLS; col += 1) hit.add(row * BLAST.COLS + col);
+  for (const col of cols) for (let row = 0; row < BLAST.ROWS; row += 1) hit.add(row * BLAST.COLS + col);
+  for (const index of hit) {
+    const row = Math.floor(index / BLAST.COLS), col = index % BLAST.COLS, centre = blastCellCentre(col, row);
+    effect(state, { type: 'pop', x: centre.x, y: centre.y, color: state.board[row][col] });
+    state.board[row][col] = null;
+  }
+  state.streak += 1; state.cleared += lines;
+  const gain = Math.floor((lines * BLAST.COLS * 10 + (COMBO_BONUS[Math.min(lines, 9)] || 100)) * blastMultiplier(state.streak));
+  state.score += gain;
+  effect(state, { type: 'text', x: WIDTH / 2, y: BLAST.TOP + BLAST.ROWS * BLAST.CELL / 2, text: `+${gain}` });
+  return lines;
+}
+function blastIsOver(state) {
+  const live = state.tray.filter(Boolean);
+  // .every on an empty tray is true, which would report an instant loss.
+  return live.length > 0 && live.every(piece => !blastHasValidPlacement(state, piece.cells));
+}
+function placeBlastPiece(state, slot, col, row) {
+  if (!Number.isInteger(slot) || slot < 0 || slot >= state.tray.length) return false;
+  const piece = state.tray[slot];
+  if (!piece) return false;
+  const at = blastSnap(state, piece.cells, col, row);
+  if (!at) return false;
+  for (const cell of piece.cells) state.board[at.row + cell.dy][at.col + cell.dx] = cell.color;
+  state.tray[slot] = null;
+  // Clear before refilling and refill before the game-over check, so the verdict is
+  // made against the post-clear board and a full tray.
+  clearBlastLines(state);
+  if (state.tray.every(item => !item)) refillTray(state);
+  if (blastIsOver(state)) state.phase = 'lost';
+  return true;
+}
+function createBlast(state, count) {
+  state.board = Array.from({ length: BLAST.ROWS }, () => Array(BLAST.COLS).fill(null));
+  state.tray = [null, null, null]; state.streak = 0; state.cleared = 0;
+  state.players = Array.from({ length: count }, (_, id) => ({ id, x: 0, y: 0, tx: 0, ty: 0 }));
+  refillTray(state);
+}
+function actBlast(state, action) {
+  return action.type === 'place' && placeBlastPiece(state, action.slot, action.col, action.row);
+}
+// Blast is turn-based: nothing moves between placements. tickGame still advances
+// state.elapsed and expires effects, which is all the clear animation needs.
+function tickBlast() {}
+
 export function createGame(mode = 'pop2', seed = Date.now(), options = {}) {
   if (!MODES.includes(mode)) throw new Error('未知游戏');
   const state = { mode, rng: seed >>> 0, phase: 'playing', score: 0, elapsed: 0, level: 1, effects: [], nextId: 1 };
   const count = options.players === 1 ? 1 : 2;
-  if (mode === 'pop2') createPop2(state, count); else if (mode === 'pop3') createPop3(state, count); else createSurge(state, count);
+  if (mode === 'pop2') createPop2(state, count); else if (mode === 'pop3') createPop3(state, count); else if (mode === 'surge') createSurge(state, count); else createBlast(state, count);
   return state;
 }
 export function act(state, player, action = {}) {
@@ -490,18 +590,21 @@ export function act(state, player, action = {}) {
     } else if (state.mode === 'pop3') {
       if (p.out) return false;
       p.tx = clamp(action.x, 0, POP3.W); p.ty = clamp(action.y, 0, POP3.H);
-    } else {
+    } else if (state.mode === 'surge') {
       p.cmd = null; p.tx = clamp(action.x, 14, WIDTH - 14); p.ty = clamp(action.y, SURGE.BELT_TOP, SURGE.TOP + SURGE.ROWS * SURGE.CELL);
+    } else {
+      p.tx = clamp(action.x, 0, WIDTH); p.ty = clamp(action.y, 0, HEIGHT);
     }
     return true;
   }
   if (state.mode === 'pop3') return action.type === 'beat' && tapBeat(state, p);
   if (state.mode === 'surge') return actSurge(state, p, action);
+  if (state.mode === 'blast') return actBlast(state, action);
   return false;
 }
 export function tickGame(state, dt = 1 / 60) {
   if (!state || state.phase !== 'playing' || !Number.isFinite(dt) || dt <= 0) return;
   dt = Math.min(dt, 0.05); state.elapsed += dt;
   state.effects = state.effects.filter(item => state.elapsed - item.time < 0.9);
-  if (state.mode === 'pop2') tickPop2(state, dt); else if (state.mode === 'pop3') tickPop3(state, dt); else tickSurge(state, dt);
+  if (state.mode === 'pop2') tickPop2(state, dt); else if (state.mode === 'pop3') tickPop3(state, dt); else if (state.mode === 'surge') tickSurge(state, dt); else tickBlast();
 }

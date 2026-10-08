@@ -14,15 +14,15 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes three arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes four arcade cards', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(3);
+  await expect(page.locator('.arcade-card')).toHaveCount(4);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
 
 test('each game shows its whole board and controls without scrolling', async ({ page }) => {
-  for (const mode of ['pop2', 'pop3', 'surge']) {
+  for (const mode of ['pop2', 'pop3', 'surge', 'blast']) {
     await open(page, mode);
     const button = page.locator('#mobile-controls button').last();
     await expect(button).toBeVisible();
@@ -78,6 +78,25 @@ test('one device can switch between solo and shared-screen play', async ({ page 
   await page.locator('.player-toggle').click();
   await expect.poll(async () => (await game(page)).players.length).toBe(2);
   await expect(page.locator('#mobile-controls .beat')).toHaveCount(2);
+});
+
+test('方块爆破: dragging a tray piece onto the board fills cells and empties its slot', async ({ page }) => {
+  await open(page, 'blast');
+  const slot = (await game(page)).tray.findIndex(Boolean);
+  // Tray slot centres sit at 168 + slot*192, y 648; cell (3,3) is the board centre.
+  await page.mouse.move(...await at(page, 168 + slot * 192, 648));
+  await page.mouse.down();
+  await page.mouse.move(...await at(page, 330, 314), { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await game(page)).tray[slot]).toBe(null);
+  expect((await game(page)).board.flat().filter(Boolean).length).toBeGreaterThan(0);
+});
+
+test('方块爆破: the best score is restored from localStorage', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('pao-blast-best', '1234'));
+  await open(page, 'blast');
+  expect(await page.evaluate(() => window.__arcade.best)).toBe(1234);
+  await expect(page.locator('#score-text')).toContainText('1234');
 });
 
 test('泡噗2: every theme reskins the board and the choice sticks', async ({ page }) => {

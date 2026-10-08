@@ -1,6 +1,7 @@
-import { act, beatPhase, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
+import { act, beatPhase, BLAST, blastCellAt, blastCellCentre, blastMultiplier, blastSnap, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
 import {
-  drawBall, drawBlock, drawBelt, drawBurst, drawClubBackdrop, drawDefence, drawEnemy, drawField,
+  drawBall, drawBlastBackdrop, drawBlastBoard, drawBlastSlot, drawBlastTile, drawBlock, drawBelt, drawBurst,
+  drawClubBackdrop, drawDefence, drawEnemy, drawField,
   drawFloatingText, drawMeadowBackdrop, drawPortal, drawRabbit, drawShip, drawSparkle,
   drawStat, drawThruster, drawWell, glow, panel, resetArtCaches, roundRect, SHADES, withAlpha
 } from './art.js';
@@ -12,7 +13,8 @@ import {
 const MODE_META = {
   pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；飞船可以直接穿过星球，但彩球碰到星球就失败。' },
   pop3: { label: 'ARCADE 02', title: '泡噗 3', help: '拖动飞船接住落下的音符，三个同色相连消除。漏掉的音符会让底部的怪鼠上升，消除能把它压回去；跟着光圈点「打拍」累积连击倍率。' },
-  surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' }
+  surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' },
+  blast: { label: 'ARCADE 04', title: '方块爆破', help: '把托盘里的拼块拖进 8×8 棋盘。整行或整列填满就会消除，一次消多行还有额外奖励；连续几手都能消除，分数倍率会一路涨。三个拼块都用完会补上新的一批，托盘里一个都放不下时回合结束。' }
 };
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
@@ -31,6 +33,10 @@ let activePlayer = 0;
 let soloPlayers = 1;
 let axeMode = false;
 let hover = null;
+// 方块爆破's drag is pure view state: game-core only ever sees the committed
+// placement, never where the finger was.
+let blastDrag = null;
+let blastBest = 0;
 let controlsKey = '';
 let hudText = '';
 let lastMove = null;
@@ -200,7 +206,8 @@ async function finishAnswer() {
   catch (error) { setHint(`完成连接失败：${error.message}`, true); }
 }
 
-const newGame = () => createGame(mode, (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0, { players: lan.role === 'solo' ? soloPlayers : 2 });
+// 方块爆破 is a solo puzzle, so it always gets one seat whatever the co-op toggle says.
+const newGame = () => createGame(mode, (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0, { players: mode === 'blast' ? 1 : lan.role === 'solo' ? soloPlayers : 2 });
 // 泡噗2's rules read the same whatever the skin, so the help line names whatever
 // the current theme actually put on the board.
 function pop2Help() {
@@ -219,11 +226,13 @@ function buildStage() {
   canvas.addEventListener('pointerdown', pointerDown);
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   $('#restart-game').addEventListener('click', restartGame);
-  controlsKey = ''; hudText = ''; axeMode = false; hover = null; pointers.clear();
+  controlsKey = ''; hudText = ''; axeMode = false; hover = null; pointers.clear(); blastDrag = null;
   themeChips($('#theme-row'));
   resizeCanvas();
 }
 function startGame(nextMode) {
+  // A guest renders whatever the host broadcasts, so blast is solo-only.
+  if (nextMode === 'blast' && lan.role !== 'solo') return setHint('方块爆破是单机游戏，请先断开连接。', true);
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
@@ -233,7 +242,7 @@ function startGame(nextMode) {
 }
 function restartGame() {
   if (lan.role === 'guest') return setHint('请由房主重新开始。', true);
-  state = newGame(); axeMode = false; hover = null; controlsKey = ''; broadcastSnapshot(true); renderGame();
+  state = newGame(); axeMode = false; hover = null; blastDrag = null; controlsKey = ''; broadcastSnapshot(true); renderGame();
 }
 // Every player this device steers: both seats when two people share one screen.
 const localPlayers = () => (lan.role === 'solo' ? state.players.map(p => p.id) : [activePlayer]);
@@ -261,7 +270,7 @@ function sendAction(player, action) {
   return done;
 }
 function playerAt(point) {
-  if (lan.role !== 'solo' || mode === 'surge') return activePlayer;
+  if (lan.role !== 'solo' || mode === 'surge' || mode === 'blast') return activePlayer;
   if (state.players.length === 1) return 0;
   return point.x < WIDTH / 2 ? 0 : 1;
 }
@@ -284,6 +293,37 @@ function surgePointer(entry, point, release) {
   else if (onField && entry.piece) sendAction(entry.player, { type: 'pick', piece: entry.piece.id, ...cell });
   else if (!entry.piece) sendAction(entry.player, { type: 'move', x: point.x, y: point.y });
 }
+// Hit-test the whole slot rather than the piece's own cells: a tray cell is about
+// 36 logical px — roughly 18 CSS px on a phone, well under a comfortable touch target.
+function blastTraySlot(point) {
+  const { TRAY_SLOT_X, TRAY_Y, TRAY_SLOT_W, TRAY_SLOT_H } = BLAST;
+  for (let slot = 0; slot < TRAY_SLOT_X.length; slot += 1) {
+    if (!state.tray[slot]) continue;
+    if (Math.abs(point.x - TRAY_SLOT_X[slot]) <= TRAY_SLOT_W / 2 && Math.abs(point.y - TRAY_Y) <= TRAY_SLOT_H / 2) return slot;
+  }
+  return -1;
+}
+function blastPointer(entry, point, release) {
+  if (release) {
+    if (blastDrag && blastDrag.pointerId === entry.pointerId) {
+      const cell = blastCellAt(point.x, point.y);
+      sendAction(entry.player, { type: 'place', slot: blastDrag.slot, col: cell.col, row: cell.row });
+      blastDrag = null;
+    }
+    hover = null;
+    return;
+  }
+  // A second finger must not hijack a drag that is already in flight.
+  if (blastDrag && blastDrag.pointerId !== entry.pointerId) return;
+  if (!blastDrag) {
+    const slot = blastTraySlot(point);
+    if (slot < 0) return;
+    blastDrag = { pointerId: entry.pointerId, slot, piece: state.tray[slot] };
+  }
+  // The ghost snaps through the same rule the model places with, so it never lies.
+  const raw = blastCellAt(point.x, point.y), at = blastSnap(state, blastDrag.piece.cells, raw.col, raw.row);
+  hover = { col: (at || raw).col, row: (at || raw).row, cells: blastDrag.piece.cells, ok: Boolean(at) };
+}
 function pointerDown(event) {
   if (!state) return;
   event.preventDefault();
@@ -294,6 +334,7 @@ function pointerDown(event) {
   const entry = { player, start: point, last: point, base: { x: p.x, y: p.y }, moved: false, time: performance.now() };
   pointers.set(event.pointerId, entry);
   if (mode === 'surge') surgePointer(entry, point, false);
+  if (mode === 'blast') blastPointer(entry, point, false);
 }
 function pointerMove(event) {
   const entry = pointers.get(event.pointerId), canvas = $('.game-canvas');
@@ -302,6 +343,7 @@ function pointerMove(event) {
   const point = canvasPoint(canvas, event); entry.last = point;
   if (Math.hypot(point.x - entry.start.x, point.y - entry.start.y) > 8) entry.moved = true;
   if (mode === 'surge') return surgePointer(entry, point, false);
+  if (mode === 'blast') return blastPointer(entry, point, false);
   if (!entry.moved) return;
   // Relative drag: the finger never has to sit on top of the ship it steers.
   const gain = DRAG_GAIN / (mode === 'pop3' ? wellRect(entry.player, state.players.length).s : 1);
@@ -311,9 +353,10 @@ function pointerUp(event) {
   const entry = pointers.get(event.pointerId);
   if (!entry) return;
   pointers.delete(event.pointerId);
-  if (!state || event.type === 'pointercancel') { hover = null; return; }
+  if (!state || event.type === 'pointercancel') { hover = null; blastDrag = null; return; }
   event.preventDefault();
   if (mode === 'surge') surgePointer(entry, entry.last, true);
+  else if (mode === 'blast') blastPointer(entry, entry.last, true);
   else if (mode === 'pop3' && !entry.moved && performance.now() - entry.time < 350) sendAction(entry.player, { type: 'beat' });
 }
 // WASD drives the first local seat and the arrows the second; with one seat both sets work.
@@ -388,6 +431,13 @@ function applyStoredTheme() {
   let stored = null;
   try { stored = localStorage.getItem('pao-theme'); } catch { /* private mode */ }
   theme = isTheme(stored) ? stored : DEFAULT_THEME;
+}
+// 方块爆破 is the only board with a score worth keeping between visits.
+function loadBlastBest() {
+  try { blastBest = Math.max(0, Number(localStorage.getItem('pao-blast-best')) || 0); } catch { blastBest = 0; }
+}
+function saveBlastBest(value) {
+  try { localStorage.setItem('pao-blast-best', String(value)); } catch { /* private mode */ }
 }
 
 // Clears animate from the effect's own timestamp, so host and guest agree.
@@ -583,6 +633,59 @@ function renderSurge(ctx) {
   drawBanner(ctx);
 }
 
+// Tray pieces are shrunk to fit their slot. The scale is quantised to quarter steps
+// so the sprite cache gains a handful of entries rather than one per distinct size —
+// overflowing it clears every cached sprite, including the other boards'.
+function blastTraySize(piece) {
+  const cell = BLAST.TRAY_CELL;
+  const width = Math.max(...piece.cells.map(c => c.dx)) + 1, height = Math.max(...piece.cells.map(c => c.dy)) + 1;
+  const fit = Math.min(1, (BLAST.TRAY_SLOT_W - 26) / (width * cell), (BLAST.TRAY_SLOT_H - 22) / (height * cell));
+  return cell * Math.max(0.25, Math.round(fit * 4) / 4);
+}
+function drawBlastTrayPiece(ctx, piece, cx, cy) {
+  const size = blastTraySize(piece);
+  const width = (Math.max(...piece.cells.map(c => c.dx)) + 1) * size, height = (Math.max(...piece.cells.map(c => c.dy)) + 1) * size;
+  const left = cx - width / 2, top = cy - height / 2;
+  for (const cell of piece.cells) drawBlastTile(ctx, left + (cell.dx + .5) * size, top + (cell.dy + .5) * size, size - 4, cell.color);
+}
+function renderBlast(ctx) {
+  const { COLS, ROWS, CELL, LEFT, TOP, TRAY_Y, TRAY_SLOT_X, TRAY_SLOT_W, TRAY_SLOT_H } = BLAST;
+  drawBlastBackdrop(ctx, WIDTH, HEIGHT, state.elapsed);
+  drawStat(ctx, '方块爆破', 24, 42, { size: 21, align: 'left' });
+  drawStat(ctx, `${state.score} 分`, WIDTH - 24, 42, { size: 21, color: '#ffd543', align: 'right' });
+  // The best score and the line count live in the HUD line above the board; only the
+  // streak needs a place on the canvas, and only once it is actually running.
+  if (state.streak > 1) drawStat(ctx, `连击 ×${blastMultiplier(state.streak).toFixed(2)}`, WIDTH - 24, 76, { size: 13, color: '#3fd0e0', align: 'right', outline: 3 });
+
+  drawBlastBoard(ctx, LEFT, TOP, COLS * CELL, ROWS * CELL, CELL, COLS, ROWS);
+  for (let row = 0; row < ROWS; row += 1) for (let col = 0; col < COLS; col += 1) {
+    if (!state.board[row][col]) continue;
+    const at = blastCellCentre(col, row);
+    drawBlastTile(ctx, at.x, at.y, CELL - 6, state.board[row][col]);
+  }
+  // The piece follows the finger, but the outline marks where it will really land.
+  // Clipped to the board: a piece that does not fit must not spill over the tray.
+  if (blastDrag) {
+    const origin = blastCellCentre(hover.col, hover.row);
+    ctx.save();
+    roundRect(ctx, LEFT, TOP, COLS * CELL, ROWS * CELL, 18); ctx.clip();
+    for (const cell of blastDrag.piece.cells) drawBlastTile(ctx, origin.x + cell.dx * CELL, origin.y + cell.dy * CELL, CELL - 6, cell.color, .55);
+    ctx.strokeStyle = hover.ok ? '#44c986' : '#8b93a5'; ctx.lineWidth = 3; ctx.setLineDash([7, 5]);
+    for (const cell of blastDrag.piece.cells) {
+      const at = blastCellCentre(hover.col + cell.dx, hover.row + cell.dy);
+      roundRect(ctx, at.x - CELL / 2 + 2, at.y - CELL / 2 + 2, CELL - 4, CELL - 4, 10); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+  for (let slot = 0; slot < TRAY_SLOT_X.length; slot += 1) {
+    const active = blastDrag?.slot === slot;
+    drawBlastSlot(ctx, TRAY_SLOT_X[slot], TRAY_Y, TRAY_SLOT_W, TRAY_SLOT_H, active);
+    if (state.tray[slot] && !active) drawBlastTrayPiece(ctx, state.tray[slot], TRAY_SLOT_X[slot], TRAY_Y);
+  }
+  drawEffects(ctx);
+}
+
 function renderEnd(ctx) {
   ctx.fillStyle = 'rgba(8,12,22,.82)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
   const w = 440, h = 190;
@@ -595,6 +698,7 @@ function hudLine() {
   const tail = state.phase === 'playing' ? '' : state.phase === 'won' ? ' · 完成！' : ' · 回合结束';
   if (mode === 'pop2') return `${state.score} 分 · 已消除 ${state.cleared}${tail}`;
   if (mode === 'pop3') return `${state.score} 分 · 评价 ${state.rank || 'C'} · ${Math.max(0, Math.ceil(state.timeLeft))}s${tail}`;
+  if (mode === 'blast') return `${state.score} 分 · 最高 ${Math.max(blastBest, state.score)} · 消除 ${state.cleared} 行${state.streak > 1 ? ` · ×${blastMultiplier(state.streak).toFixed(2)}` : ''}${tail}`;
   return `${state.score} 分 · 防线 ${state.lives} · 击退 ${state.defeated}/${surgeStage(state).total || '∞'}${tail}`;
 }
 function renderGame() {
@@ -604,7 +708,10 @@ function renderGame() {
     ctx.fillStyle = '#111824'; ctx.fillRect(0, 0, WIDTH, HEIGHT); label(ctx, '等待房主同步棋盘……', WIDTH / 2, HEIGHT / 2, 24);
     return;
   }
-  if (mode === 'pop2') renderPop2(ctx); else if (mode === 'pop3') renderPop3(ctx); else renderSurge(ctx);
+  if (mode === 'pop2') renderPop2(ctx); else if (mode === 'pop3') renderPop3(ctx); else if (mode === 'surge') renderSurge(ctx); else renderBlast(ctx);
+  // The score only moves on a clearing placement, so this writes at most once per
+  // scoring event rather than once per frame.
+  if (mode === 'blast' && state.score > blastBest) { blastBest = state.score; saveBlastBest(blastBest); }
   if (state.phase === 'playing') endedAt = 0; else { endedAt ||= performance.now(); renderEnd(ctx); }
   const text = hudLine();
   if (text !== hudText) { hudText = text; $('#score-text').textContent = text; }
@@ -627,7 +734,9 @@ function setupControls() {
     node.addEventListener(instant ? 'pointerdown' : 'click', (event) => { if (instant) event.preventDefault(); run(); }); controls.appendChild(node); return node;
   };
   if (mode === 'pop2') themeChips($('#theme-row'));
-  if (lan.role === 'solo') button(state.players.length === 1 ? '单人 · 切换同屏双人' : '同屏双人 · 切换单人', () => { soloPlayers = soloPlayers === 1 ? 2 : 1; activePlayer = 0; restartGame(); }, 'player-toggle');
+  // 方块爆破 is solo-only, so it never gets the seat toggle.
+  if (lan.role === 'solo' && mode !== 'blast') button(state.players.length === 1 ? '单人 · 切换同屏双人' : '同屏双人 · 切换单人', () => { soloPlayers = soloPlayers === 1 ? 2 : 1; activePlayer = 0; restartGame(); }, 'player-toggle');
+  if (mode === 'blast') button('重新开始', restartGame);
   if (mode === 'pop3') for (const seat of localPlayers()) button(localPlayers().length > 1 ? `P${seat + 1} 打拍` : '打拍', () => sendAction(seat, { type: 'beat' }), 'beat', true);
   if (mode === 'surge') {
     if (lan.role === 'solo' && state.players.length > 1) button(`操作 P${activePlayer + 1}`, () => { activePlayer = activePlayer ? 0 : 1; }, 'player-toggle');
@@ -660,12 +769,13 @@ $('#make-offer').addEventListener('click', makeOffer); $('#make-answer').addEven
 $$('[data-copy]').forEach((node) => node.addEventListener('click', async () => { const target = $(`#${node.dataset.copy}`); await navigator.clipboard?.writeText(target.value); setHint('已复制到剪贴板。'); }));
 $$('.tab').forEach((tab) => tab.addEventListener('click', () => { $$('.tab').forEach((other) => other.classList.toggle('active', other === tab)); $('#server-panel').classList.toggle('active', tab.dataset.tab === 'server'); $('#webrtc-panel').classList.toggle('active', tab.dataset.tab === 'webrtc'); }));
 $('#lan-server-url').value = new URLSearchParams(location.search).get('lan') || localStorage.getItem('pao-lan-server') || location.origin;
+loadBlastBest();
 for (const type of ['pointermove', 'pointerup', 'pointercancel']) document.addEventListener(type, type === 'pointermove' ? pointerMove : pointerUp, { passive: false });
 document.addEventListener('keydown', keyboard); document.addEventListener('keyup', keyboard);
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; } };
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';
