@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="noindex,nofollow"/><meta name="color-scheme" content="dark light"/>
+<title>游玩记录</title>
+<style>
+:root{--bg:#f4f5f8;--card:#fff;--ink:#1c2233;--mute:#6b7488;--line:#e1e4ec;--accent:#2f8f6b;--err:#bc5d6d}
+@media (prefers-color-scheme:dark){:root{--bg:#171c28;--card:#202638;--ink:#e8ebf3;--mute:#8d96ab;--line:#2f3750;--accent:#4fc59a;--err:#e08a99}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:4px 0 12px}h2{font-size:14px;margin:0 0 10px;color:var(--mute);font-weight:600}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,input{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+button{cursor:pointer}button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+input{min-width:0;flex:1 1 220px}
+.err{color:var(--err);margin:6px 0 0}.err:empty{display:none}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.cards div{border:1px solid var(--line);border-radius:10px;padding:10px}.cards b{display:block;font-size:20px}.cards span{color:var(--mute);font-size:12px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mute);font-weight:600;font-size:12px}
+.scroll{overflow-x:auto}tr.pick{cursor:pointer}tr.pick:hover,tr.sel{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.mono{font-family:ui-monospace,Menlo,monospace;color:var(--mute);font-size:12px}
+.row{display:grid;grid-template-columns:96px 1fr 72px;gap:8px;align-items:center;margin:4px 0}
+.track{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.track i{display:block;height:100%;background:var(--accent)}
+.heat{display:grid;grid-template-columns:84px repeat(24,minmax(10px,1fr));gap:2px;align-items:center;font-size:11px;color:var(--mute);min-width:520px}
+.heat i{display:block;height:18px;border-radius:3px;background:var(--accent)}.heat .h{text-align:center}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>游玩记录 <span class="mono">· 时间均为东八区</span></h1>
+  <section id="login">
+    <form class="bar" id="login-form"><input id="token" type="password" autocomplete="off" placeholder="访问令牌 ADMIN_TOKEN"/><button class="on">进入</button></form>
+    <p class="err" id="login-error"></p>
+  </section>
+  <div id="panel" class="hide">
+    <section><div class="bar" id="ranges"></div><p class="err" id="error"></p></section>
+    <section><div class="cards" id="cards"></div></section>
+    <section><h2>各游戏时长</h2><div id="games"></div></section>
+    <section><h2>玩家（点一行只看这个人）</h2><div class="scroll"><table id="players"></table></div></section>
+    <section><h2 id="heat-title">时段热力图</h2><div class="scroll"><div class="heat" id="heat"></div></div></section>
+    <section><h2 id="line-title">时间线</h2><div class="scroll"><table id="timeline"></table></div></section>
+  </div>
+</main>
+<script type="module">
+import { cnDate, cnDayStart, cnTime, boardTitle, formatDuration, gameOf, heatmap, summarizePlayers } from './activity-core.js';
+import { GAMES } from './leaderboard-core.js';
+
+const DAY = 86400000, KEY = 'pao-ops-token';
+const RANGES = [['今天', 1], ['近 7 天', 7], ['近 30 天', 30]];
+const $ = (s) => document.querySelector(s);
+const el = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
+const gameTitle = (id) => GAMES.find((g) => g.id === id)?.title ?? id;
+let token = '', days = 7, sessions = [], selected = null;
+try { token = sessionStorage.getItem(KEY) ?? ''; } catch { /* 隐私模式 */ }
+
+async function load() {
+  const today = cnDayStart(Date.now());
+  const from = today - (days - 1) * DAY, to = today + DAY;
+  const response = await fetch(`/api/admin/activity?from=${from}&to=${to}`, { headers: { authorization: `Bearer ${token}` }, cache: 'no-store' });
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 401) { try { sessionStorage.removeItem(KEY); } catch {} throw Object.assign(new Error(data.error), { auth: true }); }
+  if (!response.ok) throw new Error(data.error || `请求失败 (${response.status})`);
+  sessions = data.sessions;
+  $('#error').textContent = data.truncated ? '记录太多，只显示了最早的一部分，请缩小范围。' : '';
+  render();
+}
+
+function render() {
+  const players = summarizePlayers(sessions);
+  if (selected && !players.some((p) => p.pid === selected)) selected = null;
+  const scoped = selected ? sessions.filter((s) => s.pid === selected) : sessions;
+  const total = scoped.reduce((sum, s) => sum + s.active_ms, 0);
+
+  $('#ranges').replaceChildren(...RANGES.map(([label, n]) => { const b = el('button', label, n === days ? 'on' : ''); b.type = 'button'; b.onclick = () => { days = n; refresh(); }; return b; }));
+  $('#cards').replaceChildren(...[[players.length + ' 人', '玩家'], [scoped.length + ' 段', '游玩次数'], [formatDuration(total), '总时长']].map(([v, l]) => { const d = el('div'); d.append(el('b', v), el('span', l)); return d; }));
+
+  const byGame = {};
+  for (const s of scoped) byGame[gameOf(s.board)] = (byGame[gameOf(s.board)] ?? 0) + s.active_ms;
+  const max = Math.max(1, ...Object.values(byGame));
+  $('#games').replaceChildren(...GAMES.map(({ id, title }) => {
+    const row = el('div', undefined, 'row'), track = el('div', undefined, 'track'), bar = el('i');
+    bar.style.width = `${((byGame[id] ?? 0) / max) * 100}%`; track.append(bar);
+    row.append(el('span', title), track, el('span', formatDuration(byGame[id] ?? 0))); return row;
+  }));
+
+  const table = $('#players'), head = el('tr');
+  head.append(...['昵称', '总时长', '次数', '最近在线', '最常玩'].map((t) => el('th', t)));
+  table.replaceChildren(head, ...players.map((p) => {
+    const tr = el('tr', undefined, `pick${p.pid === selected ? ' sel' : ''}`);
+    const top = Object.entries(p.byGame).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const name = el('td', p.name); name.append(el('span', ` ${p.pid.slice(0, 6)}`, 'mono'));
+    tr.append(name, el('td', formatDuration(p.total)), el('td', String(p.count)), el('td', `${cnDate(p.lastAt).slice(5)} ${cnTime(p.lastAt)}`), el('td', top ? gameTitle(top) : ''));
+    tr.onclick = () => { selected = p.pid === selected ? null : p.pid; render(); };
+    return tr;
+  }));
+  if (!players.length) table.replaceChildren(el('caption', '这段时间没有记录'));
+
+  const who = selected ? players.find((p) => p.pid === selected)?.name : '全部玩家';
+  $('#heat-title').textContent = `时段热力图 · ${who}（格子越深，该小时玩得越久）`;
+  const rows = heatmap(scoped), peak = Math.max(1, ...rows.flatMap((r) => r.hours));
+  const heat = $('#heat'), cells = [el('span'), ...Array.from({ length: 24 }, (_, h) => el('span', h % 3 === 0 ? String(h) : '', 'h'))];
+  for (const { date, hours } of rows) {
+    cells.push(el('span', date.slice(5)));
+    hours.forEach((ms, h) => { const c = el('i'); c.style.opacity = ms ? Math.max(0.12, ms / peak) : 0.06; c.title = `${date} ${String(h).padStart(2, '0')}:00 · ${formatDuration(ms)}`; cells.push(c); });
+  }
+  heat.replaceChildren(...cells);
+
+  $('#line-title').textContent = `时间线 · ${who}${scoped.length > 200 ? '（最近 200 段）' : ''}`;
+  const line = $('#timeline'), lh = el('tr');
+  lh.append(...(selected ? ['日期', '时间', '游戏', '时长'] : ['日期', '时间', '玩家', '游戏', '时长']).map((t) => el('th', t)));
+  line.replaceChildren(lh, ...[...scoped].reverse().slice(0, 200).map((s) => {
+    const tr = el('tr');
+    const cols = [cnDate(s.start_at), `${cnTime(s.start_at)}–${cnTime(s.last_at)}`];
+    if (!selected) cols.push(s.name);
+    cols.push(boardTitle(s.board, GAMES), formatDuration(s.active_ms));
+    tr.append(...cols.map((t) => el('td', t))); return tr;
+  }));
+}
+
+async function refresh() {
+  try { await load(); $('#login').classList.add('hide'); $('#panel').classList.remove('hide'); }
+  catch (error) {
+    if (error.auth || !token) { $('#panel').classList.add('hide'); $('#login').classList.remove('hide'); $('#login-error').textContent = error.auth ? '令牌不对' : ''; }
+    else { $('#error').textContent = error.message; if (!$('#login').classList.contains('hide')) $('#login-error').textContent = error.message; }
+  }
+}
+$('#login-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  token = $('#token').value.trim(); $('#token').value = '';
+  try { sessionStorage.setItem(KEY, token); } catch { /* 隐私模式 */ }
+  $('#login-error').textContent = '';
+  refresh();
+});
+if (token) refresh();
+</script>
+</body>
+</html>

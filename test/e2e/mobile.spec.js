@@ -334,3 +334,58 @@ test.describe('山山兔 sideways on a phone', () => {
     await expect(page.locator('#score-text')).not.toContainText('⚡');
   });
 });
+
+// ---- 游玩记录：桩接口收心跳 ----
+test('活跃时长只在游戏界面计时，离开时上报累计值，模式切换另起一段', async ({ page }) => {
+  const reports = [];
+  await page.route('**/api/activity', async (route) => { reports.push(JSON.parse(route.request().postData())); await route.fulfill({ json: { ok: true } }); });
+  await page.route('**/api/scores**', (route) => route.abort());
+  await page.clock.install();
+  await page.goto('/');
+  await page.locator('body[data-ready]').waitFor();
+  await page.clock.runFor(3_000); // 在首页停留不计时
+  await page.locator('[data-mode="pop3"]').click();
+  await expect(page.locator('.game-canvas')).toBeVisible();
+  await page.mouse.move(100, 100);
+  await page.clock.runFor(10_000);
+  await page.locator('#mobile-controls .mode-toggle').click(); // 经典 → 无尽
+  await page.mouse.move(120, 120);
+  await page.clock.runFor(8_000);
+  await page.locator('#back-home').click();
+  await expect.poll(() => reports.length).toBe(2);
+  const [classic, endless] = reports;
+  expect(classic).toMatchObject({ board: 'pop3-classic' });
+  expect(endless).toMatchObject({ board: 'pop3-endless' });
+  expect(classic.active_ms).toBeGreaterThan(8_000);
+  expect(classic.active_ms).toBeLessThanOrEqual(classic.elapsed_ms);
+  expect(endless.active_ms).toBeGreaterThan(6_000);
+  expect(endless.active_ms).toBeLessThan(10_000);
+  expect(endless.sid).not.toBe(classic.sid);
+  expect(endless.pid).toBe(classic.pid);
+});
+
+test('隐藏看板: 令牌错误回到登录，正确后按东八区展示玩家、时间线和热力图', async ({ page }) => {
+  const day = Date.UTC(2026, 9, 8, 13, 58); // 北京时间 21:58
+  const sessions = [
+    { sid: 'sess-0001', pid: 'player-0001', name: '小明', board: 'goose-classic', start_at: day, last_at: day + 22 * 60_000, active_ms: 20 * 60_000 },
+    { sid: 'sess-0002', pid: 'player-0002', name: '小红', board: 'blast', start_at: day + 3600_000, last_at: day + 3600_000 + 9 * 60_000, active_ms: 9 * 60_000 }
+  ];
+  await page.route('**/api/admin/activity**', (route) => {
+    if (route.request().headers().authorization !== 'Bearer good') return route.fulfill({ status: 401, json: { error: '令牌不对' } });
+    return route.fulfill({ json: { sessions, truncated: false } });
+  });
+  await page.goto('/ops.html');
+  await page.locator('#token').fill('bad');
+  await page.locator('#login-form button').click();
+  await expect(page.locator('#login-error')).toHaveText('令牌不对');
+  await page.locator('#token').fill('good');
+  await page.locator('#login-form button').click();
+  await expect(page.locator('#panel')).toBeVisible();
+  await expect(page.locator('#players tr.pick')).toHaveCount(2);
+  await expect(page.locator('#timeline')).toContainText('21:58–22:20');
+  await expect(page.locator('#timeline')).toContainText('抓大鹅 · 经典');
+  await page.locator('#players tr.pick', { hasText: '小红' }).click();
+  await expect(page.locator('#timeline tr')).toHaveCount(2);
+  await expect(page.locator('#timeline')).toContainText('9 分');
+  await expect(page.locator('#heat i[title*="22:00"]').first()).toBeVisible();
+});

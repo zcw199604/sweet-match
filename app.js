@@ -7,6 +7,7 @@ import {
   drawStat, drawThruster, drawWell, glow, panel, resetArtCaches, roundRect, SHADES, withAlpha
 } from './art.js';
 import { initBoard, openBoard, reportScore } from './leaderboard.js';
+import { initActivity, trackActivity } from './activity.js';
 import {
   ballPainter, ballShades, DEFAULT_THEME, drawThemeArena, drawThemeBackdrop, drawThemeBase, drawThemeCraft,
   drawThemeThruster, isTheme, paintThemeChip, resetThemeCaches, THEMES, themeById
@@ -80,7 +81,10 @@ function showScreen(id) {
   window.scrollTo(0, 0);
   if (id === 'home') history.replaceState(null, '', '#home');
   else if (id === 'game') history.replaceState(null, '', `#game/${mode}`);
+  syncActivity();
 }
+// 游玩记录：在游戏界面里就按当前榜单 id 计时，离开就停。模式切换（泡噗3、抓大鹅）后也要调一次。
+function syncActivity() { trackActivity(document.body.classList.contains('playing') ? boardId() : null); }
 function setHint(message = '', error = false) {
   const node = $('#link-hint');
   node.textContent = message;
@@ -134,7 +138,7 @@ function installMessageHandler(message) {
     activePlayer = 1;
     // Keep steering where the guest last pointed until the host has caught up with it.
     if (lastMove && performance.now() - lastMoveAt < 400) act(state, 1, lastMove);
-    if (changed) buildStage();
+    if (changed) { buildStage(); syncActivity(); }
     if (!$('#game').classList.contains('active')) showScreen('game');
     renderGame();
   } else if (message.type === 'hello' && lan.role === 'host' && state) {
@@ -292,6 +296,7 @@ function buildGooseStage(stage, meta) {
     try { localStorage.setItem('pao-goose-mode', gooseMode); } catch { /* private mode */ }
     event.currentTarget.textContent = gooseModeLabel();
     goose?.restart(gooseMode);
+    syncActivity();
   });
   mountGooseView(stage.querySelector('.goose-wrap'));
 }
@@ -984,7 +989,7 @@ function setupControls() {
   // 方块爆破 is solo-only, so it never gets the seat toggle.
   if (lan.role === 'solo' && mode !== 'blast') button(state.players.length === 1 ? '单人 · 切换同屏双人' : '同屏双人 · 切换单人', () => { soloPlayers = soloPlayers === 1 ? 2 : 1; activePlayer = 0; restartGame(); }, 'player-toggle');
   if (mode === 'pop3' && lan.role === 'solo') button(pop3Endless ? '无尽 · 切换经典' : '经典 · 切换无尽', () => {
-    pop3Endless = !pop3Endless; savePop3('pao-pop3-mode', pop3Endless ? 'endless' : 'classic'); restartGame();
+    pop3Endless = !pop3Endless; savePop3('pao-pop3-mode', pop3Endless ? 'endless' : 'classic'); restartGame(); syncActivity();
   }, 'player-toggle mode-toggle');
   if (mode === 'pop3') for (const seat of localPlayers()) button(localPlayers().length > 1 ? `P${seat + 1} 打拍` : '打拍', () => sendAction(seat, { type: 'beat' }), 'beat', true);
   if (mode === 'surge') {
@@ -1016,7 +1021,7 @@ function loop(time) {
 $$('.arcade-card').forEach((card) => card.addEventListener('click', () => startGame(card.dataset.mode)));
 $('#open-link').addEventListener('click', openLink); $('#game-link').addEventListener('click', openLink); $('#close-link').addEventListener('click', closeLink); $('#how-link').addEventListener('click', openLink);
 $('#back-home').addEventListener('click', () => { showScreen('home'); });
-initBoard();
+initBoard(); initActivity();
 $('#open-board').addEventListener('click', () => openBoard());
 $('#game-board').addEventListener('click', () => openBoard(boardId()));
 $('#create-room').addEventListener('click', createRoom); $('#join-room').addEventListener('click', joinRoom); $('#leave-room').addEventListener('click', disconnect);
