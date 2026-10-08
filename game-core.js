@@ -37,12 +37,13 @@ export const SURGE = {
   // total 0 means the wave never ends.
   ENDLESS: { name: '无尽嘉年华', total: 0, gap: 3, mix: { bug: 4, sheep: 3, hound: 3 } }
 };
-// 方块爆破: an 8×8 well, three pieces in the tray, a full row or column clears.
+// 方块爆破: a 10×10 well, three pieces in the tray, a full row or column clears.
+// Its canvas is portrait (720 × HEIGHT) so the board can run edge to edge on a phone.
 export const BLAST = {
-  COLS: 8, ROWS: 8, CELL: 60,
-  LEFT: 120, TOP: 104,                 // the board spans 120..600 × 104..584
-  TRAY_Y: 648, TRAY_CELL: 30,          // the tray band is 584..720
-  TRAY_SLOT_X: [168, 360, 552], TRAY_SLOT_W: 176, TRAY_SLOT_H: 116,
+  COLS: 10, ROWS: 10, CELL: 68, HEIGHT: 936,
+  LEFT: 20, TOP: 80,                   // the board spans 20..700 × 80..760
+  TRAY_Y: 847, TRAY_CELL: 36,          // the tray band is 760..936
+  TRAY_SLOT_X: [124, 360, 596], TRAY_SLOT_W: 224, TRAY_SLOT_H: 150,
   STREAK_STEP: 0.05,
   // The drop cell is tried first, then its eight neighbours, as [dcol, drow].
   SNAP: [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]]
@@ -50,6 +51,10 @@ export const BLAST = {
 // Bound separately from POP2_COLORS: if pop2 ever gains a sixth colour, blast's
 // random stream must not shift.
 export const BLAST_COLORS = ['coral', 'amber', 'lime', 'cyan', 'violet', 'azure'];
+// Deal weight per shape by its cell count: small pieces come up often, the big
+// five-, six- and nine-cell slabs rarely. Uniform dealing over the table killed a
+// simulated player in a median of a dozen moves.
+export const BLAST_WEIGHTS = { 1: 3, 2: 3, 3: 3, 4: 2, 5: 1.2, 6: 0.8, 9: 0.5 };
 
 const HEX_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
 const SQUARE_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -526,13 +531,27 @@ export function blastPreviewLines(state, cells, col, row) {
   const added = new Set(cells.map(cell => (row + cell.dy) * BLAST.COLS + col + cell.dx));
   return blastFullLines((c, r) => Boolean(state.board[r][c]) || added.has(r * BLAST.COLS + c));
 }
-// Draw order is a contract: shape then colour, slots 0→1→2. Changing it later is
-// not a determinism bug, but it silently re-deals every seed.
+const blastWeight = (shape) => BLAST_WEIGHTS[shape.cells.length] ?? 1;
+function pickShape(state, shapes) {
+  let roll = random(state) * shapes.reduce((sum, shape) => sum + blastWeight(shape), 0);
+  for (const shape of shapes) { roll -= blastWeight(shape); if (roll < 0) return shape; }
+  return shapes[shapes.length - 1];
+}
+function dealPiece(state, shapes) {
+  const shape = pickShape(state, shapes), color = pick(state, BLAST_COLORS);
+  return { id: state.nextId++, name: shape.name, cells: shape.cells.map(cell => ({ dx: cell.dx, dy: cell.dy, color })) };
+}
+// Draw order is a contract: shape then colour, slots 0→1→2, then the rescue below.
+// Changing it later is not a determinism bug, but it silently re-deals every seed.
 function refillTray(state) {
-  state.tray = Array.from({ length: 3 }, () => {
-    const shape = pick(state, BLAST_SHAPES), color = pick(state, BLAST_COLORS);
-    return { id: state.nextId++, name: shape.name, cells: shape.cells.map(cell => ({ dx: cell.dx, dy: cell.dy, color })) };
-  });
+  state.tray = Array.from({ length: 3 }, () => dealPiece(state, BLAST_SHAPES));
+  // A fresh triple always offers a move: if none fits, one slot is re-dealt from
+  // the shapes that do. A clear never leaves the board full, so the single cell
+  // always qualifies and this cannot come up empty.
+  if (!state.tray.some(piece => blastHasValidPlacement(state, piece.cells))) {
+    const slot = Math.floor(random(state) * 3);
+    state.tray[slot] = dealPiece(state, BLAST_SHAPES.filter(shape => blastHasValidPlacement(state, shape.cells)));
+  }
   // The view deals the new triple in from this moment.
   state.dealtAt = state.elapsed;
 }
@@ -562,7 +581,7 @@ function clearBlastLines(state, from, color) {
   const gain = Math.floor((lines * BLAST.COLS * 10 + (COMBO_BONUS[Math.min(lines, 9)] || 100)) * blastMultiplier(state.streak));
   state.score += gain;
   // Kept clear of the board's edges so the enlarged callout never spills off it.
-  const at = blastCellCentre(Math.min(5.5, Math.max(1.5, from.col)), Math.min(6, Math.max(1, from.row)));
+  const at = blastCellCentre(Math.min(BLAST.COLS - 2.5, Math.max(1.5, from.col)), Math.min(BLAST.ROWS - 2, Math.max(1, from.row)));
   effect(state, { type: 'text', x: at.x, y: at.y, text: `+${gain}`, lines, streak: state.streak });
   return lines;
 }

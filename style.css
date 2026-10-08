@@ -34,3 +34,24 @@ body.playing{overscroll-behavior:none}
 .blast .art-tile.b{left:106px;top:78px;background:linear-gradient(180deg,#b0f2fa,#3fd0e0 60%,#137f96)}
 .blast .art-tile.c{left:156px;top:30px;background:linear-gradient(180deg,#ffe0a6,#ffb43d 60%,#c4720a)}
 .blast .art-beam{position:absolute;right:26px;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#3fd0e000,#3fd0e0,#ff5d8000)}
+/* 方块爆破's canvas is portrait (720 × 936): cap its width so its height still fits the
+   screen alongside the page chrome above it and the controls below. */
+.canvas-wrap.portrait{max-width:min(860px,max(280px,calc((100vh - 300px) * 720 / 936)));max-width:min(860px,max(280px,calc((100dvh - 300px) * 720 / 936)))}
+.mobile-controls:empty{display:none}
+/* On a phone held upright, 方块爆破 takes the full screen width: one-line nav, no
+   gutters, and no seat label (it is always solo). Restart lives in the stage header. */
+@media(max-width:800px) and (orientation:portrait){
+body.playing[data-mode=blast] main{padding:0}
+body.playing[data-mode=blast] .game-nav{height:52px;padding:0 12px}
+body.playing[data-mode=blast] .game-name span{display:none}
+body.playing[data-mode=blast] .game-name h1{font-size:18px;margin:0}
+body.playing[data-mode=blast] .stage{border-radius:0;box-shadow:none;padding:8px 0 max(12px,env(safe-area-inset-bottom))}
+body.playing[data-mode=blast] .stage-top{padding:0 12px;margin-bottom:8px}
+body.playing[data-mode=blast] #seat-text{display:none}
+body.playing[data-mode=blast] .stage-top strong{font-size:13px}
+body.playing[data-mode=blast] .stage-top button{padding:7px 12px}
+body.playing[data-mode=blast] .canvas-wrap.portrait{width:100%;max-width:max(250px,calc((100vh - 120px) * 720 / 936));max-width:max(250px,calc((100dvh - 120px) * 720 / 936))}
+body.playing[data-mode=blast] .game-canvas{border-radius:0}
+body.playing[data-mode=blast] .game-help{padding:0 14px}
+}
+@media(orientation:landscape) and (max-height:600px){.canvas-wrap.portrait{max-width:none;width:max(160px,calc((100vh - 78px) * 720 / 936));width:max(160px,calc((100dvh - 78px) * 720 / 936))}}

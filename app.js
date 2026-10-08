@@ -15,7 +15,7 @@ const MODE_META = {
   pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；飞船可以直接穿过星球，但彩球碰到星球就失败。' },
   pop3: { label: 'ARCADE 02', title: '泡噗 3', help: '拖动飞船接住落下的音符，三个同色相连消除。漏掉的音符会让底部的怪鼠上升，消除能把它压回去；跟着光圈点「打拍」累积连击倍率。' },
   surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' },
-  blast: { label: 'ARCADE 04', title: '方块爆破', help: '把托盘里的拼块拖进 8×8 棋盘。整行或整列填满就会消除，一次消多行还有额外奖励；连续几手都能消除，分数倍率会一路涨。三个拼块都用完会补上新的一批，托盘里一个都放不下时回合结束。' }
+  blast: { label: 'ARCADE 04', title: '方块爆破', help: '把托盘里的拼块拖进 10×10 棋盘。整行或整列填满就会消除，一次消多行还有额外奖励；连续几手都能消除，分数倍率会一路涨。三个拼块都用完会补上新的一批，托盘里一个都放不下时回合结束。' }
 };
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
@@ -225,9 +225,11 @@ function stageHelp() { return mode === 'pop2' ? pop2Help() : MODE_META[mode].hel
 function buildStage() {
   const meta = MODE_META[mode], stage = $('#game-stage');
   $('#mode-label').textContent = meta.label; $('#game-title').textContent = meta.title;
+  // Lets the stylesheet give one board its own page layout (方块爆破 goes edge to edge on phones).
+  document.body.dataset.mode = mode;
   // Only 泡噗2 is reskinned, so only that board gets the picker.
   const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
-  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap"><canvas class="game-canvas" width="720" height="720" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap${mode === 'blast' ? ' portrait' : ''}"><canvas class="game-canvas" width="720" height="${viewHeight()}" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
   const canvas = stage.querySelector('canvas');
   canvas.addEventListener('pointerdown', pointerDown);
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -257,8 +259,10 @@ function wellRect(index, count) {
   if (count === 1) return { x: 20, y: 10, s: 700 / POP3.H };
   return { x: index ? 375 : 15, y: 104, s: 1 };
 }
+// 方块爆破 draws on a portrait canvas; every other board is the square WIDTH × HEIGHT.
+const viewHeight = () => (mode === 'blast' ? BLAST.HEIGHT : HEIGHT);
 function canvasPoint(canvas, event) {
-  const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * WIDTH / rect.width, y: (event.clientY - rect.top) * HEIGHT / rect.height };
+  const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * WIDTH / rect.width, y: (event.clientY - rect.top) * viewHeight() / rect.height };
 }
 function sendAction(player, action) {
   if (!state) return false;
@@ -688,7 +692,7 @@ function renderBlast(ctx) {
   // clear finishes and the board can grey out.
   const endAge = state.phase === 'playing' || !endedAt ? 0 : (now - endedAt) / 1000;
   const clock = state.elapsed + endAge, ended = state.phase !== 'playing';
-  drawBlastBackdrop(ctx, WIDTH, HEIGHT, clock);
+  drawBlastBackdrop(ctx, WIDTH, BLAST.HEIGHT, clock);
 
   // The canvas score rolls up to the real one rather than jumping.
   const step = blastShownAt ? Math.min(.05, (now - blastShownAt) / 1000) : 0; blastShownAt = now;
@@ -697,7 +701,7 @@ function renderBlast(ctx) {
   const rolling = Math.min(5, (state.score - blastShown) / 20);
   drawStat(ctx, `最高 ${Math.max(blastBest, state.score)}`, 24, 42, { size: 17, color: '#aeb5c4', align: 'left', outline: 3 });
   drawStat(ctx, `${Math.round(blastShown)} 分`, WIDTH - 24, 42, { size: 21 + rolling, color: '#ffd543', align: 'right' });
-  if (state.streak > 1) drawStat(ctx, `连击 ×${blastMultiplier(state.streak).toFixed(2)}`, WIDTH - 24, 76, { size: 13, color: '#3fd0e0', align: 'right', outline: 3 });
+  if (state.streak > 1) drawStat(ctx, `连击 ×${blastMultiplier(state.streak).toFixed(2)}`, WIDTH - 24, 66, { size: 13, color: '#3fd0e0', align: 'right', outline: 3 });
 
   const fresh = state.effects.filter(item => clock - item.time < .9);
   // A multi-line clear or a long streak shakes the board, not the HUD.
@@ -720,7 +724,7 @@ function renderBlast(ctx) {
     if (!state.board[row][col]) continue;
     const at = blastCellCentre(col, row), land = landed.get(row * COLS + col);
     // Game over drains the colour out of the board from the bottom row up.
-    const grey = ended && endAge > (ROWS - 1 - row) * .07;
+    const grey = ended && endAge > (ROWS - 1 - row) * .055;
     const t = land === undefined ? 1 : clamp01(land);
     drawBlastTile(ctx, at.x, at.y, tile, grey ? 'slate' : lit(col, row) ? dragColor : state.board[row][col], {
       scale: 1 + .14 * (1 - t) ** 2, flash: .5 * (1 - t), alpha: grey ? .8 : 1
@@ -780,14 +784,15 @@ function renderBlast(ctx) {
 }
 
 function renderEnd(ctx, alpha = 1) {
+  const H = viewHeight(), mid = H / 2;
   ctx.save(); ctx.globalAlpha = alpha;
-  ctx.fillStyle = 'rgba(8,12,22,.82)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.fillStyle = 'rgba(8,12,22,.82)'; ctx.fillRect(0, 0, WIDTH, H);
   const w = 440, h = 190;
-  panel(ctx, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h, 24, { fill: 'rgba(13,18,32,.9)', stroke: 'rgba(255,213,67,.4)', shadow: 30 });
-  drawStat(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, HEIGHT / 2 - 34, { size: 42, outline: 0 });
+  panel(ctx, WIDTH / 2 - w / 2, mid - h / 2, w, h, 24, { fill: 'rgba(13,18,32,.9)', stroke: 'rgba(255,213,67,.4)', shadow: 30 });
+  drawStat(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, mid - 34, { size: 42, outline: 0 });
   const extra = mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : mode === 'blast' ? (state.score > blastPrevBest ? ' · 新纪录！' : ` · 最高 ${blastBest}`) : '';
-  drawStat(ctx, `${state.score} 分${extra}`, WIDTH / 2, HEIGHT / 2 + 18, { size: 24, color: '#ffd543' });
-  drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, HEIGHT / 2 + 62, { size: 15, color: '#aeb5c4', outline: 0 });
+  drawStat(ctx, `${state.score} 分${extra}`, WIDTH / 2, mid + 18, { size: 24, color: '#ffd543' });
+  drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, mid + 62, { size: 15, color: '#aeb5c4', outline: 0 });
   ctx.restore();
 }
 function hudLine() {
@@ -838,7 +843,6 @@ function setupControls() {
   if (mode === 'pop2') themeChips($('#theme-row'));
   // 方块爆破 is solo-only, so it never gets the seat toggle.
   if (lan.role === 'solo' && mode !== 'blast') button(state.players.length === 1 ? '单人 · 切换同屏双人' : '同屏双人 · 切换单人', () => { soloPlayers = soloPlayers === 1 ? 2 : 1; activePlayer = 0; restartGame(); }, 'player-toggle');
-  if (mode === 'blast') button('重新开始', restartGame);
   if (mode === 'pop3') for (const seat of localPlayers()) button(localPlayers().length > 1 ? `P${seat + 1} 打拍` : '打拍', () => sendAction(seat, { type: 'beat' }), 'beat', true);
   if (mode === 'surge') {
     if (lan.role === 'solo' && state.players.length > 1) button(`操作 P${activePlayer + 1}`, () => { activePlayer = activePlayer ? 0 : 1; }, 'player-toggle');
@@ -849,7 +853,7 @@ function setupControls() {
 }
 
 function resizeCanvas() {
-  const canvas = $('.game-canvas'); if (!canvas) return; const ratio = Math.min(2, window.devicePixelRatio || 1); canvas.width = WIDTH * ratio; canvas.height = HEIGHT * ratio; canvas.style.aspectRatio = `${WIDTH} / ${HEIGHT}`; canvas.getContext('2d').setTransform(ratio, 0, 0, ratio, 0, 0);
+  const canvas = $('.game-canvas'); if (!canvas) return; const ratio = Math.min(2, window.devicePixelRatio || 1), h = viewHeight(); canvas.width = WIDTH * ratio; canvas.height = h * ratio; canvas.style.aspectRatio = `${WIDTH} / ${h}`; canvas.getContext('2d').setTransform(ratio, 0, 0, ratio, 0, 0);
 }
 function loop(time) {
   const dt = lastFrame ? Math.min(.05, (time - lastFrame) / 1000) : 1 / 60; lastFrame = time;

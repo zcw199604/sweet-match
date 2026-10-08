@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
 
 const game = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__arcade.state)));
-// Logical 720×720 board coordinates → page coordinates.
+// Logical canvas coordinates → page coordinates. Every canvas is 720 logical px
+// wide (方块爆破's is taller), so the width alone gives the scale.
 async function at(page, x, y) {
   const box = await page.locator('.game-canvas').boundingBox();
-  return [box.x + x * box.width / 720, box.y + y * box.height / 720];
+  const k = box.width / 720;
+  return [box.x + x * k, box.y + y * k];
 }
 async function open(page, mode) {
   await page.goto('/');
@@ -24,10 +26,11 @@ test('home page fits narrow screens and exposes four arcade cards', async ({ pag
 test('each game shows its whole board and controls without scrolling', async ({ page }) => {
   for (const mode of ['pop2', 'pop3', 'surge', 'blast']) {
     await open(page, mode);
-    const button = page.locator('#mobile-controls button').last();
+    // The last on-screen control: a board without extra controls (方块爆破) ends at the header's restart.
+    const button = page.locator('#restart-game, #mobile-controls button').last();
     await expect(button).toBeVisible();
     const fit = await page.evaluate(() => {
-      const canvas = document.querySelector('.game-canvas').getBoundingClientRect(), last = [...document.querySelectorAll('#mobile-controls button')].at(-1).getBoundingClientRect();
+      const canvas = document.querySelector('.game-canvas').getBoundingClientRect(), last = [...document.querySelectorAll('#restart-game, #mobile-controls button')].at(-1).getBoundingClientRect();
       return { wide: document.documentElement.scrollWidth <= window.innerWidth + 1, canvas: canvas.top >= 0 && canvas.bottom <= window.innerHeight, controls: last.bottom <= window.innerHeight, size: canvas.width };
     });
     expect(fit).toMatchObject({ wide: true, canvas: true, controls: true });
@@ -83,10 +86,10 @@ test('one device can switch between solo and shared-screen play', async ({ page 
 test('方块爆破: dragging a tray piece onto the board fills cells and empties its slot', async ({ page }) => {
   await open(page, 'blast');
   const slot = (await game(page)).tray.findIndex(Boolean);
-  // Tray slot centres sit at 168 + slot*192, y 648; cell (3,3) is the board centre.
-  await page.mouse.move(...await at(page, 168 + slot * 192, 648));
+  // Tray slot centres sit at 124 + slot*236, y 847; (360, 420) is the middle of the board.
+  await page.mouse.move(...await at(page, 124 + slot * 236, 847));
   await page.mouse.down();
-  await page.mouse.move(...await at(page, 330, 314), { steps: 6 });
+  await page.mouse.move(...await at(page, 360, 420), { steps: 6 });
   await page.mouse.up();
   await expect.poll(async () => (await game(page)).tray[slot]).toBe(null);
   expect((await game(page)).board.flat().filter(Boolean).length).toBeGreaterThan(0);

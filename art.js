@@ -917,7 +917,7 @@ export function drawBlastBackdrop(ctx, w, h, t) {
     c.strokeStyle = 'rgba(255,255,255,.035)'; c.lineWidth = 1;
     for (let d = -h; d < w; d += 40) { c.beginPath(); c.moveTo(d, 0); c.lineTo(d + h, h); c.stroke(); }
     for (let d = 0; d < w + h; d += 40) { c.beginPath(); c.moveTo(d, 0); c.lineTo(d - h, h); c.stroke(); }
-    for (const [x, y, r, color] of [[90, 660, 320, '#ff5d80'], [640, 90, 300, '#3fd0e0']]) {
+    for (const [x, y, r, color] of [[w * .12, h * .9, w * .45, '#ff5d80'], [w * .9, h * .12, w * .42, '#3fd0e0']]) {
       const g = c.createRadialGradient(x, y, 0, x, y, r);
       g.addColorStop(0, withAlpha(color, .22)); g.addColorStop(1, withAlpha(color, 0));
       c.fillStyle = g; c.fillRect(0, 0, w, h);
