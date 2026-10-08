@@ -145,3 +145,15 @@ body.playing[data-mode=goose] .mobile-controls .player-toggle{flex-basis:auto;mi
 .board-row .board-value{font:700 13px 'DM Mono'}
 .board-row.me{border-color:var(--pink);box-shadow:0 0 0 2px #ff5d8030}
 @media(max-width:800px){.game-nav .nav-buttons{gap:4px}.game-nav .nav-buttons .network-button{padding:8px 7px}}
+/* 山山兔横屏（手机）：顶部导航栏不再占整行，三个按钮收成右上角一小排；画布吃满整个屏幕高度。 */
+@media(orientation:landscape) and (max-height:600px){
+body.playing[data-mode=surge]{background:var(--night)}
+body.playing[data-mode=surge] #game{position:relative}
+body.playing[data-mode=surge] main{padding:0 max(6px,env(safe-area-inset-left))}
+body.playing[data-mode=surge] .game-nav{position:absolute;z-index:2;top:6px;right:6px;left:auto;height:auto;width:auto;padding:0;gap:6px}
+body.playing[data-mode=surge] .game-name{display:none}
+body.playing[data-mode=surge] .back,body.playing[data-mode=surge] .game-nav .button{border:1px solid #ffffff26;background:#ffffff14;color:#fff;border-radius:9px;padding:8px 10px;font-size:11px;font-weight:700}
+body.playing[data-mode=surge] .stage{padding:6px;border-radius:0;box-shadow:none}
+body.playing[data-mode=surge] .stage-top{padding-top:42px}
+body.playing[data-mode=surge] .canvas-wrap.portrait{width:max(160px,calc((100vh - 12px) * 720 / var(--h,516)));width:max(160px,calc((100dvh - 12px) * 720 / var(--h,516)))}
+}

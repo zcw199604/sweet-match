@@ -304,7 +304,13 @@ test.describe('山山兔 sideways on a phone', () => {
     const box = await page.locator('.game-canvas').boundingBox();
     // 720 × 516 的视窗，比原来的正方形更宽，而且整块画布和按钮都在屏幕内。
     expect(box.width / box.height).toBeCloseTo(720 / 516, 1);
-    expect(box.height).toBeGreaterThan(300);
+    // 顶部导航栏收成右上角一小排按钮，画布吃满屏幕高度；按钮都在屏幕内，也没压住画布。
+    expect(box.height).toBeGreaterThan(360);
+    for (const id of ['#back-home', '#game-board', '#game-link']) {
+      const rect = await page.locator(id).boundingBox();
+      expect(rect.x).toBeGreaterThanOrEqual(box.x + box.width);
+      expect(rect.y + rect.height).toBeLessThanOrEqual(390);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     expect(await page.locator('#mobile-controls button').last().evaluate((node) => node.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
     // 画布顶边对应世界坐标 y=84：点第 7 列第 5 行（世界中心 x=36+6.5*54, y=252+4.5*54）。
@@ -317,6 +323,8 @@ test.describe('山山兔 sideways on a phone', () => {
     // 画布不再画标题和状态栏，关卡、防线、能量都在侧栏文字里。
     await expect(page.locator('#score-text')).toContainText('第 1 关');
     await expect(page.locator('#score-text')).toContainText('⚡');
+    await page.locator('#back-home').click();
+    await expect(page.locator('#home')).toHaveClass(/active/);
   });
 
   test('turning the phone upright goes back to the square board', async ({ page }) => {
