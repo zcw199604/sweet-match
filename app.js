@@ -1,9 +1,13 @@
 import { act, beatPhase, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
 import {
-  drawArena, drawBall, drawBlock, drawBelt, drawBurst, drawClubBackdrop, drawDefence, drawEnemy, drawField,
-  drawFloatingText, drawMeadowBackdrop, drawPlanet, drawPortal, drawRabbit, drawShip, drawSpaceBackdrop, drawSparkle,
-  drawStat, drawThruster, drawWell, glow, panel, roundRect, SHADES, withAlpha
+  drawBall, drawBlock, drawBelt, drawBurst, drawClubBackdrop, drawDefence, drawEnemy, drawField,
+  drawFloatingText, drawMeadowBackdrop, drawPortal, drawRabbit, drawShip, drawSparkle,
+  drawStat, drawThruster, drawWell, glow, panel, resetArtCaches, roundRect, SHADES, withAlpha
 } from './art.js';
+import {
+  ballPainter, ballShades, DEFAULT_THEME, drawThemeArena, drawThemeBackdrop, drawThemeBase, drawThemeCraft,
+  drawThemeThruster, isTheme, paintThemeChip, resetThemeCaches, THEMES, themeById
+} from './themes.js';
 
 const MODE_META = {
   pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；别让任何彩球碰到中间的星球。' },
@@ -16,6 +20,9 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 let mode = 'pop2';
+// The 泡噗2 skin is a per-device view choice, so it never reaches game-core or
+// the network: each side of a co-op round may watch a different theme.
+let theme = DEFAULT_THEME;
 let state = null;
 let frameId = 0;
 let lastFrame = 0;
@@ -194,19 +201,32 @@ async function finishAnswer() {
 }
 
 const newGame = () => createGame(mode, (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0, { players: lan.role === 'solo' ? soloPlayers : 2 });
+// 泡噗2's rules read the same whatever the skin, so the help line names whatever
+// the current theme actually put on the board.
+function pop2Help() {
+  const skin = themeById(theme);
+  return `拖动屏幕驾驶${skin.craftName}，接住飘来的${skin.pieceName}。三个同色相连就会消除，挂在上面的也一起掉；别让任何${skin.pieceName}碰到中间的${skin.baseName}。`;
+}
+function stageHelp() { return mode === 'pop2' ? pop2Help() : MODE_META[mode].help; }
+
 function buildStage() {
   const meta = MODE_META[mode], stage = $('#game-stage');
   $('#mode-label').textContent = meta.label; $('#game-title').textContent = meta.title;
-  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><button id="restart-game">重新开始</button></div><div class="canvas-wrap"><canvas class="game-canvas" width="720" height="720" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${meta.help}</p>`;
+  // Only 泡噗2 is reskinned, so only that board gets the picker.
+  const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap"><canvas class="game-canvas" width="720" height="720" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
   const canvas = stage.querySelector('canvas');
   canvas.addEventListener('pointerdown', pointerDown);
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   $('#restart-game').addEventListener('click', restartGame);
   controlsKey = ''; hudText = ''; axeMode = false; hover = null; pointers.clear();
+  themeChips($('#theme-row'));
   resizeCanvas();
 }
 function startGame(nextMode) {
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
+  // Read the saved skin before the first frame draws.
+  applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame();
   if (lan.role === 'guest') setHint('已进入房间，等待房主同步棋盘。');
   buildStage(); showScreen('game'); renderGame(); if (lan.role === 'host') broadcastSnapshot(true);
@@ -332,6 +352,44 @@ function steerFromKeys() {
 function label(ctx, text, x, y, size = 12, color = '#fff', align = 'center', font = 'Manrope, sans-serif', outline = 0) {
   drawStat(ctx, text, x, y, { size, color, align, font, weight: 700, outline });
 }
+// The theme picker: a chip per skin, each showing its own landscape, base and
+// craft. It lives in the stage header beside "重新开始" so it costs no vertical
+// space — the board already fills the screen exactly.
+function themeChips(row) {
+  if (!row) return;
+  row.innerHTML = '';
+  for (const entry of THEMES) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `theme-chip${entry.id === theme ? ' selected' : ''}`;
+    chip.dataset.theme = entry.id;
+    chip.title = `${entry.name}：${entry.help}`;
+    chip.setAttribute('aria-label', `切换到${entry.name}`);
+    const canvas = document.createElement('canvas');
+    canvas.width = 108; canvas.height = 84;
+    canvas.style.width = '36px'; canvas.style.height = '28px';
+    const c = canvas.getContext('2d'); c.scale(3, 3);
+    paintThemeChip(c, entry, 36, 28, state ? state.elapsed : 0);
+    chip.appendChild(canvas);
+    chip.addEventListener('click', () => {
+      theme = entry.id;
+      try { localStorage.setItem('pao-theme', theme); } catch { /* private mode */ }
+      // Cached sprites are keyed by colour and size only, so they must be dropped
+      // or the previous skin's pieces would keep drawing.
+      resetArtCaches(); resetThemeCaches(); controlsKey = '';
+      $('.game-help').textContent = stageHelp();
+      renderGame();
+    });
+    row.appendChild(chip);
+  }
+}
+
+function applyStoredTheme() {
+  let stored = null;
+  try { stored = localStorage.getItem('pao-theme'); } catch { /* private mode */ }
+  theme = isTheme(stored) ? stored : DEFAULT_THEME;
+}
+
 // Clears animate from the effect's own timestamp, so host and guest agree.
 function drawEffects(ctx, well) {
   for (const item of state.effects) {
@@ -355,28 +413,31 @@ function drawBanner(ctx) {
 
 function renderPop2(ctx) {
   const { CX, CY, ARENA_R, HOME_R, R, SHIP_R } = POP2, t = state.elapsed;
-  drawSpaceBackdrop(ctx, WIDTH, HEIGHT, t);
-  // The planet flares once anything loose drifts close.
-  const threat = state.balls.some(ball => Math.hypot(ball.x - CX, ball.y - CY) < HOME_R + R + 70);
-  drawArena(ctx, CX, CY, ARENA_R + 4, t, threat);
-  drawPlanet(ctx, CX, CY, HOME_R, t);
+  const skin = themeById(theme), shades = ballShades(theme), paint = ballPainter(theme);
+  const ball = (x, y, color, radius, alpha = 1) => drawBall(ctx, x, y, color, radius, alpha, shades, paint);
+  drawThemeBackdrop(ctx, skin.backdrop, WIDTH, HEIGHT, t);
+
+  // The base flares once anything loose drifts close to it.
+  const threat = state.balls.some(item => Math.hypot(item.x - CX, item.y - CY) < HOME_R + R + 70);
+  drawThemeArena(ctx, skin.arena, CX, CY, ARENA_R + 4, t, threat);
+  drawThemeBase(ctx, skin.base, CX, CY, HOME_R, t);
 
   const vig = ctx.createRadialGradient(CX, CY, ARENA_R * .62, CX, CY, ARENA_R * 1.06);
   vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(4,7,16,.5)');
   ctx.fillStyle = vig; ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  for (const ball of state.balls) {
-    const drift = Math.hypot(ball.vx, ball.vy) || 1;
+  for (const item of state.balls) {
+    const drift = Math.hypot(item.vx, item.vy) || 1;
     for (let i = 2; i >= 1; i--) {
       const k = i * 6;
-      drawBall(ctx, ball.x - ball.vx / drift * k, ball.y - ball.vy / drift * k, ball.color, R * (1 - i * .16), .14 / i);
+      ball(item.x - item.vx / drift * k, item.y - item.vy / drift * k, item.color, R * (1 - i * .16), .14 / i);
     }
-    drawBall(ctx, ball.x, ball.y, ball.color, R);
+    ball(item.x, item.y, item.color, R);
   }
   for (const p of state.players) {
-    for (const cell of Object.keys(p.cells)) { const o = hexOffset(...cell.split(',').map(Number)); drawBall(ctx, p.x + o.x, p.y + o.y, p.cells[cell], R); }
-    drawThruster(ctx, p.x, p.y, SHIP_R, p.id, t);
-    drawShip(ctx, p.x, p.y, SHIP_R, p.id);
+    for (const cell of Object.keys(p.cells)) { const o = hexOffset(...cell.split(',').map(Number)); ball(p.x + o.x, p.y + o.y, p.cells[cell], R); }
+    drawThemeThruster(ctx, skin.craft, p.x, p.y, SHIP_R, p.id, t);
+    drawThemeCraft(ctx, skin.craft, p.id, p.x, p.y, SHIP_R);
     if (state.players.length > 1) drawStat(ctx, `P${p.id + 1}`, p.x, p.y - SHIP_R - 14, { size: 12, color: PLAYER_HEX[p.id], font: '"DM Mono"', outline: 3 });
   }
   drawEffects(ctx);
@@ -552,15 +613,17 @@ function renderGame() {
 function setupControls() {
   const controls = $('#mobile-controls'); if (!controls || !state) return;
   const affordable = mode === 'surge' && state.energy >= SURGE.AXE_COST;
-  const next = [mode, lan.role, state.players.length, activePlayer, axeMode, affordable].join('|');
+  const next = [mode, lan.role, state.players.length, activePlayer, axeMode, affordable, theme].join('|');
   if (next === controlsKey) return;
   controlsKey = next; controls.innerHTML = '';
-  $('#seat-text').textContent = `${MODE_META[mode].label} · ${lan.role === 'guest' ? '玩家 2' : lan.role === 'host' ? '房主 / 玩家 1' : state.players.length === 1 ? '单人' : '同屏双人'}`;
+  const seat = lan.role === 'guest' ? '玩家 2' : lan.role === 'host' ? '房主 / 玩家 1' : state.players.length === 1 ? '单人' : '同屏双人';
+  $('#seat-text').textContent = `${MODE_META[mode].label} · ${seat}`;
   const button = (text, run, className = '', instant = false) => {
     const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.className = className;
     // Rhythm taps fire on touch-down; waiting for the click would cost the beat.
     node.addEventListener(instant ? 'pointerdown' : 'click', (event) => { if (instant) event.preventDefault(); run(); }); controls.appendChild(node); return node;
   };
+  if (mode === 'pop2') themeChips($('#theme-row'));
   if (lan.role === 'solo') button(state.players.length === 1 ? '单人 · 切换同屏双人' : '同屏双人 · 切换单人', () => { soloPlayers = soloPlayers === 1 ? 2 : 1; activePlayer = 0; restartGame(); }, 'player-toggle');
   if (mode === 'pop3') for (const seat of localPlayers()) button(localPlayers().length > 1 ? `P${seat + 1} 打拍` : '打拍', () => sendAction(seat, { type: 'beat' }), 'beat', true);
   if (mode === 'surge') {
@@ -599,5 +662,8 @@ document.addEventListener('keydown', keyboard); document.addEventListener('keyup
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; } };
+// The card handlers only exist once this module has run, so tests wait on this
+// rather than racing the import.
+document.body.dataset.ready = '1';
 showScreen('home'); cancelAnimationFrame(frameId); frameId = requestAnimationFrame(loop);

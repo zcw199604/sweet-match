@@ -12,6 +12,13 @@
 .mobile-controls button{touch-action:manipulation;padding:0 16px}
 .mobile-controls button:disabled{opacity:.4}
 .mobile-controls .beat{min-width:150px;min-height:58px;background:#58d4de30;border-color:#58d4de;font-size:16px}
+/* 泡噗2 theme picker: one chip per skin, previewing its own artwork. It sits in
+   the stage header so the board keeps every pixel of height it had. */
+.stage-actions{display:flex;align-items:center;gap:10px}
+.theme-row{display:flex;gap:6px}
+.theme-row .theme-chip{padding:0;border:1px solid #ffffff2e;background:#0d1421;border-radius:8px;overflow:hidden;display:grid;place-items:center;line-height:0}
+.theme-row .theme-chip canvas{display:block;border-radius:6px;pointer-events:none}
+.theme-row .theme-chip.selected{border-color:#ffd543;box-shadow:0 0 0 2px #ffd54366}
 .mobile-controls .player-toggle{background:transparent;color:#aeb5c4}
 body.playing{overscroll-behavior:none}
 @media(max-width:800px){body.playing .topbar,body.playing footer{display:none}body.playing main{padding:0 10px}.stage{min-height:0;padding-bottom:max(14px,env(safe-area-inset-bottom))}.canvas-wrap{width:min(100%,max(260px,calc(100vh - 290px)));width:min(100%,max(260px,calc(100dvh - 290px)))}.mobile-controls{gap:8px}.mobile-controls button{min-width:0;flex:1 1 30%}.mobile-controls .player-toggle{flex-basis:100%;min-height:38px}}

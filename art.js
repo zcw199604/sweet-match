@@ -35,7 +35,7 @@ export function roundRect(ctx, x, y, w, h, r) {
 
 // The device scale the current transform is drawing at (device pixel ratio times
 // any board-local zoom), so cached artwork can be rasterised at native resolution.
-function deviceScale(ctx) {
+export function deviceScale(ctx) {
   const t = ctx.getTransform();
   return Math.max(1, Math.min(3, Math.hypot(t.a, t.b) || 1));
 }
@@ -59,6 +59,11 @@ function sprite(key, w, h, scale, paint) {
 function blit(ctx, key, x, y, w, h, paint) {
   const canvas = sprite(key, w, h, deviceScale(ctx), paint);
   ctx.drawImage(canvas, x - w / 2, y - h / 2, w, h);
+}
+
+// Artwork is cached per colour and size, so a theme change has to drop the lot.
+export function resetArtCaches() {
+  sprites.clear(); backdrops.clear();
 }
 
 // Full-board backdrops are smooth gradients and speckles only, so one logical-size
@@ -96,8 +101,21 @@ export function panel(ctx, x, y, w, h, r, { fill = 'rgba(13,19,32,.72)', stroke 
 
 // --- Candy spheres and tiles -------------------------------------------------
 
-function paintBall(c, w, h, color, r) {
-  const s = shade(color), cx = w / 2, cy = h / 2;
+// The two dots and the smile every piece in this game wears. Shared so a theme
+// can reskin a ball's material without redrawing its face.
+export function paintFace(c, cx, cy, r, ink) {
+  if (r < 11) return;
+  const eye = r * .13, ex = r * .3, ey = -r * .02;
+  c.fillStyle = ink;
+  c.beginPath(); c.arc(cx - ex, cy + ey, eye, 0, Math.PI * 2); c.arc(cx + ex, cy + ey, eye, 0, Math.PI * 2); c.fill();
+  c.fillStyle = 'rgba(255,255,255,.9)';
+  c.beginPath(); c.arc(cx - ex + eye * .35, cy + ey - eye * .4, eye * .38, 0, Math.PI * 2); c.arc(cx + ex + eye * .35, cy + ey - eye * .4, eye * .38, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = withAlpha(ink, .8); c.lineWidth = Math.max(.8, r * .07);
+  c.beginPath(); c.arc(cx, cy + r * .3, r * .2, .25, Math.PI - .25); c.stroke();
+}
+
+export function paintBall(c, w, h, s, r) {
+  const cx = w / 2, cy = h / 2;
   const drop = c.createRadialGradient(cx, cy + r * .62, r * .1, cx, cy + r * .62, r * .9);
   drop.addColorStop(0, 'rgba(3,6,14,.5)'); drop.addColorStop(1, 'rgba(3,6,14,0)');
   c.fillStyle = drop; c.beginPath(); c.arc(cx, cy + r * .55, r * .9, 0, Math.PI * 2); c.fill();
@@ -121,21 +139,16 @@ function paintBall(c, w, h, color, r) {
   c.strokeStyle = withAlpha(s.edge, .85); c.lineWidth = Math.max(.9, r * .085);
   c.beginPath(); c.arc(cx, cy, r * .95, 0, Math.PI * 2); c.stroke();
 
-  if (r >= 11) {
-    const eye = r * .13, ex = r * .3, ey = -r * .02;
-    c.fillStyle = s.edge;
-    c.beginPath(); c.arc(cx - ex, cy + ey, eye, 0, Math.PI * 2); c.arc(cx + ex, cy + ey, eye, 0, Math.PI * 2); c.fill();
-    c.fillStyle = 'rgba(255,255,255,.9)';
-    c.beginPath(); c.arc(cx - ex + eye * .35, cy + ey - eye * .4, eye * .38, 0, Math.PI * 2); c.arc(cx + ex + eye * .35, cy + ey - eye * .4, eye * .38, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = withAlpha(s.edge, .8); c.lineWidth = Math.max(.8, r * .07);
-    c.beginPath(); c.arc(cx, cy + r * .3, r * .2, .25, Math.PI - .25); c.stroke();
-  }
+  paintFace(c, cx, cy, r, s.edge);
 }
 
-export function drawBall(ctx, x, y, color, radius, alpha = 1) {
+// The shade record, cache key and painter all come from the caller, so a board
+// can reskin its pieces without every other mode losing the shared candy look.
+export function drawBall(ctx, x, y, color, radius, alpha = 1, shades = SHADES, paint = paintBall) {
+  const s = shades[color] || shade(color);
   const box = radius * 3;
   ctx.save(); ctx.globalAlpha *= alpha;
-  blit(ctx, `ball:${color}`, x, y, box, box, (c, w, h) => paintBall(c, w, h, color, radius));
+  blit(ctx, `ball:${color}:${s.base}`, x, y, box, box, (c, w, h) => paint(c, w, h, s, radius));
   ctx.restore();
 }
 

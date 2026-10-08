@@ -8,6 +8,8 @@ async function at(page, x, y) {
 }
 async function open(page, mode) {
   await page.goto('/');
+  // The arcade cards only respond once app.js has run.
+  await page.locator('body[data-ready]').waitFor();
   await page.locator(`[data-mode="${mode}"]`).click();
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
@@ -76,4 +78,33 @@ test('one device can switch between solo and shared-screen play', async ({ page 
   await page.locator('.player-toggle').click();
   await expect.poll(async () => (await game(page)).players.length).toBe(2);
   await expect(page.locator('#mobile-controls .beat')).toHaveCount(2);
+});
+
+test('泡噗2: every theme reskins the board and the choice sticks', async ({ page }) => {
+  await open(page, 'pop2');
+  await expect(page.locator('.theme-chip')).toHaveCount(3);
+  // Read a couple of pixels off the board: the base sits at the centre of the
+  // arena, so its colour is a direct fingerprint of the skin in use.
+  const centre = () => page.evaluate(() => {
+    const canvas = document.querySelector('.game-canvas');
+    const ctx = canvas.getContext('2d');
+    const scale = canvas.width / 720;
+    const d = ctx.getImageData(Math.round(360 * scale), Math.round(360 * scale), 1, 1).data;
+    return [d[0], d[1], d[2]].join(',');
+  });
+  const seen = new Map();
+  for (const id of ['space', 'reef', 'tribe']) {
+    await page.locator(`.theme-chip[data-theme="${id}"]`).click();
+    await expect(page.locator(`.theme-chip[data-theme="${id}"]`)).toHaveClass(/selected/);
+    await expect.poll(centre).not.toBe('0,0,0');
+    seen.set(id, await centre());
+    expect(await page.evaluate(() => window.__arcade.theme)).toBe(id);
+  }
+  // Three skins, three different bases.
+  expect(new Set(seen.values()).size).toBe(3);
+
+  await page.reload();
+  await page.locator('body[data-ready]').waitFor();
+  await page.locator('[data-mode="pop2"]').click();
+  await expect(page.locator('.theme-chip[data-theme="tribe"]')).toHaveClass(/selected/);
 });
