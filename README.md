@@ -51,7 +51,7 @@ npm run lan
 - **Build output directory**：`/`（项目根目录）
 - **Functions**：无需配置
 
-`app.js`、`game-core.js`、`style.css` 和 `index.html` 会作为静态资源直接发布。Node 局域网服务不能由 Pages 进程托管，需要在局域网电脑或另一台可访问的 Node 主机上运行。
+`app.js`、`art.js`、`game-core.js`、`style.css` 和 `index.html` 会作为静态资源直接发布。Node 局域网服务不能由 Pages 进程托管，需要在局域网电脑或另一台可访问的 Node 主机上运行。
 
 ### GitHub Actions 自动部署
 

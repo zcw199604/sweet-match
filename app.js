@@ -1,11 +1,15 @@
 import { act, beatPhase, canPlace, cellAt, cellCentre, createGame, hexOffset, HEIGHT, MODES, pieceCentre, POP2, POP3, pop3Multiplier, pop3Stage, SURGE, surgeStage, tickGame, WIDTH } from './game-core.js';
+import {
+  drawArena, drawBall, drawBlock, drawBelt, drawBurst, drawClubBackdrop, drawDefence, drawEnemy, drawField,
+  drawFloatingText, drawMeadowBackdrop, drawPlanet, drawPortal, drawRabbit, drawShip, drawSpaceBackdrop, drawSparkle,
+  drawStat, drawThruster, drawWell, glow, panel, roundRect, SHADES, withAlpha
+} from './art.js';
 
 const MODE_META = {
   pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；别让任何彩球碰到中间的星球。' },
   pop3: { label: 'ARCADE 02', title: '泡噗 3', help: '拖动飞船接住落下的音符，三个同色相连消除。漏掉的音符会让底部的怪鼠上升，消除能把它压回去；跟着光圈点「打拍」累积连击倍率。' },
   surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' }
 };
-const COLOR_HEX = { red: '#ff5d6c', yellow: '#ffd543', green: '#44c986', blue: '#58a8f0', purple: '#a78bfa' };
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -325,113 +329,116 @@ function steerFromKeys() {
   }
 }
 
-function roundedRect(ctx, x, y, w, h, radius) {
-  ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(x, y, w, h, radius); else ctx.rect(x, y, w, h);
+function label(ctx, text, x, y, size = 12, color = '#fff', align = 'center', font = 'Manrope, sans-serif', outline = 0) {
+  drawStat(ctx, text, x, y, { size, color, align, font, weight: 700, outline });
 }
-function drawBall(ctx, x, y, color, radius) {
-  const gradient = ctx.createRadialGradient(x - radius * .35, y - radius * .4, radius * .08, x, y, radius * 1.2);
-  gradient.addColorStop(0, '#ffffffcc'); gradient.addColorStop(.18, COLOR_HEX[color] || '#798093'); gradient.addColorStop(1, '#10152255');
-  ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#ffffff40'; ctx.lineWidth = 1; ctx.stroke();
-}
-function drawBlock(ctx, x, y, size, color, alpha = 1) {
-  ctx.save(); ctx.globalAlpha *= alpha;
-  ctx.fillStyle = COLOR_HEX[color] || '#798093'; roundedRect(ctx, x - size / 2, y - size / 2, size, size, size * .2); ctx.fill();
-  ctx.fillStyle = '#ffffff40'; roundedRect(ctx, x - size * .36, y - size * .38, size * .72, size * .2, size * .1); ctx.fill();
-  ctx.fillStyle = '#1b213066'; ctx.beginPath(); ctx.arc(x - size * .14, y + size * .06, size * .06, 0, Math.PI * 2); ctx.arc(x + size * .14, y + size * .06, size * .06, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-}
-function drawShip(ctx, x, y, radius, index) {
-  ctx.fillStyle = PLAYER_HEX[index]; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = '#1b2130'; ctx.beginPath(); ctx.arc(x - radius * .32, y - radius * .1, radius * .14, 0, Math.PI * 2); ctx.arc(x + radius * .32, y - radius * .1, radius * .14, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x, y + radius * .12, radius * .34, .2, Math.PI - .2); ctx.lineWidth = 1.5; ctx.strokeStyle = '#1b2130'; ctx.stroke();
-}
-function label(ctx, text, x, y, size = 12, color = '#fff', align = 'center', font = 'Manrope, sans-serif') {
-  ctx.fillStyle = color; ctx.font = `700 ${size}px ${font}`; ctx.textAlign = align; ctx.fillText(text, x, y); ctx.textAlign = 'left';
-}
+// Clears animate from the effect's own timestamp, so host and guest agree.
 function drawEffects(ctx, well) {
   for (const item of state.effects) {
     if (item.well !== well) continue;
     const age = (state.elapsed - item.time) / 0.9;
     if (age < 0 || age > 1) continue;
-    ctx.save(); ctx.globalAlpha = 1 - age;
-    if (item.type === 'pop') { ctx.strokeStyle = COLOR_HEX[item.color] || '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(item.x, item.y, 8 + age * 26, 0, Math.PI * 2); ctx.stroke(); }
-    else label(ctx, item.text, item.x, item.y - 18 - age * 34, 18);
-    ctx.restore();
+    if (item.type === 'pop') drawBurst(ctx, item.x, item.y, item.color, age);
+    else drawFloatingText(ctx, item.text, item.x, item.y, age, item.text?.startsWith('+') ? '#ffe9a3' : '#ffffff');
   }
 }
 function drawBanner(ctx) {
   const age = state.banner ? state.elapsed - state.banner.time : 9;
   if (age > 2.2) return;
-  ctx.save(); ctx.globalAlpha = Math.min(1, (2.2 - age) * 2);
-  ctx.fillStyle = '#111824dd'; roundedRect(ctx, WIDTH / 2 - 190, HEIGHT / 2 - 44, 380, 88, 18); ctx.fill();
-  label(ctx, state.banner.text, WIDTH / 2, HEIGHT / 2 + 11, 32); ctx.restore();
+  const alpha = Math.min(1, (2.2 - age) * 2), w = 420, h = 96;
+  ctx.save(); ctx.globalAlpha = alpha;
+  panel(ctx, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h, 22, { fill: 'rgba(10,15,28,.86)', stroke: 'rgba(255,213,67,.5)', shadow: 26 });
+  panel(ctx, WIDTH / 2 - w / 2 + 8, HEIGHT / 2 - h / 2 + 8, w - 16, h - 16, 16, { fill: 'rgba(255,255,255,.04)', stroke: 'rgba(255,255,255,.08)' });
+  drawStat(ctx, state.banner.text, WIDTH / 2, HEIGHT / 2 + 12, { size: 34, outline: 0, color: '#ffe9a3' });
+  ctx.restore();
 }
 
 function renderPop2(ctx) {
-  const { CX, CY } = POP2;
-  ctx.fillStyle = '#111824'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  const glow = ctx.createRadialGradient(CX, CY, 20, CX, CY, POP2.ARENA_R + 30);
-  glow.addColorStop(0, '#263a4f'); glow.addColorStop(1, '#162031');
-  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(CX, CY, POP2.ARENA_R + 16, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#ffffff30'; ctx.lineWidth = 2; ctx.setLineDash([3, 9]); ctx.stroke(); ctx.setLineDash([]);
-  // The planet flashes once anything loose drifts close.
-  const threat = state.balls.some(ball => Math.hypot(ball.x - CX, ball.y - CY) < 130);
-  if (threat) { ctx.strokeStyle = `rgba(255,93,108,${.35 + .35 * Math.sin(state.elapsed * 10)})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(CX, CY, POP2.HOME_R + 12, 0, Math.PI * 2); ctx.stroke(); }
-  const planet = ctx.createRadialGradient(CX - 9, CY - 10, 3, CX, CY, POP2.HOME_R);
-  planet.addColorStop(0, '#fff3b0'); planet.addColorStop(.5, '#ffb347'); planet.addColorStop(1, '#c9612c');
-  ctx.fillStyle = planet; ctx.beginPath(); ctx.arc(CX, CY, POP2.HOME_R, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#ffffff70'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(CX, CY, POP2.HOME_R + 9, 8, -.4, 0, Math.PI * 2); ctx.stroke();
-  for (const ball of state.balls) drawBall(ctx, ball.x, ball.y, ball.color, POP2.R);
+  const { CX, CY, ARENA_R, HOME_R, R, SHIP_R } = POP2, t = state.elapsed;
+  drawSpaceBackdrop(ctx, WIDTH, HEIGHT, t);
+  // The planet flares once anything loose drifts close.
+  const threat = state.balls.some(ball => Math.hypot(ball.x - CX, ball.y - CY) < HOME_R + R + 70);
+  drawArena(ctx, CX, CY, ARENA_R + 4, t, threat);
+  drawPlanet(ctx, CX, CY, HOME_R, t);
+
+  const vig = ctx.createRadialGradient(CX, CY, ARENA_R * .62, CX, CY, ARENA_R * 1.06);
+  vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(4,7,16,.5)');
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  for (const ball of state.balls) {
+    const drift = Math.hypot(ball.vx, ball.vy) || 1;
+    for (let i = 2; i >= 1; i--) {
+      const k = i * 6;
+      drawBall(ctx, ball.x - ball.vx / drift * k, ball.y - ball.vy / drift * k, ball.color, R * (1 - i * .16), .14 / i);
+    }
+    drawBall(ctx, ball.x, ball.y, ball.color, R);
+  }
   for (const p of state.players) {
-    for (const cell of Object.keys(p.cells)) { const o = hexOffset(...cell.split(',').map(Number)); drawBall(ctx, p.x + o.x, p.y + o.y, p.cells[cell], POP2.R); }
-    drawShip(ctx, p.x, p.y, POP2.SHIP_R, p.id);
-    if (state.players.length > 1) label(ctx, `P${p.id + 1}`, p.x, p.y - POP2.SHIP_R - 6, 11, PLAYER_HEX[p.id], 'center', '"DM Mono"');
+    for (const cell of Object.keys(p.cells)) { const o = hexOffset(...cell.split(',').map(Number)); drawBall(ctx, p.x + o.x, p.y + o.y, p.cells[cell], R); }
+    drawThruster(ctx, p.x, p.y, SHIP_R, p.id, t);
+    drawShip(ctx, p.x, p.y, SHIP_R, p.id);
+    if (state.players.length > 1) drawStat(ctx, `P${p.id + 1}`, p.x, p.y - SHIP_R - 14, { size: 12, color: PLAYER_HEX[p.id], font: '"DM Mono"', outline: 3 });
   }
   drawEffects(ctx);
 }
 
 function renderWell(ctx, p, count) {
-  const rect = wellRect(p.id, count), { W, H, CELL } = POP3, spike = H - p.monster;
+  const rect = wellRect(p.id, count), { W, H, CELL } = POP3, t = state.elapsed, spike = H - p.monster;
   ctx.save(); ctx.translate(rect.x, rect.y); ctx.scale(rect.s, rect.s);
-  ctx.fillStyle = '#0d1320'; roundedRect(ctx, 0, 0, W, H, 10); ctx.fill(); ctx.save(); ctx.clip();
+  drawWell(ctx, 0, 0, W, H, 1, { color: PLAYER_HEX[p.id], spike, t, alive: !p.out });
+  ctx.save(); roundRect(ctx, 0, 0, W, H, 12); ctx.clip();
   for (const note of state.notes) if (note.well === p.id) drawBlock(ctx, note.x, note.y, CELL - 3, note.color);
   if (!p.out) {
     for (const cell of Object.keys(p.cells)) { const [c, r] = cell.split(',').map(Number); drawBlock(ctx, p.x + c * CELL, p.y + r * CELL, CELL - 3, p.cells[cell]); }
     // The ring closes on the ship exactly on the beat.
-    const phase = beatPhase(state);
-    ctx.strokeStyle = `rgba(88,212,222,${.35 + .65 * phase})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 15 + 26 * (1 - phase), 0, Math.PI * 2); ctx.stroke();
+    const phase = beatPhase(state), ring = 15 + 28 * (1 - phase);
+    ctx.strokeStyle = `rgba(88,212,222,${(.28 + .72 * phase).toFixed(3)})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${(.08 + .26 * phase).toFixed(3)})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, ring + 6, 0, Math.PI * 2); ctx.stroke();
+    drawThruster(ctx, p.x, p.y, CELL / 2 - 1, p.id, t);
     drawShip(ctx, p.x, p.y, CELL / 2 - 1, p.id);
-    if (state.elapsed - p.judgeAt < .6) label(ctx, p.judge, p.x, p.y + CELL + 6, 13, p.judge === 'MISS' ? '#9aa3b5' : p.judge === 'GOOD' ? '#a78bfa' : '#ffb347');
+    if (t - p.judgeAt < .6) drawFloatingText(ctx, p.judge, p.x, p.y + CELL - 4, (t - p.judgeAt) / .6,
+      p.judge === 'MISS' ? '#9aa3b5' : p.judge === 'GOOD' ? '#a78bfa' : '#ffb347');
   }
-  ctx.fillStyle = '#3a4257'; ctx.fillRect(0, spike + 10, W, H - spike);
-  ctx.fillStyle = '#c9cfdb'; ctx.beginPath();
-  for (let x = 0; x < W; x += 22) { ctx.moveTo(x, spike + 12); ctx.lineTo(x + 11, spike); ctx.lineTo(x + 22, spike + 12); }
-  ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(W / 2 - 16, spike + 30, 6, 0, Math.PI * 2); ctx.arc(W / 2 + 16, spike + 30, 6, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#7a4bd6'; ctx.beginPath(); ctx.arc(W / 2 - 16, spike + 31, 3, 0, Math.PI * 2); ctx.arc(W / 2 + 16, spike + 31, 3, 0, Math.PI * 2); ctx.fill();
   drawEffects(ctx, p.id);
-  if (p.out) { ctx.fillStyle = '#000000aa'; ctx.fillRect(0, 0, W, H); label(ctx, `P${p.id + 1} LOST`, W / 2, H / 2, 26, '#c9cfdb'); }
-  ctx.restore(); ctx.strokeStyle = PLAYER_HEX[p.id]; ctx.lineWidth = 2; roundedRect(ctx, 0, 0, W, H, 10); ctx.stroke();
+  if (p.out) { ctx.fillStyle = 'rgba(6,9,18,.84)'; ctx.fillRect(0, 0, W, H); drawStat(ctx, `P${p.id + 1} 出局`, W / 2, H / 2, { size: 30, color: '#c9cfdb', outline: 0 }); }
+  ctx.restore();
   ctx.restore();
 }
 function renderPop3(ctx) {
-  const count = state.players.length, time = Math.max(0, Math.ceil(state.timeLeft));
-  ctx.fillStyle = '#1b1830'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  const count = state.players.length, time = Math.max(0, Math.ceil(state.timeLeft)), t = state.elapsed;
+  drawClubBackdrop(ctx, WIDTH, HEIGHT, t);
   for (const p of state.players) renderWell(ctx, p, count);
   const combo = (p, x, y, align) => {
-    label(ctx, `COMBO ${String(p.combo).padStart(3, '0')}`, x, y, 15, PLAYER_HEX[p.id], align, '"DM Mono"');
-    label(ctx, `×${pop3Multiplier(p.combo).toFixed(1)}`, x, y + 24, 20, '#fff', align);
+    drawStat(ctx, `COMBO ${String(p.combo).padStart(3, '0')}`, x, y, { size: 15, color: PLAYER_HEX[p.id], align, font: '"DM Mono"', outline: 3 });
+    drawStat(ctx, `×${pop3Multiplier(p.combo).toFixed(1)}`, x, y + 26, { size: 22, color: '#ffe9a3', align, outline: 4 });
   };
   if (count === 1) {
     const x = 560;
-    label(ctx, pop3Stage(state).name, x, 70, 20); label(ctx, 'SCORE', x, 130, 12, '#aeb5c4', 'center', '"DM Mono"'); label(ctx, String(state.score), x, 168, 34);
-    label(ctx, state.rank || 'C', x, 262, 64, '#ffd543'); label(ctx, `${time}s`, x, 312, 18, '#aeb5c4');
-    combo(state.players[0], x, 400, 'center');
+    panel(ctx, 424, 34, 272, 476, 22, { fill: 'rgba(12,10,28,.62)', stroke: 'rgba(167,139,250,.28)', shadow: 24 });
+    drawStat(ctx, pop3Stage(state).name, x, 82, { size: 21, outline: 0 });
+    drawStat(ctx, 'SCORE', x, 138, { size: 12, color: '#b9aee0', font: '"DM Mono"', outline: 0, letter: 2 });
+    drawStat(ctx, String(state.score), x, 184, { size: 38 });
+    // Rank medallion.
+    const rank = state.rank || 'C';
+    glow(ctx, x, 272, 74, '#ffd543', .45);
+    ctx.beginPath(); ctx.arc(x, 272, 58, 0, Math.PI * 2);
+    const disc = ctx.createLinearGradient(x - 58, 272 - 58, x + 58, 272 + 58);
+    disc.addColorStop(0, '#3b2f6b'); disc.addColorStop(1, '#221a44');
+    ctx.fillStyle = disc; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,213,67,.75)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, 272, 48, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.stroke();
+    drawStat(ctx, rank, x, 272 + 24, { size: 68, color: '#ffd543' });
+    drawStat(ctx, `${time}s`, x, 372, { size: 22, color: '#d8d2ee', font: '"DM Mono"' });
+    panel(ctx, x - 100, 394, 200, 8, 4, { fill: 'rgba(255,255,255,.12)', stroke: null });
+    roundRect(ctx, x - 100, 394, 200 * Math.min(1, state.timeLeft / pop3Stage(state).time), 8, 4);
+    ctx.fillStyle = state.timeLeft < 15 ? '#ff5d6c' : '#58d4de'; ctx.fill();
+    combo(state.players[0], x, 450, 'center');
   } else {
-    label(ctx, pop3Stage(state).name, WIDTH / 2, 28, 15, '#aeb5c4'); label(ctx, String(state.score), WIDTH / 2, 64, 30);
-    label(ctx, `${state.rank || 'C'} · ${time}s`, WIDTH / 2, 90, 15, '#ffd543');
+    drawStat(ctx, pop3Stage(state).name, WIDTH / 2, 28, { size: 15, color: '#cfc6ea', outline: 0 });
+    drawStat(ctx, String(state.score), WIDTH / 2, 66, { size: 32 });
+    drawStat(ctx, `${state.rank || 'C'} · ${time}s`, WIDTH / 2, 92, { size: 15, color: '#ffd543', outline: 3 });
     combo(state.players[0], 20, 44, 'left'); combo(state.players[1], WIDTH - 20, 44, 'right');
   }
   drawBanner(ctx);
@@ -442,48 +449,38 @@ function drawPiece(ctx, cells, x, y, size, alpha = 1) {
 }
 function outlineCells(ctx, cells, col, row, color) {
   ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.setLineDash([7, 5]);
-  for (const cell of cells) { const c = cellCentre(col + cell.dx, row + cell.dy); roundedRect(ctx, c.x - SURGE.CELL / 2 + 2, c.y - SURGE.CELL / 2 + 2, SURGE.CELL - 4, SURGE.CELL - 4, 9); ctx.stroke(); }
+  for (const cell of cells) { const c = cellCentre(col + cell.dx, row + cell.dy); roundRect(ctx, c.x - SURGE.CELL / 2 + 2, c.y - SURGE.CELL / 2 + 2, SURGE.CELL - 4, SURGE.CELL - 4, 9); ctx.stroke(); }
   ctx.setLineDash([]);
 }
-function drawEnemy(ctx, enemy) {
-  const y = cellCentre(0, enemy.row).y, x = enemy.x, spec = SURGE.ENEMIES[enemy.type];
-  if (enemy.type === 'sheep') {
-    ctx.fillStyle = '#f4f1ea'; for (const [dx, dy] of [[-10, -6], [8, -8], [-4, 8], [11, 6], [0, 0]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, 13, 0, Math.PI * 2); ctx.fill(); }
-    ctx.fillStyle = '#3b3340'; ctx.beginPath(); ctx.arc(x - 15, y, 8, 0, Math.PI * 2); ctx.fill();
-  } else {
-    ctx.fillStyle = enemy.type === 'hound' ? '#8a93b0' : '#b0566a'; ctx.beginPath();
-    if (enemy.type === 'hound') ctx.ellipse(x, y, 22, 13, 0, 0, Math.PI * 2);
-    else for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, r = i % 2 ? 12 : 20; ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
-    ctx.fill();
-    ctx.fillStyle = enemy.type === 'hound' ? '#1b2130' : '#ffd543'; ctx.beginPath(); ctx.arc(x - 9, y - 2, 3.5, 0, Math.PI * 2); ctx.fill();
-  }
-  for (let i = 0; i < enemy.hp && spec.hp > 1; i++) { ctx.fillStyle = '#ff5d6c'; ctx.fillRect(x - 14 + i * 10, y - 27, 8, 4); }
-  if (enemy.gnaw > 0) { ctx.fillStyle = '#ffffff30'; ctx.fillRect(x - 16, y + 22, 32, 4); ctx.fillStyle = '#ffb347'; ctx.fillRect(x - 16, y + 22, 32 * enemy.gnaw / spec.gnaw, 4); }
-}
-function drawRabbit(ctx, p) {
-  ctx.fillStyle = PLAYER_HEX[p.id];
-  ctx.beginPath(); ctx.ellipse(p.x - 7, p.y - 20, 5, 13, -.2, 0, Math.PI * 2); ctx.ellipse(p.x + 7, p.y - 20, 5, 13, .2, 0, Math.PI * 2); ctx.fill();
-  drawShip(ctx, p.x, p.y, 15, p.id);
-}
 function renderSurge(ctx) {
-  const { COLS, ROWS, CELL, LEFT, TOP, BELT_TOP, BELT_BOTTOM, BELT_Y, BELT_CELL } = SURGE, right = LEFT + COLS * CELL, bottom = TOP + ROWS * CELL, stage = surgeStage(state);
-  ctx.fillStyle = '#111824'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  label(ctx, `${state.level > SURGE.STAGES.length ? '∞' : `第 ${state.level} 关`} · ${stage.name}`, 24, 44, 20, '#fff', 'left');
-  label(ctx, `${state.score} 分`, WIDTH - 24, 44, 20, '#ffd543', 'right');
-  label(ctx, '← 传送带 · 点拼块抓取', 24, 78, 11, '#aeb5c4', 'left', '"DM Mono"');
-  ctx.fillStyle = '#1c2536'; roundedRect(ctx, 0, BELT_TOP, WIDTH, BELT_BOTTOM - BELT_TOP, 0); ctx.fill();
+  const { COLS, ROWS, CELL, LEFT, TOP, BELT_TOP, BELT_BOTTOM, BELT_Y, BELT_CELL } = SURGE, right = LEFT + COLS * CELL, bottom = TOP + ROWS * CELL, stage = surgeStage(state), t = state.elapsed;
+  drawMeadowBackdrop(ctx, WIDTH, HEIGHT);
+  drawStat(ctx, `${state.level > SURGE.STAGES.length ? '∞' : `第 ${state.level} 关`} · ${stage.name}`, 24, 44, { size: 21, align: 'left' });
+  drawStat(ctx, `${state.score} 分`, WIDTH - 24, 44, { size: 21, color: '#ffd543', align: 'right' });
+  drawStat(ctx, '← 传送带 · 点拼块抓取', 24, 78, { size: 11, color: '#a9b4c8', align: 'left', font: '"DM Mono"', weight: 500, outline: 0, letter: 1 });
+
+  drawBelt(ctx, 0, BELT_TOP, WIDTH, BELT_BOTTOM - BELT_TOP, t);
   for (const piece of state.belt) drawPiece(ctx, piece.cells, piece.x, BELT_Y, BELT_CELL);
-  ctx.fillStyle = '#1e2a3b'; roundedRect(ctx, LEFT, TOP, COLS * CELL, ROWS * CELL, 8); ctx.fill();
-  ctx.strokeStyle = '#ffffff12'; ctx.lineWidth = 1; ctx.beginPath();
-  for (let c = 1; c < COLS; c++) { ctx.moveTo(LEFT + c * CELL, TOP); ctx.lineTo(LEFT + c * CELL, bottom); }
-  for (let r = 1; r < ROWS; r++) { ctx.moveTo(LEFT, TOP + r * CELL); ctx.lineTo(right, TOP + r * CELL); }
-  ctx.stroke();
-  for (let y = TOP; y < bottom; y += 18) { ctx.fillStyle = Math.floor((y - TOP) / 18) % 2 ? '#1b2130' : '#ffd543'; ctx.fillRect(LEFT - 12, y, 8, Math.min(18, bottom - y)); }
-  for (let r = 0; r < ROWS; r++) label(ctx, '‹‹', right + 16, cellCentre(0, r).y + 6, 17, '#ff5d6c88');
+
+  drawField(ctx, LEFT, TOP, COLS * CELL, ROWS * CELL, CELL, COLS, ROWS);
+  drawPortal(ctx, right, TOP, WIDTH - right, ROWS * CELL, t);
+  drawDefence(ctx, LEFT - 22, TOP, 14, ROWS * CELL, state.lives <= 1);
+
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (state.board[r][c]) { const centre = cellCentre(c, r); drawBlock(ctx, centre.x, centre.y, CELL - 6, state.board[r][c]); }
   if (axeMode) for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (state.board[r][c]) outlineCells(ctx, [{ dx: 0, dy: 0 }], c, r, '#ffd543');
-  for (const shot of state.shots) { const y = cellCentre(0, shot.row).y; ctx.fillStyle = `${COLOR_HEX[shot.color]}55`; ctx.fillRect(shot.x - 34, y - 5, 34, 10); drawBall(ctx, shot.x, y, shot.color, 12); }
-  for (const enemy of state.enemies) drawEnemy(ctx, enemy);
+  for (const shot of state.shots) {
+    const y = cellCentre(0, shot.row).y;
+    glow(ctx, shot.x, y, 26, SHADES[shot.color]?.glow || '#ffffff', .6);
+    const trail = ctx.createLinearGradient(shot.x - 40, y, shot.x, y);
+    trail.addColorStop(0, withAlpha(SHADES[shot.color]?.base || '#ffffff', 0));
+    trail.addColorStop(1, withAlpha(SHADES[shot.color]?.light || '#ffffff', .55));
+    ctx.fillStyle = trail; roundRect(ctx, shot.x - 40, y - 5, 40, 10, 5); ctx.fill();
+    drawBall(ctx, shot.x, y, shot.color, 12);
+  }
+  for (const enemy of state.enemies) {
+    const spec = SURGE.ENEMIES[enemy.type];
+    drawEnemy(ctx, enemy.x, cellCentre(0, enemy.row).y, enemy.type, enemy.hp, spec.hp, enemy.gnaw, spec.gnaw, t);
+  }
   if (hover?.cells) { drawPiece(ctx, hover.cells, cellCentre(hover.col, hover.row).x, cellCentre(hover.col, hover.row).y, CELL, .45); outlineCells(ctx, hover.cells, hover.col, hover.row, canPlace(state, hover.cells, hover.col, hover.row) ? '#44c986' : '#9aa3b5'); }
   else if (hover) outlineCells(ctx, [{ dx: 0, dy: 0 }], hover.col, hover.row, '#ffd543');
   for (const p of state.players) {
@@ -493,26 +490,42 @@ function renderSurge(ctx) {
       if (over) { drawPiece(ctx, p.held.cells, cellCentre(cell.col, cell.row).x, cellCentre(cell.col, cell.row).y, CELL, .8); outlineCells(ctx, p.held.cells, cell.col, cell.row, canPlace(state, p.held.cells, cell.col, cell.row) ? '#44c986' : '#9aa3b5'); }
       else drawPiece(ctx, p.held.cells, p.x, p.y, BELT_CELL, .85);
     }
-    drawRabbit(ctx, p);
-    if (state.players.length > 1) label(ctx, `P${p.id + 1}`, p.x, p.y + 30, 11, PLAYER_HEX[p.id], 'center', '"DM Mono"');
+    glow(ctx, p.x, p.y, 42, PLAYER_HEX[p.id], .3);
+    drawRabbit(ctx, p.x, p.y, p.id);
+    if (state.players.length > 1) drawStat(ctx, `P${p.id + 1}`, p.x, p.y + 32, { size: 12, color: PLAYER_HEX[p.id], font: '"DM Mono"', outline: 3 });
   }
   drawEffects(ctx);
+
   const hud = bottom + 44;
-  label(ctx, '防线', 24, hud, 13, '#aeb5c4', 'left');
-  for (let i = 0; i < SURGE.LIVES; i++) label(ctx, '♥', 76 + i * 24, hud + 2, 22, i < state.lives ? '#ff5d6c' : '#ffffff25');
-  label(ctx, `击退 ${state.defeated} / ${stage.total || '∞'}`, WIDTH / 2, hud, 15);
-  label(ctx, `⚡ ${state.energy} / ${SURGE.MAX_ENERGY}`, WIDTH - 24, hud, 15, '#ffd543', 'right');
-  ctx.fillStyle = '#ffffff18'; roundedRect(ctx, 24, hud + 22, WIDTH - 48, 12, 6); ctx.fill();
-  ctx.fillStyle = '#ffd543'; roundedRect(ctx, 24, hud + 22, (WIDTH - 48) * state.energy / SURGE.MAX_ENERGY, 12, 6); ctx.fill();
-  if (axeMode) label(ctx, '消消斧头：点一个方块，把它变成泡姆发射出去', WIDTH / 2, hud + 62, 13, '#ffd543');
+  panel(ctx, 16, hud - 24, WIDTH - 32, 86, 16, { fill: 'rgba(8,13,24,.6)', stroke: 'rgba(255,255,255,.1)' });
+  drawStat(ctx, '防线', 36, hud, { size: 13, color: '#a9b4c8', align: 'left', outline: 0 });
+  for (let i = 0; i < SURGE.LIVES; i++) drawStat(ctx, '♥', 88 + i * 26, hud + 3, { size: 23, color: i < state.lives ? '#ff5d6c' : 'rgba(255,255,255,.14)', outline: i < state.lives ? 3 : 0 });
+  drawStat(ctx, `击退 ${state.defeated} / ${stage.total || '∞'}`, WIDTH / 2, hud, { size: 16, outline: 3 });
+  drawStat(ctx, `⚡ ${state.energy} / ${SURGE.MAX_ENERGY}`, WIDTH - 36, hud, { size: 16, color: '#ffd543', align: 'right', outline: 3 });
+  panel(ctx, 36, hud + 16, WIDTH - 72, 14, 7, { fill: 'rgba(255,255,255,.1)', stroke: 'rgba(255,255,255,.12)' });
+  const ratio = state.energy / SURGE.MAX_ENERGY, bar = (WIDTH - 72) * ratio;
+  if (bar > 2) {
+    roundRect(ctx, 36, hud + 16, bar, 14, 7);
+    const fill = ctx.createLinearGradient(36, 0, 36 + bar, 0);
+    fill.addColorStop(0, '#ffb347'); fill.addColorStop(1, '#ffd543');
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  for (let i = 1; i < SURGE.MAX_ENERGY / SURGE.AXE_COST; i++) {
+    const x = 36 + (WIDTH - 72) * (i * SURGE.AXE_COST / SURGE.MAX_ENERGY);
+    ctx.fillStyle = 'rgba(8,13,24,.55)'; ctx.fillRect(x, hud + 16, 2, 14);
+  }
+  if (axeMode) drawStat(ctx, '消消斧头：点一个方块，把它变成泡姆发射出去', WIDTH / 2, hud + 54, { size: 13, color: '#ffd543', outline: 3 });
   drawBanner(ctx);
 }
 
 function renderEnd(ctx) {
-  ctx.fillStyle = '#0b0f18cc'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  label(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, HEIGHT / 2 - 30, 44);
-  label(ctx, `${state.score} 分${mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : ''}`, WIDTH / 2, HEIGHT / 2 + 18, 22, '#ffd543');
-  label(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, HEIGHT / 2 + 62, 15, '#aeb5c4');
+  ctx.fillStyle = 'rgba(8,12,22,.82)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  const w = 440, h = 190;
+  panel(ctx, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h, 24, { fill: 'rgba(13,18,32,.9)', stroke: 'rgba(255,213,67,.4)', shadow: 30 });
+  drawStat(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, HEIGHT / 2 - 34, { size: 42, outline: 0 });
+  drawStat(ctx, `${state.score} 分${mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : ''}`, WIDTH / 2, HEIGHT / 2 + 18, { size: 24, color: '#ffd543' });
+  drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, HEIGHT / 2 + 62, { size: 15, color: '#aeb5c4', outline: 0 });
 }
 function hudLine() {
   const tail = state.phase === 'playing' ? '' : state.phase === 'won' ? ' · 完成！' : ' · 回合结束';
