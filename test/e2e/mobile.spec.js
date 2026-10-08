@@ -16,9 +16,9 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes four arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes five arcade cards', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(4);
+  await expect(page.locator('.arcade-card')).toHaveCount(5);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
@@ -129,4 +129,52 @@ test('泡噗2: every theme reskins the board and the choice sticks', async ({ pa
   await page.locator('body[data-ready]').waitFor();
   await page.locator('[data-mode="pop2"]').click();
   await expect(page.locator('.theme-chip[data-theme="tribe"]')).toHaveClass(/selected/);
+});
+
+// 抓大鹅 draws with WebGL into its own canvas; its state lives on window.__arcade.goose.
+const goose = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__arcade.goose?.state ?? null)));
+async function openGoose(page) {
+  await page.goto('/');
+  await page.locator('body[data-ready]').waitFor();
+  await page.locator('[data-mode="goose"]').click();
+  await expect(page.locator('.goose-canvas')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(async () => (await goose(page))?.pile.length).toBe(99);
+}
+
+test('抓大鹅: the bowl, tray and controls fit on one screen', async ({ page }) => {
+  await openGoose(page);
+  const fit = await page.evaluate(() => {
+    const canvas = document.querySelector('.goose-canvas').getBoundingClientRect(), last = [...document.querySelectorAll('#mobile-controls button')].at(-1).getBoundingClientRect();
+    return { wide: document.documentElement.scrollWidth <= window.innerWidth + 1, canvas: canvas.top >= 0 && canvas.bottom <= window.innerHeight, controls: last.bottom <= window.innerHeight, size: canvas.width };
+  });
+  expect(fit).toMatchObject({ wide: true, canvas: true, controls: true });
+  expect(fit.size).toBeGreaterThan(250);
+});
+
+test('抓大鹅: tapping a reachable item sends it to the tray', async ({ page }) => {
+  await openGoose(page);
+  // Wait for the pile to settle, then tap an item that is not buried under another.
+  // Finding and locating it happen in one call, since the pile can still shift between calls.
+  const reachable = () => page.evaluate(() => { const g = window.__arcade.goose, [item] = g.debug.tappable(); return item ? g.debug.screenOf(item.id) : null; });
+  let at = null;
+  for (const until = Date.now() + 10_000; !at && Date.now() < until;) at = await reachable() ?? (await page.waitForTimeout(200), null);
+  expect(at).not.toBe(null);
+  await page.mouse.click(at.x, at.y);
+  await expect.poll(async () => (await goose(page)).tray.map(entry => entry.status).join()).toBe('resting');
+  expect((await goose(page)).pile).toHaveLength(98);
+  await expect(page.locator('.goose-hud')).toContainText('98');
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test('抓大鹅: switching to endless mode restarts against the clock, and leaving frees the view', async ({ page }) => {
+  await openGoose(page);
+  await page.locator('#goose-mode').click();
+  await expect.poll(async () => (await goose(page)).mode).toBe('endless');
+  await expect(page.locator('.goose-hud')).toContainText('消除');
+  await page.locator('#goose-shake').click();
+  await page.locator('#back-home').click();
+  expect(await page.evaluate(() => window.__arcade.goose)).toBe(null);
+  // The choice of mode is remembered for the next visit.
+  await page.locator('.arcade-card[data-mode="goose"]').click();
+  await expect.poll(async () => (await goose(page))?.mode).toBe('endless');
 });

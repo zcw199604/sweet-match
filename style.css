@@ -41,17 +41,56 @@ body.playing{overscroll-behavior:none}
 /* On a phone held upright, 方块爆破 takes the full screen width: one-line nav, no
    gutters, and no seat label (it is always solo). Restart lives in the stage header. */
 @media(max-width:800px) and (orientation:portrait){
-body.playing[data-mode=blast] main{padding:0}
-body.playing[data-mode=blast] .game-nav{height:52px;padding:0 12px}
-body.playing[data-mode=blast] .game-name span{display:none}
-body.playing[data-mode=blast] .game-name h1{font-size:18px;margin:0}
-body.playing[data-mode=blast] .stage{border-radius:0;box-shadow:none;padding:8px 0 max(12px,env(safe-area-inset-bottom))}
-body.playing[data-mode=blast] .stage-top{padding:0 12px;margin-bottom:8px}
-body.playing[data-mode=blast] #seat-text{display:none}
-body.playing[data-mode=blast] .stage-top strong{font-size:13px}
-body.playing[data-mode=blast] .stage-top button{padding:7px 12px}
+body.playing:is([data-mode=blast],[data-mode=goose]) main{padding:0}
+body.playing:is([data-mode=blast],[data-mode=goose]) .game-nav{height:52px;padding:0 12px}
+body.playing:is([data-mode=blast],[data-mode=goose]) .game-name span{display:none}
+body.playing:is([data-mode=blast],[data-mode=goose]) .game-name h1{font-size:18px;margin:0}
+body.playing:is([data-mode=blast],[data-mode=goose]) .stage{border-radius:0;box-shadow:none;padding:8px 0 max(12px,env(safe-area-inset-bottom))}
+body.playing:is([data-mode=blast],[data-mode=goose]) .stage-top{padding:0 12px;margin-bottom:8px}
+body.playing:is([data-mode=blast],[data-mode=goose]) #seat-text{display:none}
+body.playing:is([data-mode=blast],[data-mode=goose]) .stage-top strong{font-size:13px}
+body.playing:is([data-mode=blast],[data-mode=goose]) .stage-top button{padding:7px 12px}
 body.playing[data-mode=blast] .canvas-wrap.portrait{width:100%;max-width:max(250px,calc((100vh - 120px) * 720 / 936));max-width:max(250px,calc((100dvh - 120px) * 720 / 936))}
 body.playing[data-mode=blast] .game-canvas{border-radius:0}
-body.playing[data-mode=blast] .game-help{padding:0 14px}
+body.playing:is([data-mode=blast],[data-mode=goose]) .game-help{padding:0 14px}
 }
 @media(orientation:landscape) and (max-height:600px){.canvas-wrap.portrait{max-width:none;width:max(160px,calc((100vh - 78px) * 720 / 936));width:max(160px,calc((100dvh - 78px) * 720 / 936))}}
+
+/* 抓大鹅: five cards on the home grid, and a portrait 3D stage (720 × 820) over a gingham tablecloth. */
+.arcade-grid{grid-template-columns:repeat(5,1fr)}
+@media(max-width:1100px){.arcade-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:800px){.arcade-grid{grid-template-columns:1fr}}
+.goose .art{background-color:#fff3e2;background-image:linear-gradient(90deg,#ff5d8024 50%,transparent 50%),linear-gradient(#ff5d8024 50%,transparent 50%);background-size:28px 28px}
+.goose .art-bowl{position:absolute;left:50%;top:14px;width:118px;height:118px;margin-left:-59px;border-radius:50%;background:radial-gradient(circle,#4b2c1b 0 18%,#a66a3f 50%,#d99c62 68%,#a8673a 69% 78%,#8a5330 79%);box-shadow:4px 10px 16px #4b2c1b40}
+.goose .art-bowl i{position:absolute;border-radius:50%;box-shadow:inset -4px -5px 8px #00000026,0 3px 5px #0000002e}
+.goose .art-bowl .a{left:30px;top:26px;width:30px;height:24px;background:#fbf8f0}
+.goose .art-bowl .a::after{content:'';position:absolute;right:-9px;top:6px;border-left:11px solid #ff9a2e;border-top:5px solid transparent;border-bottom:5px solid transparent}
+.goose .art-bowl .b{left:64px;top:36px;width:24px;height:24px;background:#ff4757}
+.goose .art-bowl .c{left:40px;top:58px;width:26px;height:22px;background:#ff9124}
+.goose .art-bowl .d{left:70px;top:66px;width:18px;height:24px;background:#fff0d4}
+.goose .art-tray{position:absolute;left:50%;bottom:12px;width:150px;margin-left:-75px;height:30px;border-radius:15px;background:#b5713f;display:flex;gap:6px;align-items:center;justify-content:center;box-shadow:0 6px 12px #4b2c1b33}
+.goose .art-tray i{width:22px;height:22px;border-radius:50%;background:#fbecd0}
+.goose .art-tray i:first-child{background:radial-gradient(circle at 40% 35%,#fff,#fbf8f0 55%,#ddd6c8)}
+.canvas-wrap.goose-wrap{aspect-ratio:720/820;width:min(100%,860px,max(260px,calc((100vh - 400px) * 720 / 820)));width:min(100%,860px,max(260px,calc((100dvh - 400px) * 720 / 820)));border-radius:13px;overflow:hidden;touch-action:none;background-color:#fff3e2;background-image:radial-gradient(circle at calc(var(--bowl-x,50%) + 5px) calc(var(--bowl-y,45%) + 9px),#4b2c1b59 calc(var(--bowl-r,0px) - 2px),#4b2c1b00 calc(var(--bowl-r,0px) + 16px)),linear-gradient(90deg,#ff5d8022 50%,transparent 50%),linear-gradient(#ff5d8022 50%,transparent 50%);background-size:100% 100%,44px 44px,44px 44px}
+.goose-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-tap-highlight-color:transparent}
+.goose-loading{position:absolute;inset:0;margin:0;display:grid;place-content:center;gap:12px;padding:20px;text-align:center;color:#7a4a2a;font-weight:700}
+.goose-loading p{margin:0}
+.goose-loading button,.goose-end button{border:0;background:#ff5d80;color:#fff;font-weight:800;padding:11px 24px;border-radius:12px;justify-self:center}
+.goose-hud{position:absolute;left:10px;right:10px;top:10px;display:flex;justify-content:space-between;pointer-events:none}
+.goose-hud span{background:#fffdf8eb;color:#4b2c1b;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;box-shadow:0 4px 12px #4b2c1b26}
+.goose-hud b{font-size:17px}
+.goose-hud .urgent{color:#e23d4f}
+.goose-end{position:absolute;inset:0;display:grid;place-items:center;background:#2a160ba6;padding:16px}
+.goose-end[hidden]{display:none}
+.goose-end.won{background:#2a160b40}
+.goose-end>div{background:#fffaf0;color:#3a2414;border-radius:18px;padding:22px 30px;text-align:center;box-shadow:0 18px 40px #0000004d;display:grid;gap:4px}
+.goose-end strong{font-size:28px;letter-spacing:-.03em}
+.goose-end p{margin:4px 0 14px;color:#7a5a3c;font-size:14px}
+@media(max-width:800px){.canvas-wrap.goose-wrap{width:min(100%,max(260px,calc((100vh - 290px) * 720 / 820)));width:min(100%,max(260px,calc((100dvh - 290px) * 720 / 820)))}}
+@media(orientation:landscape) and (max-height:600px){.canvas-wrap.goose-wrap{width:max(200px,calc((100vh - 78px) * 720 / 820));width:max(200px,calc((100dvh - 78px) * 720 / 820))}}
+/* On a phone held upright 抓大鹅 also goes edge to edge, with both buttons on one row so the bowl gets the height. */
+@media(max-width:800px) and (orientation:portrait){
+body.playing[data-mode=goose] .canvas-wrap.goose-wrap{width:100%;max-width:max(250px,calc((100vh - 190px) * 720 / 820));max-width:max(250px,calc((100dvh - 190px) * 720 / 820));border-radius:0}
+body.playing[data-mode=goose] .mobile-controls{padding:0 12px;margin-top:10px}
+body.playing[data-mode=goose] .mobile-controls .player-toggle{flex-basis:auto;min-height:46px}
+}

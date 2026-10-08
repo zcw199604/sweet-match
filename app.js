@@ -15,8 +15,11 @@ const MODE_META = {
   pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；飞船可以直接穿过星球，但彩球碰到星球就失败。' },
   pop3: { label: 'ARCADE 02', title: '泡噗 3', help: '拖动飞船接住落下的音符，三个同色相连消除。漏掉的音符会让底部的怪鼠上升，消除能把它压回去；跟着光圈点「打拍」累积连击倍率。' },
   surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' },
-  blast: { label: 'ARCADE 04', title: '方块爆破', help: '把托盘里的拼块拖进 10×10 棋盘。整行或整列填满就会消除，一次消多行还有额外奖励；连续几手都能消除，分数倍率会一路涨。三个拼块都用完会补上新的一批，托盘里一个都放不下时回合结束。' }
+  blast: { label: 'ARCADE 04', title: '方块爆破', help: '把托盘里的拼块拖进 10×10 棋盘。整行或整列填满就会消除，一次消多行还有额外奖励；连续几手都能消除，分数倍率会一路涨。三个拼块都用完会补上新的一批，托盘里一个都放不下时回合结束。' },
+  goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
+// 抓大鹅 and 方块爆破 are solo puzzles: no seats, no snapshots, no co-op toggle.
+const SOLO_ONLY = ['blast', 'goose'];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -43,6 +46,11 @@ let blastBest = 0;
 let blastPrevBest = 0;
 let blastShown = 0;
 let blastShownAt = 0;
+// 抓大鹅 runs its own 3D view (goose.js, loaded on first use) with its own loop;
+// app.js only builds the frame around it and tears it down on the way out.
+let goose = null;
+let gooseToken = 0;
+let gooseMode = 'classic';
 let controlsKey = '';
 let hudText = '';
 let lastMove = null;
@@ -58,6 +66,7 @@ let lan = { role: 'solo', token: null, code: null, base: '', source: null, event
 let rtc = { peer: null, channel: null };
 
 function showScreen(id) {
+  if (id !== 'game') stopGoose();
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
@@ -227,6 +236,8 @@ function buildStage() {
   $('#mode-label').textContent = meta.label; $('#game-title').textContent = meta.title;
   // Lets the stylesheet give one board its own page layout (方块爆破 goes edge to edge on phones).
   document.body.dataset.mode = mode;
+  stopGoose();
+  if (mode === 'goose') return buildGooseStage(stage, meta);
   // Only 泡噗2 is reskinned, so only that board gets the picker.
   const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
   stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap${mode === 'blast' ? ' portrait' : ''}"><canvas class="game-canvas" width="720" height="${viewHeight()}" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
@@ -239,9 +250,11 @@ function buildStage() {
   resizeCanvas();
 }
 function startGame(nextMode) {
-  // A guest renders whatever the host broadcasts, so blast is solo-only.
-  if (nextMode === 'blast' && lan.role !== 'solo') return setHint('方块爆破是单机游戏，请先断开连接。', true);
+  // A guest renders whatever the host broadcasts, so the solo puzzles stay off the network.
+  if (SOLO_ONLY.includes(nextMode) && lan.role !== 'solo') return setHint(`${MODE_META[nextMode].title}是单机游戏，请先断开连接。`, true);
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
+  // The 2D loop idles while state is null, which leaves the frame to goose.js.
+  if (mode === 'goose') { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame(); resetBlastView();
@@ -251,6 +264,41 @@ function startGame(nextMode) {
 function restartGame() {
   if (lan.role === 'guest') return setHint('请由房主重新开始。', true);
   state = newGame(); axeMode = false; hover = null; controlsKey = ''; resetBlastView(); broadcastSnapshot(true); renderGame();
+}
+function stopGoose() {
+  gooseToken += 1;
+  goose?.destroy();
+  goose = null;
+}
+function gooseModeLabel() { return gooseMode === 'classic' ? '经典模式 · 切换无尽' : '无尽模式 · 切换经典'; }
+function buildGooseStage(stage, meta) {
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap goose-wrap"></div><div class="mobile-controls" id="mobile-controls"><button type="button" id="goose-shake">晃一下</button><button type="button" class="player-toggle" id="goose-mode">${gooseModeLabel()}</button></div><p class="game-help">${meta.help}</p>`;
+  $('#restart-game').addEventListener('click', () => goose?.restart(gooseMode));
+  $('#goose-shake').addEventListener('click', () => goose?.shake());
+  $('#goose-mode').addEventListener('click', (event) => {
+    gooseMode = gooseMode === 'classic' ? 'endless' : 'classic';
+    try { localStorage.setItem('pao-goose-mode', gooseMode); } catch { /* private mode */ }
+    event.currentTarget.textContent = gooseModeLabel();
+    goose?.restart(gooseMode);
+  });
+  mountGooseView(stage.querySelector('.goose-wrap'));
+}
+async function mountGooseView(wrap) {
+  const token = gooseToken;
+  wrap.innerHTML = '<p class="goose-loading">正在加载 3D 引擎……</p>';
+  try {
+    const { mountGoose } = await import('./goose.js');
+    if (token !== gooseToken) return;
+    const view = await mountGoose(wrap, { mode: gooseMode, onHud: (text) => { $('#score-text').textContent = text; } });
+    // The player left (or restarted the stage) while the engine was loading.
+    if (token !== gooseToken) { view.destroy(); return; }
+    goose = view;
+  } catch (error) {
+    if (token !== gooseToken) return;
+    console.error(error);
+    wrap.innerHTML = '<div class="goose-loading"><p>3D 引擎加载失败，请检查网络或浏览器是否支持 WebGL。</p><button type="button">重试</button></div>';
+    wrap.querySelector('button').addEventListener('click', () => mountGooseView(wrap));
+  }
 }
 function resetBlastView() { blastDrag = null; blastShown = 0; blastPrevBest = blastBest; }
 // Every player this device steers: both seats when two people share one screen.
@@ -876,12 +924,13 @@ $$('[data-copy]').forEach((node) => node.addEventListener('click', async () => {
 $$('.tab').forEach((tab) => tab.addEventListener('click', () => { $$('.tab').forEach((other) => other.classList.toggle('active', other === tab)); $('#server-panel').classList.toggle('active', tab.dataset.tab === 'server'); $('#webrtc-panel').classList.toggle('active', tab.dataset.tab === 'webrtc'); }));
 $('#lan-server-url').value = new URLSearchParams(location.search).get('lan') || localStorage.getItem('pao-lan-server') || location.origin;
 loadBlastBest();
+try { gooseMode = localStorage.getItem('pao-goose-mode') === 'endless' ? 'endless' : 'classic'; } catch { /* private mode */ }
 for (const type of ['pointermove', 'pointerup', 'pointercancel']) document.addEventListener(type, type === 'pointermove' ? pointerMove : pointerUp, { passive: false });
 document.addEventListener('keydown', keyboard); document.addEventListener('keyup', keyboard);
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; } };
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';

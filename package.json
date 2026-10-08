@@ -6,9 +6,12 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "lan": "node scripts/start-lan.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "vendor": "node scripts/vendor.js"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@dimforge/rapier3d-compat": "0.20.0",
+    "@playwright/test": "1.63.0",
+    "three": "0.185.1"
   }
 }

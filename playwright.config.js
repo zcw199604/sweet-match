@@ -5,7 +5,9 @@ export default defineConfig({
   timeout: 15_000,
   retries: 0,
   reporter: [['list']],
-  webServer: { command: 'python3 -m http.server 4173', port: 4173, reuseExistingServer: true },
+  // http.server's default listen backlog is 5; 抓大鹅 fetches several modules at once,
+  // and with three browsers in parallel the overflow comes back as connection resets.
+  webServer: { command: `python3 -c "import http.server as h; h.ThreadingHTTPServer.request_queue_size = 128; h.test(HandlerClass=h.SimpleHTTPRequestHandler, ServerClass=h.ThreadingHTTPServer, port=4173)"`, port: 4173, reuseExistingServer: true },
   use: { baseURL: 'http://127.0.0.1:4173', browserName: 'chromium', channel: 'chrome', headless: true },
   projects: [
     { name: 'mobile', use: { ...devices['iPhone 13'] } },
