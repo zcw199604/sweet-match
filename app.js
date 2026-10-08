@@ -6,6 +6,7 @@ import {
   drawFloatingText, drawMeadowBackdrop, drawPortal, drawRabbit, drawShip, drawSparkle,
   drawStat, drawThruster, drawWell, glow, panel, resetArtCaches, roundRect, SHADES, withAlpha
 } from './art.js';
+import { initBoard, openBoard, reportScore } from './leaderboard.js';
 import {
   ballPainter, ballShades, DEFAULT_THEME, drawThemeArena, drawThemeBackdrop, drawThemeBase, drawThemeCraft,
   drawThemeThruster, isTheme, paintThemeChip, resetThemeCaches, THEMES, themeById
@@ -55,6 +56,8 @@ let gooseMode = 'classic';
 let pop3Endless = false;
 let pop3Best = 0;
 let pop3PrevBest = 0;
+// 全球榜单：这一局结算后显示在结算卡片上的一行字（提交中 / 名次 / 连不上），每局开始时清空。
+let lbStatus = '';
 let controlsKey = '';
 let hudText = '';
 let lastMove = null;
@@ -298,7 +301,7 @@ async function mountGooseView(wrap) {
   try {
     const { mountGoose } = await import('./goose.js');
     if (token !== gooseToken) return;
-    const view = await mountGoose(wrap, { mode: gooseMode, onHud: (text) => { $('#score-text').textContent = text; } });
+    const view = await mountGoose(wrap, { mode: gooseMode, onHud: (text) => { $('#score-text').textContent = text; }, onResult: reportScore });
     // The player left (or restarted the stage) while the engine was loading.
     if (token !== gooseToken) { view.destroy(); return; }
     goose = view;
@@ -309,7 +312,7 @@ async function mountGooseView(wrap) {
     wrap.querySelector('button').addEventListener('click', () => mountGooseView(wrap));
   }
 }
-function resetBlastView() { blastDrag = null; blastShown = 0; blastPrevBest = blastBest; pop3PrevBest = pop3Best; }
+function resetBlastView() { lbStatus = ''; blastDrag = null; blastShown = 0; blastPrevBest = blastBest; pop3PrevBest = pop3Best; }
 // Every player this device steers: both seats when two people share one screen.
 const localPlayers = () => (lan.role === 'solo' ? state.players.map(p => p.id) : [activePlayer]);
 // A phone held upright: 方块爆破 and 泡噗3 give up their square board for a taller one.
@@ -547,6 +550,21 @@ function savePop3(key, value) {
 const mmss = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 // A score only counts toward the 无尽 record when one person played it.
 const pop3Record = () => state.endless && state.players.length === 1;
+
+// 每个游戏的每个模式各有一份全球榜。
+function boardId() {
+  if (mode === 'goose') return gooseMode === 'endless' ? 'goose-endless' : 'goose-classic';
+  if (mode === 'pop3') return (state ? state.endless : pop3Endless) ? 'pop3-endless' : 'pop3-classic';
+  return mode;
+}
+// 只有一个人玩的整局才上榜：联机和同屏双人的分数是两个人的合计，不能和单人比。
+const ranked = () => lan.role === 'solo' && state?.players.length === 1;
+function reportResult() {
+  if (!ranked() || state.score < 1) return;
+  const round = state;
+  lbStatus = '正在提交成绩……';
+  reportScore(boardId(), state.score).then((text) => { if (state === round) lbStatus = text; });
+}
 
 // Clears animate from the effect's own timestamp, so host and guest agree.
 function drawEffects(ctx, well) {
@@ -879,14 +897,18 @@ function renderEnd(ctx, alpha = 1) {
   const H = viewHeight(), mid = H / 2;
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.fillStyle = 'rgba(8,12,22,.82)'; ctx.fillRect(0, 0, WIDTH, H);
-  const w = 440, h = mode === 'pop3' && state.endless ? 214 : 190;
-  panel(ctx, WIDTH / 2 - w / 2, mid - h / 2, w, h, 24, { fill: 'rgba(13,18,32,.9)', stroke: 'rgba(255,213,67,.4)', shadow: 30 });
-  drawStat(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, mid - 34, { size: 42, outline: 0 });
   const endless = mode === 'pop3' && state.endless;
+  const record = endless && pop3Record();
+  // Every extra line (the 无尽 record, the leaderboard rank) grows the card by one row, half above and half below.
+  const rows = (record ? 1 : 0) + (lbStatus ? 1 : 0), w = 440, h = 190 + rows * 28, shift = rows * 14;
+  panel(ctx, WIDTH / 2 - w / 2, mid - h / 2, w, h, 24, { fill: 'rgba(13,18,32,.9)', stroke: 'rgba(255,213,67,.4)', shadow: 30 });
+  drawStat(ctx, state.phase === 'won' ? '完成！' : '回合结束', WIDTH / 2, mid - 34 - shift, { size: 42, outline: 0 });
   const extra = endless ? ` · 坚持 ${mmss(pop3Clock(state))}` : mode === 'pop3' ? ` · 评价 ${state.rank || 'C'}` : mode === 'blast' ? (state.score > blastPrevBest ? ' · 新纪录！' : ` · 最高 ${blastBest}`) : '';
-  drawStat(ctx, `${state.score} 分${extra}`, WIDTH / 2, mid + 18, { size: 24, color: '#ffd543' });
-  if (endless && pop3Record()) drawStat(ctx, state.score > pop3PrevBest ? '新纪录！' : `最高 ${pop3Best} 分`, WIDTH / 2, mid + 46, { size: 17, color: state.score > pop3PrevBest ? '#ff9d5c' : '#aeb5c4', outline: 0 });
-  drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, mid + (endless ? 76 : 62), { size: 15, color: '#aeb5c4', outline: 0 });
+  let y = mid + 18 - shift;
+  drawStat(ctx, `${state.score} 分${extra}`, WIDTH / 2, y, { size: 24, color: '#ffd543' });
+  if (record) { y += 28; drawStat(ctx, state.score > pop3PrevBest ? '新纪录！' : `最高 ${pop3Best} 分`, WIDTH / 2, y, { size: 17, color: state.score > pop3PrevBest ? '#ff9d5c' : '#aeb5c4', outline: 0 }); }
+  if (lbStatus) { y += 28; drawStat(ctx, lbStatus, WIDTH / 2, y, { size: 16, color: '#7fe3ea', outline: 0 }); }
+  drawStat(ctx, lan.role === 'guest' ? '等待房主重新开始' : '点击画面重新开始', WIDTH / 2, y + 44, { size: 15, color: '#aeb5c4', outline: 0 });
   ctx.restore();
 }
 function hudLine() {
@@ -913,6 +935,7 @@ function renderGame() {
   if (mode === 'blast' && state.score > blastBest) { blastBest = state.score; saveBlastBest(blastBest); }
   if (state.phase === 'playing') endedAt = 0;
   else {
+    if (!endedAt) reportResult();
     endedAt ||= performance.now();
     // 方块爆破 lets the board grey out first, then fades the end card in.
     const fade = mode === 'blast' ? clamp01((performance.now() - endedAt - BLAST_END_DELAY) / 250) : 1;
@@ -975,6 +998,9 @@ function loop(time) {
 $$('.arcade-card').forEach((card) => card.addEventListener('click', () => startGame(card.dataset.mode)));
 $('#open-link').addEventListener('click', openLink); $('#game-link').addEventListener('click', openLink); $('#close-link').addEventListener('click', closeLink); $('#how-link').addEventListener('click', openLink);
 $('#back-home').addEventListener('click', () => { showScreen('home'); });
+initBoard();
+$('#open-board').addEventListener('click', () => openBoard());
+$('#game-board').addEventListener('click', () => openBoard(boardId()));
 $('#create-room').addEventListener('click', createRoom); $('#join-room').addEventListener('click', joinRoom); $('#leave-room').addEventListener('click', disconnect);
 $('#make-offer').addEventListener('click', makeOffer); $('#make-answer').addEventListener('click', makeAnswer); $('#finish-answer').addEventListener('click', finishAnswer);
 $$('[data-copy]').forEach((node) => node.addEventListener('click', async () => { const target = $(`#${node.dataset.copy}`); await navigator.clipboard?.writeText(target.value); setHint('已复制到剪贴板。'); }));

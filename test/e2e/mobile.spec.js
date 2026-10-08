@@ -210,3 +210,87 @@ test('抓大鹅: switching to endless mode restarts against the clock, and leavi
   await page.locator('.arcade-card[data-mode="goose"]').click();
   await expect.poll(async () => (await goose(page))?.mode).toBe('endless');
 });
+
+// ---- 全球榜单：用桩接口代替线上的 /api/scores ----
+async function stubScores(page, entries = []) {
+  const posts = [];
+  await page.route('**/api/scores**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      const body = request.postDataJSON();
+      posts.push(body);
+      return route.fulfill({ json: { board: body.board, improved: true, best: body.value, rank: 3 } });
+    }
+    return route.fulfill({ json: { board: new URL(request.url()).searchParams.get('board'), entries, me: null } });
+  });
+  return posts;
+}
+
+test('榜单: 首页能打开弹窗，按游戏和模式切换，昵称被记住', async ({ page }) => {
+  await stubScores(page, [{ rank: 1, name: '<b>阿福</b>', value: 4200, at: 1 }, { rank: 2, name: '小满', value: 900, at: 2 }]);
+  await page.goto('/');
+  await page.locator('body[data-ready]').waitFor();
+  await page.locator('#open-board').click();
+  await expect(page.locator('.board-row')).toHaveCount(2);
+  // 昵称按纯文本渲染，不会被当成 HTML。
+  await expect(page.locator('.board-row .board-name').first()).toHaveText('<b>阿福</b>');
+  await expect(page.locator('.board-row .board-value').first()).toHaveText('4200 分');
+  await page.locator('.board-tab', { hasText: '抓大鹅' }).click();
+  await expect(page.locator('.board-mode')).toHaveCount(2);
+  await page.locator('.board-mode', { hasText: '无尽' }).click();
+  await expect(page.locator('.board-row .board-value').first()).toHaveText('4200 件');
+  await page.locator('#board-name').fill('新昵称');
+  await page.locator('#board-name').dispatchEvent('change');
+  expect(await page.evaluate(() => localStorage.getItem('pao-name'))).toBe('新昵称');
+  await page.locator('#close-board').click();
+  await expect(page.locator('#board')).not.toHaveClass(/active/);
+});
+
+test('榜单: 游戏里的榜单按钮直接打开当前模式', async ({ page }) => {
+  await stubScores(page);
+  await open(page, 'pop3');
+  await page.locator('#game-board').click();
+  await expect(page.locator('.board-tab.active')).toHaveText('泡噗 3');
+  await expect(page.locator('.board-mode.active')).toHaveText('经典');
+  await expect(page.locator('#board-hint')).toContainText('还没有人上榜');
+});
+
+test('榜单: 单人一局结束后自动提交成绩', async ({ page }) => {
+  const posts = await stubScores(page);
+  await open(page, 'blast');
+  await page.evaluate(() => { const { state } = window.__arcade; state.score = 321; state.phase = 'lost'; });
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toMatchObject({ board: 'blast', value: 321 });
+  expect(posts[0].pid).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+  expect(posts[0].name).toBeTruthy();
+  // 同一局结算卡片停在屏幕上，不会每帧重复提交。
+  await page.waitForTimeout(400);
+  expect(posts).toHaveLength(1);
+});
+
+test('榜单: 泡噗3 无尽和经典分开计榜；同屏双人不上榜', async ({ page }) => {
+  const posts = await stubScores(page);
+  await open(page, 'pop3');
+  await page.evaluate(() => { const { state } = window.__arcade; state.score = 50; state.phase = 'lost'; });
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0].board).toBe('pop3-classic');
+  await page.locator('.mode-toggle').click();
+  await page.evaluate(() => { const { state } = window.__arcade; state.score = 60; state.phase = 'lost'; });
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[1].board).toBe('pop3-endless');
+  // 切到同屏双人再打完：两个人的合计分不能和单人比。
+  await page.locator('.player-toggle:not(.mode-toggle)').click();
+  await page.evaluate(() => { const { state } = window.__arcade; state.score = 70; state.phase = 'lost'; });
+  await page.waitForTimeout(500);
+  expect(posts).toHaveLength(2);
+});
+
+test('榜单: 连不上服务时游戏照常结算', async ({ page }) => {
+  await page.route('**/api/scores**', (route) => route.abort());
+  await open(page, 'surge');
+  await page.evaluate(() => { const { state } = window.__arcade; state.score = 10; state.phase = 'lost'; });
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => window.__arcade.state.phase)).toBe('lost');
+  await page.locator('#game-board').click();
+  await expect(page.locator('#board-hint')).not.toHaveText('加载中……');
+});

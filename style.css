@@ -71,7 +71,7 @@ body.playing[data-mode=pop3] .game-help{padding:0 14px}
 body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait){position:relative}
 body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .game-nav{height:48px}
 body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .game-name{display:none}
-body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage-top{position:absolute;top:7px;right:64px;margin:0;padding:0;z-index:1}
+body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage-top{position:absolute;top:7px;right:104px;margin:0;padding:0;z-index:1}
 body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage-top>div:first-child{display:none}
 body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage-top button{background:#fff;color:var(--ink);border-color:var(--line);font-size:11px;font-weight:700;padding:8px 12px;border-radius:9px}
 body.playing[data-mode=pop3] #game:has(.canvas-wrap.portrait) .stage{padding-top:0}
@@ -120,3 +120,28 @@ body.playing[data-mode=goose] .canvas-wrap.goose-wrap{width:100%;max-width:max(2
 body.playing[data-mode=goose] .mobile-controls{padding:0 12px;margin-top:10px}
 body.playing[data-mode=goose] .mobile-controls .player-toggle{flex-basis:auto;min-height:46px}
 }
+/* 全球榜单：首页和游戏页的入口按钮，以及弹窗里的榜单列表 */
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap}
+.nav-buttons{display:flex;gap:6px}
+.board-me{display:grid;gap:6px;font-size:11px;font-weight:700;max-width:320px;margin-top:14px}
+.board-me input{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;font-size:14px}
+.board-me small{font-weight:400;color:var(--muted)}
+.board-tabs,.board-modes{display:flex;gap:10px;flex-wrap:wrap}
+.board-tabs{border-bottom:1px solid var(--line);margin-top:22px}
+.board-tab{border:0;background:transparent;padding:10px 2px;color:var(--muted);font-size:12px}
+.board-tab.active{color:var(--ink);font-weight:800;border-bottom:2px solid var(--pink)}
+.board-modes{margin-top:14px}
+.board-modes[hidden]{display:none}
+.board-mode{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 14px;font-size:11px;font-weight:700;color:var(--muted)}
+.board-mode.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.board-list{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:6px}
+.board-row{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px}
+.board-row .board-rank{font:12px 'DM Mono';color:var(--muted)}
+.board-row.top1 .board-rank,.board-row.top2 .board-rank,.board-row.top3 .board-rank{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;color:var(--ink);font-weight:700}
+.board-row.top1 .board-rank{background:var(--yellow)}
+.board-row.top2 .board-rank{background:#dfe3ea}
+.board-row.top3 .board-rank{background:#f1c9a4}
+.board-row .board-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.board-row .board-value{font:700 13px 'DM Mono'}
+.board-row.me{border-color:var(--pink);box-shadow:0 0 0 2px #ff5d8030}
+@media(max-width:800px){.game-nav .nav-buttons{gap:4px}.game-nav .nav-buttons .network-button{padding:8px 7px}}

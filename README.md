@@ -21,6 +21,27 @@
 - `goose-art.js`：十二种物品的造型。每件物品的零件被烘焙成一个带顶点色的几何体，整碗 99 件只需 99 次绘制，手机上也跑得动。
 - `vendor/three`（three.js 0.185.1，MIT）和 `vendor/rapier`（@dimforge/rapier3d-compat 0.20.0，Apache-2.0，wasm 内联在 `rapier.mjs` 里）直接随站点发布，不走 CDN、不需要构建；首页和其他四个游戏不会加载它们，只有点进抓大鹅时才按需加载（约 3.6 MB）。升级版本时改 `package.json` 里的版本号，`npm install` 后运行 `npm run vendor` 重新复制。
 
+## 全球榜单
+
+首页的「全球榜单」和游戏页右上角的「榜单」按钮打开榜单。每个游戏的每个模式各一份，共 7 份：泡噗 2、泡噗 3（经典 / 无尽）、山山兔、方块爆破、抓大鹅（经典按通关用时，越快越靠前；无尽按消除件数）。
+
+- **只有单人整局才上榜**：同屏双人和联机的分数是两个人的合计，不和单人比。一局结束时自动提交，结算卡片上显示全球名次；连不上榜单时只提示一句，不影响游戏。
+- **每人每榜只留最好成绩**。玩家用浏览器里随机生成的 `pao-pid` 区分，没有账号；昵称存在 `pao-name`，默认「玩家 + 4 位数字」，可在榜单弹窗里改，改名在下次提交成绩时生效。清掉站点数据就是一个新玩家。
+- **没有防作弊**：成绩由浏览器上报，服务端只检查范围（`leaderboard-core.js` 里每个榜的 `min` / `max`）。想挡住批量灌水，可以在 Cloudflare 的 WAF 里给 `/api/scores` 加一条速率限制规则。
+- 代码分布：`leaderboard-core.js`（榜单定义、校验、请求处理、内存 / D1 两种存储，浏览器和服务端共用）、`functions/api/scores.js`（Pages Function）、`leaderboard.js`（浏览器端：提交成绩和弹窗）。`test/leaderboard.test.js` 用内存存储和 `node:sqlite` 跑同一组用例，所以需要 Node 22 及以上才会跑到 D1 的 SQL，旧版本会跳过那几条。
+
+### 部署：给 Pages 项目绑一个 D1 数据库
+
+榜单数据存在 Cloudflare D1，部署前做一次（表会在第一次请求时自动创建，不需要迁移）：
+
+1. 创建数据库：`npx wrangler d1 create pao-arcade-scores`（或在 Cloudflare 控制台 Workers & Pages → D1 里新建）。
+2. 在 Pages 项目的 **Settings → Bindings → Add → D1 database** 里，变量名填 **`DB`**，选刚才的数据库；Production 和 Preview 环境都要加。
+3. 重新部署（推送到 `main` 即可）。`wrangler pages deploy .` 会自动带上 `functions/` 目录。
+
+没绑定时 `/api/scores` 返回 503，榜单弹窗会显示「榜单尚未配置数据库」，游戏本身不受影响。
+
+本地调试：`npx wrangler pages dev . --d1 DB` 会在本机起一个带 D1 的 Pages 环境，榜单数据存在 `.wrangler/` 里。`npm run lan` 和 `python3 -m http.server` 没有 `/api/scores`，榜单在那里会显示连不上。
+
 ## 泡噗 2 的主题
 
 泡噗 2 的规则完全不变，只换掉看得见的那四样东西：背景、场地、中间要守住的基地、以及驾驶的东西。棋子的形状也保持不变（它们是要被匹配的对象），只换材质。

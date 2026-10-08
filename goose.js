@@ -33,7 +33,7 @@ let physicsReady = null;
 // The wasm module is inlined in rapier.mjs and only needs compiling once per page.
 export const loadPhysics = () => (physicsReady ||= RAPIER.init());
 
-export async function mountGoose(wrap, { mode = 'classic', onHud = () => {} } = {}) {
+export async function mountGoose(wrap, { mode = 'classic', onHud = () => {}, onResult = null } = {}) {
   await loadPhysics();
 
   const canvas = document.createElement('canvas');
@@ -434,6 +434,13 @@ export async function mountGoose(wrap, { mode = 'classic', onHud = () => {} } = 
     card.innerHTML = `<div><strong>${title}</strong><p>${line}</p><button type="button">再来一局</button></div>`;
     card.querySelector('button').addEventListener('click', () => restart());
     card.hidden = false;
+    // 榜单：经典按通关用时（0.1 秒），无尽按消除件数；经典失败不上榜。onResult 给出名次那一行字。
+    const board = state.phase === 'won' ? 'goose-classic' : endless ? 'goose-endless' : null;
+    const value = board === 'goose-classic' ? Math.max(1, Math.round(state.elapsed * 10)) : state.cleared;
+    if (onResult && board && value > 0) {
+      const note = card.querySelector('p');
+      onResult(board, value).then((text) => { if (text && note.isConnected && !card.hidden) note.textContent += ` · ${text}`; });
+    }
     updateHud(true);
   }
 
