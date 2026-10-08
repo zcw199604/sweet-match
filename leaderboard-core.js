@@ -14,14 +14,17 @@ export const BOARDS = {
   blast: { game: 'blast', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: MAX_SCORE },
   // 99 件物品、每次凑三个，再快也不可能少于 15 秒。
   'goose-classic': { game: 'goose', label: '经典 · 用时', order: 'asc', unit: '秒', scale: 10, min: 150, max: 36_000 },
-  'goose-endless': { game: 'goose', label: '无尽 · 消除', order: 'desc', unit: '件', scale: 1, min: 1, max: 999 }
+  'goose-endless': { game: 'goose', label: '无尽 · 消除', order: 'desc', unit: '件', scale: 1, min: 1, max: 999 },
+  // 十关打满、每关速通也只有三万出头，十万封顶。
+  quest: { game: 'quest', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 100_000 }
 };
 export const GAMES = [
   { id: 'pop2', title: '泡噗 2' },
   { id: 'pop3', title: '泡噗 3' },
   { id: 'surge', title: '山山兔' },
   { id: 'blast', title: '方块爆破' },
-  { id: 'goose', title: '抓大鹅' }
+  { id: 'goose', title: '抓大鹅' },
+  { id: 'quest', title: '三消勇者团' }
 ];
 export const boardsOf = (game) => Object.keys(BOARDS).filter((id) => BOARDS[id].game === game);
 

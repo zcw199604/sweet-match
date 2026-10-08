@@ -84,6 +84,8 @@ test('榜单: 拒绝未知榜单、非法玩家标识和不合理的成绩', asy
   assert.equal(await bad({ value: BOARDS.blast.max + 1 }), 400);
   assert.equal(await bad({ board: 'goose-classic', value: 20 }), 400); // 2 秒通关不可能
   assert.equal(await bad({ board: 'goose-endless', value: 1000 }), 400);
+  assert.equal(await bad({ board: 'quest', value: BOARDS.quest.max + 1 }), 400);
+  assert.equal((await post(memoryStore(), { board: 'quest', pid: PID(1), value: 28_000 })).status, 200);
   assert.equal((await post(store, { board: 'blast', pid: PID(1), value: 'x'.repeat(2000) })).status, 413);
   assert.equal((await handleScores(new Request('http://x/api/scores', { method: 'POST', body: '{坏的' }), store)).status, 400);
   assert.equal((await handleScores(new Request('http://x/api/scores', { method: 'DELETE' }), store)).status, 405);
@@ -101,4 +103,5 @@ test('榜单: 昵称清洗与成绩显示', () => {
   assert.equal(formatValue('blast', 1234), '1234 分');
   assert.equal(formatValue('goose-classic', 623), '62.3 秒');
   assert.equal(formatValue('goose-endless', 42), '42 件');
+  assert.equal(formatValue('quest', 12_345), '12345 分');
 });

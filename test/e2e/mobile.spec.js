@@ -16,9 +16,9 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes five arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes six arcade cards', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(5);
+  await expect(page.locator('.arcade-card')).toHaveCount(6);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
@@ -209,6 +209,139 @@ test('抓大鹅: switching to endless mode restarts against the clock, and leavi
   // The choice of mode is remembered for the next visit.
   await page.locator('.arcade-card[data-mode="goose"]').click();
   await expect.poll(async () => (await goose(page))?.mode).toBe('endless');
+});
+
+// 三消勇者团 is plain DOM; its live state is on window.__arcade.quest.
+const quest = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__arcade.quest?.state ?? null)));
+async function openQuest(page) {
+  await page.goto('/');
+  await page.locator('body[data-ready]').waitFor();
+  await page.locator('[data-mode="quest"]').click();
+  await expect(page.locator('.quest-board .qt')).toHaveCount(36);
+  await expect(page.locator('#score-text')).toContainText('第 1/10 关');
+}
+// Tap the two tiles of a swap that is known to make a match.
+async function tapSwap(page) {
+  const move = await page.evaluate(async () => {
+    const { validSwaps } = await import('/quest-core.js');
+    return validSwaps(window.__arcade.quest.state.board)[0];
+  });
+  const tile = ({ 0: r, 1: c }) => page.locator(`.qt[data-r="${r}"][data-c="${c}"]`);
+  await tile(move.a).click();
+  await tile(move.b).click();
+  return move;
+}
+
+test('三消勇者团: enemies, party and the 6×6 board fit on one screen', async ({ page }) => {
+  await openQuest(page);
+  if (page.viewportSize().width <= 800) await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.locator('.qh')).toHaveCount(4);
+  await expect(page.locator('.qe')).toHaveCount(1);
+  await expect(page.locator('.qe-intent')).toContainText('预告');
+  const fit = await page.evaluate(() => {
+    const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
+    const board = rect('.quest-board'), last = [...document.querySelectorAll('#mobile-controls button')].at(-1).getBoundingClientRect(), enemy = rect('.qe');
+    return { wide: document.documentElement.scrollWidth <= window.innerWidth + 1, board: board.bottom <= window.innerHeight && board.top >= 0, enemy: enemy.top >= 0, controls: last.bottom <= window.innerHeight, size: board.width };
+  });
+  expect(fit).toMatchObject({ wide: true, board: true, enemy: true, controls: true });
+  expect(fit.size).toBeGreaterThan(240);
+});
+
+test('三消勇者团: a swap that lines up three resolves, then the enemy answers', async ({ page }) => {
+  await openQuest(page);
+  // A long cascade can finish the first wave outright; keep the slime alive so the enemy phase is what we watch.
+  await page.evaluate(() => { const [slime] = window.__arcade.quest.state.enemies; slime.hp = slime.maxHp = 9999; });
+  await tapSwap(page);
+  await expect(page.locator('.quest-turn')).toHaveText(/敌人行动|额外回合|你的回合/);
+  // Back to the player: either the enemy has answered (turns +1) or a 4-line earned an extra move.
+  await expect.poll(async () => { const s = await quest(page); return s.phase === 'player' && (s.turns >= 1 || s.bonus); }, { timeout: 8000 }).toBe(true);
+  expect((await quest(page)).score).toBeGreaterThanOrEqual(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test('三消勇者团: a swap that makes no match is refused without costing the turn', async ({ page }) => {
+  await openQuest(page);
+  const cell = await page.evaluate(async () => {
+    const { validSwaps } = await import('/quest-core.js');
+    const { board } = window.__arcade.quest.state, good = validSwaps(board).map(({ a, b }) => `${a}|${b}`);
+    for (let r = 0; r < 6; r += 1) for (let c = 0; c < 5; c += 1) if (board[r][c] !== board[r][c + 1] && !good.includes(`${[r, c]}|${[r, c + 1]}`)) return { a: [r, c], b: [r, c + 1] };
+    return null;
+  });
+  test.skip(!cell, 'every neighbouring pair matches on this board');
+  const before = await quest(page);
+  await page.locator(`.qt[data-r="${cell.a[0]}"][data-c="${cell.a[1]}"]`).click();
+  await page.locator(`.qt[data-r="${cell.b[0]}"][data-c="${cell.b[1]}"]`).click();
+  await expect(page.locator('.quest-msg')).toContainText('连不成三个');
+  const after = await quest(page);
+  expect(after.board).toEqual(before.board);
+  expect(after.phase).toBe('player');
+});
+
+test('三消勇者团: the hint button lights up a swap that works', async ({ page }) => {
+  await openQuest(page);
+  await page.locator('#quest-hint').click();
+  await expect(page.locator('.qt.hint')).toHaveCount(2);
+});
+
+test('三消勇者团: losing shows the end card, submits the score, and 再来一局 starts over', async ({ page }) => {
+  const posts = await stubScores(page);
+  await openQuest(page);
+  // Leave one hero standing on 1 HP and an enemy that cannot miss, then make any move.
+  await page.evaluate(() => {
+    const { state } = window.__arcade.quest;
+    state.score = 321;
+    state.enemies[0].hp = state.enemies[0].maxHp = 9999; // a long cascade must not win the wave first
+    state.party.forEach((hero, i) => { hero.hp = i === 0 ? 1 : 0; });
+    state.enemies[0].intent = { n: '必杀', k: 'pierce', p: 99 };
+  });
+  await tapSwap(page);
+  await expect(page.locator('.quest-card strong')).toHaveText('全军覆没', { timeout: 10_000 });
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toMatchObject({ board: 'quest', value: 321 });
+  await expect(page.locator('.quest-card p')).toContainText('全球第 3 名');
+  await page.locator('.quest-again').click();
+  await expect(page.locator('.quest-overlay')).toBeHidden();
+  expect((await quest(page)).stage).toBe(1);
+  expect((await quest(page)).score).toBe(0);
+  await expect(page.locator('.qh.down')).toHaveCount(0);
+  await page.locator('#back-home').click();
+  expect(await page.evaluate(() => window.__arcade.quest)).toBe(null);
+});
+
+test('三消勇者团: clearing a wave offers rewards and the next stage starts', async ({ page }) => {
+  await openQuest(page);
+  await page.evaluate(() => {
+    const { state } = window.__arcade.quest;
+    // One hit from dead whatever the first match is: mage and warrior tiles both finish it.
+    state.enemies[0].hp = 1;
+    state.party[1].hp = state.party[0].hp = 1;
+  });
+  // Swap until the board's first valid move kills the slime (warrior/mage), or give up after a few tries.
+  for (let tries = 0; tries < 6; tries += 1) {
+    const phase = (await quest(page)).phase;
+    if (phase === 'build') break;
+    if (phase !== 'player') { await page.waitForTimeout(500); continue; }
+    const kill = await page.evaluate(async () => {
+      const { validSwaps, swapTiles, resolveStep } = await import('/quest-core.js');
+      const { state } = window.__arcade.quest;
+      for (const move of validSwaps(state.board)) {
+        const copy = structuredClone(state);
+        swapTiles(copy, ...move.a, ...move.b);
+        resolveStep(copy);
+        if (copy.enemies[0].hp <= 0) return move;
+      }
+      return null;
+    });
+    if (!kill) { await page.locator('#restart-game').click(); await page.evaluate(() => { window.__arcade.quest.state.enemies[0].hp = 1; }); continue; }
+    await page.locator(`.qt[data-r="${kill.a[0]}"][data-c="${kill.a[1]}"]`).click();
+    await page.locator(`.qt[data-r="${kill.b[0]}"][data-c="${kill.b[1]}"]`).click();
+    await expect.poll(async () => (await quest(page)).phase, { timeout: 8000 }).toBe('build');
+  }
+  await expect(page.locator('.quest-perk')).toHaveCount(3);
+  await page.locator('.quest-perk').first().click();
+  await expect(page.locator('.quest-overlay')).toBeHidden();
+  await expect(page.locator('#score-text')).toContainText('第 2/10 关');
+  await expect(page.locator('.qe-name')).toHaveText('洞穴蝠');
 });
 
 // ---- 全球榜单：用桩接口代替线上的 /api/scores ----
