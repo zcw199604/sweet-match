@@ -16,7 +16,9 @@ export const BOARDS = {
   'goose-classic': { game: 'goose', label: '经典 · 用时', order: 'asc', unit: '秒', scale: 10, min: 150, max: 36_000 },
   'goose-endless': { game: 'goose', label: '无尽 · 消除', order: 'desc', unit: '件', scale: 1, min: 1, max: 999 },
   // 十关打满、每关速通也只有三万出头，十万封顶。
-  quest: { game: 'quest', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 100_000 }
+  quest: { game: 'quest', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 100_000 },
+  // 五十关共 390 瓶（每瓶 10 分）加每关最多 300 分的星级奖励，满分 18900，两万封顶。
+  pour: { game: 'pour', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 20_000 }
 };
 export const GAMES = [
   { id: 'pop2', title: '泡噗 2' },
@@ -24,7 +26,8 @@ export const GAMES = [
   { id: 'surge', title: '山山兔' },
   { id: 'blast', title: '方块爆破' },
   { id: 'goose', title: '抓大鹅' },
-  { id: 'quest', title: '三消勇者团' }
+  { id: 'quest', title: '三消勇者团' },
+  { id: 'pour', title: '倒水排序' }
 ];
 export const boardsOf = (game) => Object.keys(BOARDS).filter((id) => BOARDS[id].game === game);
 
