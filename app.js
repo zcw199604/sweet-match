@@ -8,6 +8,7 @@ import {
 } from './art.js';
 import { initBoard, openBoard, reportScore } from './leaderboard.js';
 import { initActivity, trackActivity } from './activity.js';
+import { initRecent, noteOpened, showRecent } from './recent.js';
 import {
   ballPainter, ballShades, DEFAULT_THEME, drawThemeArena, drawThemeBackdrop, drawThemeBase, drawThemeCraft,
   drawThemeThruster, isTheme, paintThemeChip, resetThemeCaches, THEMES, themeById
@@ -93,6 +94,7 @@ function showScreen(id) {
   window.scrollTo(0, 0);
   if (id === 'home') history.replaceState(null, '', '#home');
   else if (id === 'game') history.replaceState(null, '', `#game/${mode}`);
+  if (id === 'home') showRecent();
   syncActivity();
 }
 // 游玩记录：在游戏界面里就按当前榜单 id 计时，离开就停。模式切换（泡噗3、抓大鹅）后也要调一次。
@@ -287,6 +289,7 @@ function startGame(nextMode) {
   // A guest renders whatever the host broadcasts, so the solo puzzles stay off the network.
   if (SOLO_ONLY.includes(nextMode) && lan.role !== 'solo') return setHint(`${MODE_META[nextMode].title}是单机游戏，请先断开连接。`, true);
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
+  noteOpened(mode);
   // The 2D loop idles while state is null, which leaves the frame to goose.js.
   if (mode === 'goose' || mode === 'quest' || mode === 'park' || mode === 'pour') { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
@@ -1112,7 +1115,7 @@ function loop(time) {
 $$('.arcade-card').forEach((card) => card.addEventListener('click', () => startGame(card.dataset.mode)));
 $('#open-link').addEventListener('click', openLink); $('#game-link').addEventListener('click', openLink); $('#close-link').addEventListener('click', closeLink); $('#how-link').addEventListener('click', openLink);
 $('#back-home').addEventListener('click', () => { showScreen('home'); });
-initBoard(); initActivity();
+initBoard(); initActivity(); initRecent(startGame);
 $('#open-board').addEventListener('click', () => openBoard());
 $('#game-board').addEventListener('click', () => openBoard(boardId()));
 $('#create-room').addEventListener('click', createRoom); $('#join-room').addEventListener('click', joinRoom); $('#leave-room').addEventListener('click', disconnect);

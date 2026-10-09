@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+// 页面没有身份时会被登录弹窗盖住，所以默认每个用例都先带着一个已登录的身份。
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('pao-pw', 'e2eTestPass1'); localStorage.setItem('pao-name', '测试员');
+  });
+});
+
 const game = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__arcade.state)));
 // Logical canvas coordinates → page coordinates. Every canvas is 720 logical px
 // wide (方块爆破's is taller), so the width alone gives the scale.
@@ -416,9 +423,16 @@ test('榜单: 首页能打开弹窗，按游戏和模式切换，昵称被记住
   await expect(page.locator('.board-mode')).toHaveCount(2);
   await page.locator('.board-mode', { hasText: '无尽' }).click();
   await expect(page.locator('.board-row .board-value').first()).toHaveText('4200 件');
+  // 改昵称：点「保存」后本机立刻生效，并 POST /api/player 让服务端同步所有榜单。
+  const renames = [];
+  await page.route('**/api/player', async (route) => { renames.push(route.request().postDataJSON()); await route.fulfill({ json: { name: '新昵称', boards: 3 } }); });
   await page.locator('#board-name').fill('新昵称');
-  await page.locator('#board-name').dispatchEvent('change');
+  await page.locator('#board-rename').click();
+  await expect(page.locator('#board-me-hint')).toHaveText('已同步到所有榜单');
   expect(await page.evaluate(() => localStorage.getItem('pao-name'))).toBe('新昵称');
+  expect(renames).toHaveLength(1);
+  expect(renames[0]).toMatchObject({ name: '新昵称' });
+  expect(renames[0].pid).toMatch(/^[0-9a-f]{64}$/);
   await page.locator('#close-board').click();
   await expect(page.locator('#board')).not.toHaveClass(/active/);
 });

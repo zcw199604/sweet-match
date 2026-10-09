@@ -52,6 +52,49 @@ export function cleanName(raw) {
 }
 export const isPlayerId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(id);
 
+// ---- 密码即身份 ----
+// 玩家没有账号：pid 是「站点前缀 + 密码」的 SHA-256，同一个密码在任何浏览器里算出同一个 pid。
+// 不用 crypto.subtle：局域网里的 http://192.168.x.x 不是安全上下文，那里没有 subtle。
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 32;
+export const isPassword = (text) => typeof text === 'string' && /^[A-Za-z0-9]+$/.test(text) && text.length >= PASSWORD_MIN && text.length <= PASSWORD_MAX;
+
+// 轮常量：前 64 个素数立方根的小数部分，取 32 位。
+const K = (() => {
+  const primes = [];
+  for (let n = 2; primes.length < 64; n += 1) if (primes.every((p) => n % p)) primes.push(n);
+  return Uint32Array.from(primes, (p) => Math.floor((Math.cbrt(p) % 1) * 2 ** 32));
+})();
+export function sha256Hex(text) {
+  const data = new TextEncoder().encode(text);
+  const padded = new Uint8Array(((data.length + 9 + 63) >> 6) << 6);
+  padded.set(data);
+  padded[data.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 8, Math.floor((data.length * 8) / 2 ** 32));
+  view.setUint32(padded.length - 4, (data.length * 8) >>> 0);
+  const h = Uint32Array.of(0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19);
+  const w = new Uint32Array(64);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let i = 0; i < 16; i += 1) w[i] = view.getUint32(offset + i * 4);
+    for (let i = 16; i < 64; i += 1) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 64; i += 1) {
+      const t1 = (hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+      const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    [a, b, c, d, e, f, g, hh].forEach((value, i) => { h[i] = (h[i] + value) | 0; });
+  }
+  return [...h].map((value) => (value >>> 0).toString(16).padStart(8, '0')).join('');
+}
+export const derivePid = (password) => sha256Hex(`pao-arcade:${password}`);
+
 const json = (status, body) => new Response(JSON.stringify(body), {
   status,
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
@@ -101,6 +144,29 @@ export async function handleScores(request, store, now = Date.now()) {
   return json(405, { error: '不支持的请求方式' });
 }
 
+// 身份接口（functions/api/player.js）：
+//   GET  ?pid=…           → { exists, name, boards }，登录前预览这个密码对应的身份
+//   POST { pid, name }    → 把该 pid 在所有榜上的昵称一并改掉，返回 { name, boards }
+// 另需要 store.profile(pid) → { name, boards } | null 和 store.rename(pid, name) → 改了几行。
+export async function handlePlayer(request, store) {
+  if (request.method === 'GET') {
+    const pid = new URL(request.url).searchParams.get('pid');
+    if (!isPlayerId(pid)) return json(400, { error: '玩家标识无效' });
+    const profile = await store.profile(pid);
+    return json(200, profile ? { exists: true, ...profile } : { exists: false, name: null, boards: 0 });
+  }
+  if (request.method === 'POST') {
+    const text = await request.text();
+    if (text.length > BODY_LIMIT) return json(413, { error: '请求太大' });
+    let body;
+    try { body = JSON.parse(text); } catch { return json(400, { error: '请求格式不对' }); }
+    if (!isPlayerId(body?.pid)) return json(400, { error: '玩家标识无效' });
+    const name = cleanName(body.name);
+    return json(200, { name, boards: await store.rename(body.pid, name) });
+  }
+  return json(405, { error: '不支持的请求方式' });
+}
+
 export function memoryStore() {
   const rows = new Map(); // board → Map(pid → { name, value, at })
   const table = (board) => rows.get(board) ?? rows.set(board, new Map()).get(board);
@@ -114,13 +180,23 @@ export function memoryStore() {
       else mine.name = name;
     },
     async top(board, limit) { return ordered(board).slice(0, limit).map(({ name, value, at }) => ({ name, value, at })); },
-    async rank(board, value) { return 1 + [...table(board).values()].filter((row) => isBetter(board, row.value, value)).length; }
+    async rank(board, value) { return 1 + [...table(board).values()].filter((row) => isBetter(board, row.value, value)).length; },
+    async profile(pid) {
+      const mine = [...rows.values()].map((t) => t.get(pid)).filter(Boolean).sort((a, b) => b.at - a.at);
+      return mine.length ? { name: mine[0].name, boards: mine.length } : null;
+    },
+    async rename(pid, name) {
+      let changed = 0;
+      for (const t of rows.values()) if (t.has(pid)) { t.get(pid).name = name; changed += 1; }
+      return changed;
+    }
   };
 }
 
 const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS scores (board TEXT NOT NULL, pid TEXT NOT NULL, name TEXT NOT NULL, value INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (board, pid))',
-  'CREATE INDEX IF NOT EXISTS scores_by_value ON scores (board, value)'
+  'CREATE INDEX IF NOT EXISTS scores_by_value ON scores (board, value)',
+  'CREATE INDEX IF NOT EXISTS scores_by_pid ON scores (pid)'
 ];
 const prepared = new WeakMap();
 
@@ -152,6 +228,15 @@ export function d1Store(db) {
       const better = BOARDS[board].order === 'asc' ? '<' : '>';
       const row = await (await query(`SELECT COUNT(*) AS n FROM scores WHERE board = ?1 AND value ${better} ?2`, board, value)).first();
       return row.n + 1;
+    },
+    async profile(pid) {
+      const { results } = await (await query('SELECT name FROM scores WHERE pid = ?1 ORDER BY at DESC', pid)).all();
+      return results.length ? { name: results[0].name, boards: results.length } : null;
+    },
+    async rename(pid, name) {
+      const { results } = await (await query('SELECT COUNT(*) AS n FROM scores WHERE pid = ?1', pid)).all();
+      await (await query('UPDATE scores SET name = ?2 WHERE pid = ?1', pid, name)).run();
+      return results[0].n;
     }
   };
 }

@@ -125,6 +125,15 @@ body.playing[data-mode=goose] .mobile-controls .player-toggle{flex-basis:auto;mi
 .board-me{display:grid;gap:6px;font-size:11px;font-weight:700;max-width:320px;margin-top:14px}
 .board-me input{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;font-size:14px}
 .board-me small{font-weight:400;color:var(--muted)}
+.board-me>label{margin-top:4px}
+.board-me .text-button{justify-self:start;padding:4px 0;font-size:11px}
+.pw-row{display:flex;gap:6px}
+.pw-row input{flex:1;min-width:0}
+.pw-row .button{padding:8px 12px;white-space:nowrap}
+#login{z-index:20}
+.login-card{width:min(440px,100%)}
+.login-card .board-me{max-width:none}
+.login-card .button.primary{width:100%;margin-top:6px}
 .board-tabs,.board-modes{display:flex;gap:10px;flex-wrap:wrap}
 .board-tabs{border-bottom:1px solid var(--line);margin-top:22px}
 .board-tab{border:0;background:transparent;padding:10px 2px;color:var(--muted);font-size:12px}
@@ -396,3 +405,15 @@ body.playing[data-mode=park] .canvas-wrap.park-wrap{width:min(100%,max(240px,cal
 @media(max-width:800px) and (orientation:portrait){
 body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .5625)));width:min(100%,max(240px,calc((100dvh - 190px) * .5625)))}
 }
+
+/* 首页「最近常玩」：右上角是累计游玩时长 */
+.recent{margin-bottom:26px}
+.recent-list{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.recent-card{--c:var(--violet);position:relative;display:grid;gap:4px;text-align:left;border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;background:#fff;padding:14px 16px;transition:.2s}
+.recent-card:hover{transform:translateY(-3px);box-shadow:0 14px 34px #26333418}
+.recent-card[data-game=pop2]{--c:var(--pink)}.recent-card[data-game=pop3]{--c:var(--violet)}.recent-card[data-game=surge]{--c:var(--yellow)}.recent-card[data-game=blast]{--c:var(--cyan)}.recent-card[data-game=goose]{--c:var(--green)}.recent-card[data-game=quest]{--c:#ff9a3c}.recent-card[data-game=park]{--c:#4a8dff}.recent-card[data-game=pour]{--c:#2ec4b6}
+.recent-title{font-size:16px;letter-spacing:-.04em;padding-right:84px}
+.recent-ago{font:10px 'DM Mono';color:var(--muted)}
+.recent-time{position:absolute;top:12px;right:14px;font:700 11px 'DM Mono';color:var(--ink);background:#f1efe8;border-radius:999px;padding:3px 9px}
+#recent-more[hidden]{display:none}
+@media(max-width:800px){.recent-list{grid-template-columns:1fr}}
