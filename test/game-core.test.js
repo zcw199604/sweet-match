@@ -223,3 +223,42 @@ test('泡噗3 无尽模式: classic play is unchanged and a missed note still en
   p.spawnIn = 1e9; p.monsterTo = POP3.H; run(state, 20);
   assert.equal(p.out, true); assert.equal(state.phase, 'lost');
 });
+// A column of alternating colours hanging off the ship (rows from..to), so nothing ever matches.
+const column = (p, from, to) => { for (let r = from; r <= to; r++) if (r) p.cells[`0,${r}`] = r % 2 ? 'red' : 'blue'; };
+test('泡噗3: the higher the stack reaches, the lower the ship\'s ceiling', () => {
+  const state = calmWell(), p = state.players[0];
+  column(p, -10, -1); // the top of the stack sits 10 rows above the ship
+  act(state, 0, { type: 'move', x: p.x, y: 0 }); run(state, 3);
+  assert.equal(p.out, false); assert.equal(p.y, 10.5 * POP3.CELL, 'the stack just fits under the top edge');
+  assert.ok(p.y - 10.5 * POP3.CELL >= 0);
+});
+test('泡噗3: a stack that grows past the ceiling pushes a parked ship down, and with no room left the ship is out', () => {
+  const state = calmWell(), p = state.players[0];
+  act(state, 0, { type: 'move', x: p.x, y: 0 }); run(state, 2);
+  assert.equal(p.y, POP3.CELL / 2);
+  column(p, -5, -1); run(state, 1);
+  assert.equal(p.y, 5.5 * POP3.CELL, 'dragged down by the stack even though the player did not steer');
+  // 19 rows fill the well from the top edge down to the spikes at their lowest: no room left.
+  column(p, -5, 13); run(state, 2);
+  assert.equal(p.out, true); assert.equal(state.phase, 'lost');
+});
+test('泡噗3: a full row at the top of the well no longer makes the ship untouchable', () => {
+  const state = calmWell(), p = state.players[0];
+  for (let c = -5; c <= 5; c++) if (c) p.cells[`${c},0`] = c % 2 ? 'red' : 'blue';
+  column(p, -17, -1); // 18 rows with the full row at the bottom
+  p.x = p.tx = 165; act(state, 0, { type: 'move', x: 165, y: 0 }); run(state, 3);
+  assert.equal(p.y, 17.5 * POP3.CELL); assert.equal(p.out, false);
+  column(p, -18, -1); run(state, 1); // one more row and the stack no longer fits above the spikes
+  assert.equal(p.out, true);
+});
+test('泡噗3: a stack hanging below the ship is what limits it, and 18 rows reach the spikes even at the top', () => {
+  const fits = calmWell(), a = fits.players[0];
+  column(a, 1, 17); a.x = a.tx = 165; a.y = a.ty = POP3.CELL / 2;
+  run(fits, 1); assert.equal(a.out, false);
+  act(fits, 0, { type: 'move', x: a.x, y: POP3.H }); run(fits, 2);
+  assert.equal(a.out, false); assert.ok(a.y < POP3.H - a.monster - (17.5 * POP3.CELL), 'steering stops above the spikes');
+  const tooTall = calmWell(), b = tooTall.players[0];
+  column(b, 1, 18); b.x = b.tx = 165; b.y = b.ty = POP3.CELL / 2;
+  run(tooTall, 0.1);
+  assert.equal(b.out, true); assert.equal(tooTall.phase, 'lost');
+});

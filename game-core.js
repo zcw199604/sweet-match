@@ -260,11 +260,14 @@ function pop3Extent(p) {
 }
 function movePop3Ship(state, p, dt) {
   const dx = p.tx - p.x, dy = p.ty - p.y, distance = Math.hypot(dx, dy);
-  if (distance < 0.5) return;
   const step = Math.min(distance, POP3.SPEED * dt), extent = pop3Extent(p), half = POP3.CELL / 2;
-  p.x = clamp(p.x + dx / distance * step, half - extent.minC * POP3.CELL, pop3Width(state) - half - extent.maxC * POP3.CELL);
-  // Steering stops just above the spikes. A tall stack may poke out of the top of the well.
-  p.y = clamp(p.y + dy / distance * step, half, POP3.H - p.monster - 1 - (extent.maxR + 0.5) * POP3.CELL);
+  if (distance >= 0.5) p.x = clamp(p.x + dx / distance * step, half - extent.minC * POP3.CELL, pop3Width(state) - half - extent.maxC * POP3.CELL);
+  // The whole stack has to stay inside the well, so the higher it reaches the lower the ship's ceiling. Steering also stops
+  // just above the spikes; when the two meet there is no room left and the ship is knocked out.
+  const ceiling = half - extent.minR * POP3.CELL, floor = POP3.H - p.monster - 1 - (extent.maxR + 0.5) * POP3.CELL;
+  if (distance >= 0.5) p.y = clamp(p.y + dy / distance * step, Math.min(ceiling, p.y), floor);
+  // A stack that grows past the ceiling pushes the ship down with it, at ship speed rather than all at once.
+  if (p.y < ceiling) p.y = Math.min(ceiling, p.y + POP3.SPEED * dt);
 }
 function dockPop3(state, p, note) {
   const fx = (note.x - p.x) / POP3.CELL, fy = (note.y - p.y) / POP3.CELL;
