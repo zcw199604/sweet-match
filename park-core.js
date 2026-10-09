@@ -18,18 +18,21 @@ export const PARK = {
   PER_PASSENGER: 5
 };
 export const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'];
-// cars: how many to fit (the densest packing the road rule allows is a bit above this); colors: how many of COLORS; window: cars whose passengers get mixed.
-export const LEVELS = [
-  { cols: 5, rows: 6, cars: 7, colors: 3, window: 2 },
-  { cols: 6, rows: 7, cars: 12, colors: 4, window: 3 },
-  { cols: 7, rows: 8, cars: 17, colors: 5, window: 3 },
-  { cols: 7, rows: 9, cars: 21, colors: 5, window: 4 },
-  { cols: 8, rows: 9, cars: 24, colors: 6, window: 4 },
-  { cols: 8, rows: 10, cars: 26, colors: 6, window: 4 },
-  { cols: 9, rows: 10, cars: 28, colors: 7, window: 4 },
-  { cols: 9, rows: 11, cars: 30, colors: 8, window: 4 }
-];
-export const STAGES = LEVELS.length;
+// cars: how many to fit (the densest packing the road rule allows is a bit below the biggest
+// targets, so the last stages hold about 60); colors: how many of COLORS; window: cars whose passengers get mixed.
+const RAMP = 22; // stages it takes the board to reach full size; the rest only add colours and a wider queue mix
+export const STAGES = 30;
+export const LEVELS = Array.from({ length: STAGES }, (_, index) => {
+  const stage = index + 1;
+  const grow = Math.min(1, index / RAMP);
+  return {
+    cols: Math.round(8 + 5 * grow),
+    rows: Math.round(10 + 7 * grow),
+    cars: Math.round(14 + 52 * grow),
+    colors: Math.round(3 + (5 * index) / (STAGES - 1)),
+    window: stage <= 8 ? 2 : stage <= 25 ? 3 : 4
+  };
+});
 // dir: 0 up, 1 right, 2 down, 3 left.
 export const DR = [-1, 0, 1, 0];
 export const DC = [0, 1, 0, -1];
@@ -78,7 +81,7 @@ export function pathCells(car, cols, rows) {
 function layCars(rng, level) {
   const occupied = new Map(); // "r,c" -> car
   const cars = [];
-  for (let attempt = 0; attempt < 6000 && cars.length < level.cars; attempt += 1) {
+  for (let attempt = 0; attempt < 20000 && cars.length < level.cars; attempt += 1) {
     const len = rng() < 0.28 ? 3 : 2;
     const dir = Math.floor(rng() * 4);
     const horizontal = isHorizontal(dir);
@@ -181,8 +184,8 @@ export function cloneLevel(state) {
   return { ...state, cars: state.cars.map((car) => ({ ...car })), queue: [...state.queue], slots: [...state.slots], witness: [...state.witness] };
 }
 
-// A move that keeps the level winnable, found by depth-first search with a node budget;
-// null when the budget runs out first. Cars that serve the front of the queue come first.
+// A move that keeps the level winnable, found by depth-first search with a node budget (when it
+// runs out, the next car of the level's own clearing order). Cars that serve the front of the queue come first.
 export function findHint(state, budget = 6000) {
   let nodes = 0;
   const failed = new Set();
@@ -200,7 +203,8 @@ export function findHint(state, budget = 6000) {
     const front = s.queue[0];
     const next = s.queue.slice(0, 6);
     const rank = (id) => (s.cars[id].color === front ? 0 : next.includes(s.cars[id].color) ? 1 : 2);
-    for (const id of exitable(s).sort((a, b) => rank(a) - rank(b))) {
+    const order = (id) => s.witness.indexOf(id);
+    for (const id of exitable(s).sort((a, b) => rank(a) - rank(b) || order(a) - order(b))) {
       const branch = cloneLevel(s);
       if (!apply(branch, id)) continue;
       const rest = search(branch);
@@ -211,5 +215,8 @@ export function findHint(state, budget = 6000) {
     return false;
   };
   const line = search(cloneLevel(state));
-  return line?.length ? line[0] : null;
+  if (line?.length) return line[0];
+  // Out of budget: the first car still standing in the order the level was built to be cleared in
+  // has nothing left in its way (everything that could block it went before it).
+  return state.witness.find((id) => state.cars[id].status === 'board') ?? null;
 }

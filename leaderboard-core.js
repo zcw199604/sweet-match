@@ -17,8 +17,8 @@ export const BOARDS = {
   'goose-endless': { game: 'goose', label: '无尽 · 消除', order: 'desc', unit: '件', scale: 1, min: 1, max: 999 },
   // 十关打满、每关速通也只有三万出头，十万封顶。
   quest: { game: 'quest', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 100_000 },
-  // 八关乘客共约 700 人（每人 5 分）加关卡奖励 3600，不会超过一万，留足余量。
-  park: { game: 'park', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 20_000 }
+  // 三十关乘客共约 5900 人（每人 5 分）加关卡奖励 46500，合计不到 8 万，十五万封顶。
+  park: { game: 'park', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 150_000 }
 };
 export const GAMES = [
   { id: 'pop2', title: '泡噗 2' },

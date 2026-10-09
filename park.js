@@ -134,7 +134,7 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
     anims.push({ t0: performance.now(), ms: speed(ms), draw, resolve });
     poke(speed(ms) + 60);
   });
-  const hud = () => onHud(`第 ${core.stage}/${STAGES} 关 · 剩 ${vis.queue.length} 人 · ${runScore + vis.score} 分`);
+  const hud = () => onHud(`第 ${core.stage}/${STAGES} 关 · ${runScore + vis.score} 分`);
 
   // ---- level ----
   function begin(stage, seed) {
@@ -184,7 +184,7 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
       if (px + half < lay.x || px - half > lay.x + lay.cell * core.cols || py + half < lay.y || py - half > lay.y + lay.cell * core.rows) break;
       reach += lay.cell * 0.5;
     }
-    const outMs = 90 + (reach / lay.cell) * 28, flyMs = 230;
+    const outMs = 80 + reach * 0.5, flyMs = 200;
     const out = { x: from.x + dx * reach, y: from.y + dy * reach };
     vis.left.add(car.id);
     const total = outMs + flyMs;
@@ -199,19 +199,24 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
       }
     });
   }
-  async function board(event) {
+  // One passenger runs from the front of the queue to the car, hopping as he goes; several can be
+  // on their way at once (move() starts them a beat apart), and the car bumps as each one gets in.
+  async function board(event, mine) {
     const [fx, fy] = queueSpot(0);
     const [tx, ty] = bayCenter(event.slot);
     vis.queue.shift();
     vis.shiftAt = performance.now();
-    await tween(150, (g, t) => {
+    await tween(260, (g, t) => {
       const p = ease(t);
-      drawPerson(g, mix(fx, tx, p), mix(fy, ty, p) - Math.sin(p * Math.PI) * 14, event.color, 8);
+      const hop = Math.abs(Math.sin(t * Math.PI * 2)) * 9;
+      drawPerson(g, mix(fx, tx, p), mix(fy, ty, p) - hop, event.color, mix(9, 6, p));
     });
+    if (mine !== epoch || !alive) return;
     const bay = vis.bays[event.slot];
-    if (bay) bay.filled += 1;
+    if (bay) { bay.filled += 1; bay.bumpAt = performance.now(); }
     vis.score += PARK.PER_PASSENGER;
     hud();
+    poke(200);
   }
   async function depart(event) {
     const bay = vis.bays[event.slot];
@@ -239,10 +244,20 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
     await drive(car, result.slot);
     if (mine !== epoch || !alive) return;
     vis.bays[result.slot] = { id, filled: 0 };
+    const flights = [];
     for (const event of settle(core)) {
-      if (event.t === 'board') await board(event); else await depart(event);
+      if (event.t === 'board') {
+        flights.push(board(event, mine));
+        await tween(70, () => {});
+      } else {
+        await Promise.all(flights.splice(0)); // the car waits for its last passenger
+        if (mine !== epoch || !alive) return;
+        await depart(event);
+      }
       if (mine !== epoch || !alive) return;
     }
+    await Promise.all(flights);
+    if (mine !== epoch || !alive) return;
     busy = false;
     const state = outcome(core);
     if (state === 'won') return won();
@@ -334,7 +349,7 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
       drawCar(ctx, x, y, pose.angle, pose.len, pose.wid, car.color, { glow });
     }
   }
-  function drawBays() {
+  function drawBays(now) {
     for (let i = 0; i < PARK.SLOTS; i += 1) {
       const x = bayX(i);
       roundRect(ctx, x, BAY.y, BAY.w, BAY.h, 10);
@@ -349,12 +364,14 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
       if (!bay) continue;
       const car = core.cars[bay.id];
       const [cx, cy] = bayCenter(i), cs = bayScale(car.len);
-      drawCar(ctx, cx, cy, ANGLE[0], car.len * cs - cs * 0.14, cs * 0.8, car.color);
+      const pulse = Math.max(0, 1 - (now - (bay.bumpAt ?? 0)) / 200);
+      const grow = 1 + 0.1 * pulse;
+      drawCar(ctx, cx, cy, ANGLE[0], (car.len * cs - cs * 0.14) * grow, cs * 0.8 * grow, car.color, { glow: pulse > 0.4 ? '#ffffff' : '' });
       // one pip per seat, filled as passengers board
       const pip = Math.min(9, (BAY.w - 10) / car.cap);
       for (let s = 0; s < car.cap; s += 1) {
         ctx.beginPath();
-        ctx.arc(x + BAY.w / 2 + (s - (car.cap - 1) / 2) * pip, BAY.y + BAY.h - 12, 3.4, 0, Math.PI * 2);
+        ctx.arc(x + BAY.w / 2 + (s - (car.cap - 1) / 2) * pip, BAY.y + BAY.h - 12, 3.4 + (s === bay.filled - 1 ? 2.2 * pulse : 0), 0, Math.PI * 2);
         ctx.fillStyle = s < bay.filled ? PAL[car.color][0] : '#ffffff26';
         ctx.fill();
       }
@@ -390,7 +407,7 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, LW, LH);
     drawQueue(now);
-    drawBays();
+    drawBays(now);
     drawBoard(now);
     for (const anim of anims) anim.draw(ctx, Math.min(1, (now - anim.t0) / anim.ms));
     if (toast && toast.until > now) {
@@ -412,6 +429,8 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
     get state() { return core; },
     get busy() { return busy; },
     restart,
+    // Jump to a stage with a fresh run (used by tests and for trying a level).
+    goto(stage, seed = Date.now()) { runScore = 0; begin(stage, seed); },
     hint,
     // Where a car sits on the page, for tests that click it.
     locate(id) {

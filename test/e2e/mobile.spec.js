@@ -573,7 +573,7 @@ async function openPark(page) {
   await page.locator('body[data-ready]').waitFor();
   await page.locator('[data-mode="park"]').click();
   await page.waitForFunction(() => window.__arcade.park);
-  await expect(page.locator('#score-text')).toContainText('第 1/8 关');
+  await expect(page.locator('#score-text')).toContainText('第 1/30 关');
 }
 // Click the car `pick` names (run in the page, which can see the state), then wait for the move to finish.
 async function clickCar(page, pick) {
@@ -600,9 +600,9 @@ test('挪车接客: tapping a free car parks it and the front passenger boards; 
   await expect.poll(async () => (await park(page)).moves).toBe(1);
   await settled(page);
   const after = await park(page);
-  // The car is in a bay or has already left full; either way the queue and the score line agree.
+  // The car is in a bay or has already left full; either way the score line has caught up with the core.
   expect(await page.evaluate((i) => window.__arcade.park.state.cars[i].status, id)).toMatch(/^(slot|gone)$/);
-  await expect(page.locator('#score-text')).toContainText(`剩 ${after.queue} 人`);
+  await expect(page.locator('#score-text')).toContainText(`${after.score} 分`);
 });
 
 test('挪车接客: following the hints clears stage 1, submits the score, and 下一关 deals stage 2', async ({ page }) => {
@@ -611,7 +611,7 @@ test('挪车接客: following the hints clears stage 1, submits the score, and �
   await openPark(page);
   await page.locator('#park-hint').click(); // lights a car up; nothing else changes
   expect((await park(page)).moves).toBe(0);
-  for (let guard = 0; guard < 12 && await page.locator('.park-overlay').isHidden(); guard += 1) {
+  for (let guard = 0; guard < 40 && await page.locator('.park-overlay').isHidden(); guard += 1) {
     await clickCar(page, (core, state) => core.findHint(state));
     await settled(page);
   }
@@ -622,7 +622,7 @@ test('挪车接客: following the hints clears stage 1, submits the score, and �
   await expect(page.locator('.park-note')).toContainText('全球第 3 名');
   await page.locator('.park-again').click();
   await expect(page.locator('.park-overlay')).toBeHidden();
-  await expect(page.locator('#score-text')).toContainText('第 2/8 关');
+  await expect(page.locator('#score-text')).toContainText('第 2/30 关');
   await page.locator('#back-home').click();
   expect(await page.evaluate(() => window.__arcade.park)).toBe(null);
 });
