@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseReward, createQuest, enemyStep, findMatches, finishMove, intentPower, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from '../quest-core.js';
+import { chooseReward, createQuest, enemyStep, findMatches, finishMove, intentPower, isBoss, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from '../quest-core.js';
 
 const W = 0, M = 1, G = 2, P = 3;
 // A board with no match anywhere: along a row the type steps by 1, down a column by 2.
@@ -280,7 +280,7 @@ test('choosing a reward starts the next stage, heals the party and revives the f
   assert.equal(state.perks[pick], 1);
   assert.ok(state.party[1].hp > 0);
   assert.ok(state.party[0].hp > 10);
-  assert.equal(state.enemies[0].name, '洞穴蝠');
+  assert.equal(state.enemies.length, 2);
   assert.equal(chooseReward(state, pick), false);
 });
 
@@ -369,4 +369,17 @@ test('every event of a step names the hero who caused it, and an enemy cast name
   foe.enemies[0].intent = { n: '撞击', k: 'aoe', p: 4 };
   const act = enemyStep(foe);
   assert.equal(act.events.find((event) => event.kind === 'cast').k, 'aoe');
+});
+
+test('every stage has a wave, and bosses appear exactly on the boss stages', () => {
+  const state = fresh(4);
+  for (let stage = 2; stage <= QUEST.STAGES; stage += 1) {
+    state.stage = stage - 1;
+    state.phase = 'build';
+    state.offers = ['vigor'];
+    chooseReward(state, 'vigor');
+    assert.equal(state.stage, stage);
+    assert.ok(state.enemies.length >= 1 && state.enemies.length <= 2, `stage ${stage}`);
+    assert.equal(isBoss(state), QUEST.BOSS_STAGES.includes(stage), `stage ${stage}`);
+  }
 });

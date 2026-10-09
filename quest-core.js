@@ -12,8 +12,8 @@
 export const QUEST = {
   COLS: 6,
   ROWS: 6,
-  STAGES: 10,
-  BOSS_STAGES: [5, 10],
+  STAGES: 12,
+  BOSS_STAGES: [6, 12],
   COMBO_STEP: 0.25,
   PERK_CAP: 3,
   PERK_STEP: 0.25,
@@ -22,9 +22,10 @@ export const QUEST = {
   REVIVE_RATIO: 0.35,
   CLEAR_HEAL: 0.25,
   CLEAR_REVIVE: 0.3,
-  HP_GROWTH: 0.14,
-  ATK_BASE: 2.6,
-  ATK_GROWTH: 0.22
+  HP_START: 1.5,
+  HP_GROWTH: 0.10,
+  ATK_BASE: 2.2,
+  ATK_GROWTH: 0.13
 };
 
 export const HEROES = [
@@ -50,10 +51,10 @@ const ENEMIES = [
 ];
 const byId = (id) => ENEMIES.find((entry) => entry.id === id);
 
-// Who turns up on each stage. Stage 5 and 10 end on a boss.
+// Who turns up on each stage. Stage 6 and 12 end on a boss.
 const WAVES = [
-  ['slime'], ['bat'], ['slime', 'bat'], ['goblin', 'bat'], ['gargoyle'],
-  ['goblin', 'skeleton'], ['wraith', 'skeleton'], ['ogre', 'wraith'], ['drake', 'ogre'], ['lich', 'wraith']
+  ['slime'], ['slime', 'bat'], ['bat', 'goblin'], ['goblin', 'bat'], ['goblin', 'skeleton'], ['gargoyle'],
+  ['skeleton', 'wraith'], ['wraith', 'ogre'], ['ogre', 'skeleton'], ['drake', 'wraith'], ['drake', 'ogre'], ['lich', 'wraith']
 ];
 
 export const PERKS = [
@@ -148,7 +149,7 @@ function gravity(state) {
 
 // ---- stages ----
 // Enemies hit harder faster than they grow tougher, so late waves punish a neglected priest.
-const hpScale = (stage) => 1 + (stage - 1) * QUEST.HP_GROWTH;
+const hpScale = (stage) => QUEST.HP_START + (stage - 1) * QUEST.HP_GROWTH;
 const atkScale = (stage) => QUEST.ATK_BASE * (1 + (stage - 1) * QUEST.ATK_GROWTH);
 function spawn(stage) {
   return WAVES[stage - 1].map((id, index) => {

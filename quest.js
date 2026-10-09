@@ -19,7 +19,7 @@ const el = (tag, className, text) => {
 };
 const MOVE_ICON = { hit: '🗡', aoe: '💥', pierce: '🎯', drain: '🩸', mend: '💚' };
 // The road changes as the party travels: meadow, the gargoyle's canyon, a dusk forest, the lich's night.
-const zoneOf = (stage) => (stage <= 4 ? 'meadow' : stage === 5 ? 'canyon' : stage <= 9 ? 'dusk' : 'castle');
+const zoneOf = (stage) => (stage <= 5 ? 'meadow' : stage === 6 ? 'canyon' : stage <= 11 ? 'dusk' : 'castle');
 const calm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {

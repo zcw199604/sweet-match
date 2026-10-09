@@ -218,7 +218,7 @@ async function openQuest(page) {
   await page.locator('body[data-ready]').waitFor();
   await page.locator('[data-mode="quest"]').click();
   await expect(page.locator('.quest-board .qt')).toHaveCount(36);
-  await expect(page.locator('#score-text')).toContainText('第 1/10 关');
+  await expect(page.locator('#score-text')).toContainText('第 1/12 关');
 }
 // Tap the two tiles of a swap that is known to make a match.
 async function tapSwap(page) {
@@ -380,8 +380,8 @@ test('三消勇者团: clearing a wave offers rewards and the next stage starts'
   await expect(page.locator('.quest-perk')).toHaveCount(3);
   await page.locator('.quest-perk').first().click();
   await expect(page.locator('.quest-overlay')).toBeHidden();
-  await expect(page.locator('#score-text')).toContainText('第 2/10 关');
-  await expect(page.locator('.qe-name')).toHaveText('洞穴蝠');
+  await expect(page.locator('#score-text')).toContainText('第 2/12 关');
+  await expect(page.locator('.qe-name')).toHaveText(['史莱姆', '洞穴蝠']);
   await expect(page.locator('.quest-route i').nth(1)).toHaveClass(/now/);
   // The party marches to the next wave; the board takes moves again once it arrives.
   await expect(page.locator('.quest-turn')).toHaveText('你的回合', { timeout: 5000 });
