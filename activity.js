@@ -1,11 +1,11 @@
-// 游玩记录的浏览器端：只在游戏界面、页面可见、最近有操作时计时，定时把累计值报给 /api/activity。
+// 游玩记录的浏览器端：只在游戏界面、页面可见、最近有点击 / 触摸 / 指针移动 / 按键时计时，定时把累计值报给 /api/activity。
 // 任何失败都静默忽略，不能影响游戏。服务端的约定见 activity-core.js。
 import { playerId, playerName } from './leaderboard.js';
 
 const ENDPOINT = '/api/activity';
 const TICK_MS = 1000;
 const HEARTBEAT_MS = 60_000;
-const IDLE_MS = 90_000; // 这么久没操作就暂停计时
+const IDLE_MS = 30_000; // 这么久没点击 / 触摸 / 指针移动 / 按键就暂停计时
 const SPLIT_MS = 5 * 60_000; // 中断超过这么久，回来算新的一段
 const MIN_REPORT_MS = 5000; // 不满 5 秒的误触不上报
 
@@ -54,16 +54,15 @@ export function trackActivity(board) {
   if (current) send(current, true);
   const now = Date.now();
   current = board ? start(board, now) : null;
-  if (board) lastInput = now;
 }
 
 export function initActivity() {
   const touch = () => { lastInput = Date.now(); };
-  for (const type of ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel']) document.addEventListener(type, touch, { passive: true, capture: true });
-  // 回到前台时重新起算，避免把后台那段时间补进去。
+  for (const type of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) document.addEventListener(type, touch, { passive: true, capture: true });
+  // 回到前台时重新起算，避免把后台那段时间补进去；要等用户有了新的操作才继续计时。
   document.addEventListener('visibilitychange', () => {
     if (!current) return;
-    if (visible()) { const now = Date.now(); lastInput = now; resume(now); } else send(current, true);
+    if (visible()) resume(Date.now()); else send(current, true);
   });
   window.addEventListener('pagehide', () => { if (current) send(current, true); });
   timer = timer || setInterval(tick, TICK_MS);
