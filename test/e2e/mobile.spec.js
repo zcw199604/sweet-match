@@ -16,15 +16,15 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes seven arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes eight arcade cards', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(7);
+  await expect(page.locator('.arcade-card')).toHaveCount(8);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
 
 test('each game shows its whole board and controls without scrolling', async ({ page }) => {
-  for (const mode of ['pop2', 'pop3', 'surge', 'blast', 'pour']) {
+  for (const mode of ['pop2', 'pop3', 'surge', 'blast', 'park', 'pour']) {
     await open(page, mode);
     // Opening a game smooth-scrolls the page back to the top; on a phone the boards sit close
     // to the top edge, so measure once the scroll has landed.
@@ -564,6 +564,85 @@ test('隐藏看板: 令牌错误回到登录，正确后按东八区展示玩家
   await expect(page.locator('#timeline tr')).toHaveCount(2);
   await expect(page.locator('#timeline')).toContainText('9 分');
   await expect(page.locator('#heat i[title*="22:00"]').first()).toBeVisible();
+});
+
+// 挪车接客 is one canvas; its live state is on window.__arcade.park, which can also say where a car is on the page.
+const park = (page) => page.evaluate(() => { const { state, busy } = window.__arcade.park; return { stage: state.stage, moves: state.moves, queue: state.queue.length, boarded: state.boarded, busy, score: state.score }; });
+async function openPark(page) {
+  await page.goto('/');
+  await page.locator('body[data-ready]').waitFor();
+  await page.locator('[data-mode="park"]').click();
+  await page.waitForFunction(() => window.__arcade.park);
+  await expect(page.locator('#score-text')).toContainText('第 1/30 关');
+}
+// Click the car `pick` names (run in the page, which can see the state), then wait for the move to finish.
+async function clickCar(page, pick) {
+  const spot = await page.evaluate(async (source) => {
+    const core = await import('/park-core.js');
+    const { state, locate } = window.__arcade.park;
+    const id = new Function('core', 'state', `return (${source})(core, state)`)(core, state);
+    return id === null ? null : { id, ...locate(id) };
+  }, pick.toString());
+  if (!spot) return null;
+  await page.mouse.click(spot.x, spot.y);
+  return spot.id;
+}
+const settled = (page) => page.waitForFunction(() => !window.__arcade.park.busy);
+
+test('挪车接客: tapping a free car parks it and the front passenger boards; a blocked car stays put', async ({ page }) => {
+  await openPark(page);
+  // A blocked car first: nothing moves, nothing is spent.
+  const blocked = await clickCar(page, (core, state) => state.cars.find((car) => !core.canExit(state, car.id))?.id ?? null);
+  if (blocked !== null) expect((await park(page)).moves).toBe(0);
+  // Then a free car that the front of the queue wants.
+  const id = await clickCar(page, (core, state) => core.exitable(state).find((i) => state.cars[i].color === state.queue[0]) ?? core.exitable(state)[0]);
+  expect(id).not.toBeNull();
+  await expect.poll(async () => (await park(page)).moves).toBe(1);
+  await settled(page);
+  const after = await park(page);
+  // The car is in a bay or has already left full; either way the score line has caught up with the core.
+  expect(await page.evaluate((i) => window.__arcade.park.state.cars[i].status, id)).toMatch(/^(slot|gone)$/);
+  await expect(page.locator('#score-text')).toContainText(`${after.score} 分`);
+});
+
+test('挪车接客: following the hints clears stage 1, submits the score, and 下一关 deals stage 2', async ({ page }) => {
+  test.setTimeout(60_000);
+  const posts = await stubScores(page);
+  await openPark(page);
+  await page.locator('#park-hint').click(); // lights a car up; nothing else changes
+  expect((await park(page)).moves).toBe(0);
+  for (let guard = 0; guard < 40 && await page.locator('.park-overlay').isHidden(); guard += 1) {
+    await clickCar(page, (core, state) => core.findHint(state));
+    await settled(page);
+  }
+  await expect(page.locator('.park-card strong')).toHaveText('第 1 关完成');
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0].board).toBe('park');
+  expect(posts[0].value).toBeGreaterThan(100);
+  await expect(page.locator('.park-note')).toContainText('全球第 3 名');
+  await page.locator('.park-again').click();
+  await expect(page.locator('.park-overlay')).toBeHidden();
+  await expect(page.locator('#score-text')).toContainText('第 2/30 关');
+  await page.locator('#back-home').click();
+  expect(await page.evaluate(() => window.__arcade.park)).toBe(null);
+});
+
+test('挪车接客: a dead end shows 停车场堵死了, and 重试本关 deals the same cars again', async ({ page }) => {
+  await openPark(page);
+  const layout = await page.evaluate(() => JSON.stringify(window.__arcade.park.state.cars.map((car) => [car.r, car.c, car.dir, car.color])));
+  // Fill four bays by hand, then park a car nobody is waiting for in the fifth.
+  await page.evaluate(async () => {
+    const { sendCar, exitable } = await import('/park-core.js');
+    const { state } = window.__arcade.park;
+    state.queue.unshift(7); // a colour no car has, at the front
+    for (let i = 0; i < 4; i += 1) sendCar(state, exitable(state)[0]);
+  });
+  await clickCar(page, (core, state) => core.exitable(state)[0] ?? null);
+  await expect(page.locator('.park-card strong')).toHaveText('停车场堵死了', { timeout: 10_000 });
+  await page.locator('.park-again').click();
+  await expect(page.locator('.park-overlay')).toBeHidden();
+  expect(await page.evaluate(() => JSON.stringify(window.__arcade.park.state.cars.map((car) => [car.r, car.c, car.dir, car.color])))).toBe(layout);
+  expect((await park(page)).moves).toBe(0);
 });
 
 // 倒水排序 is one canvas; its live state is on window.__arcade.pour, which can also say where a tube is on the page.

@@ -19,11 +19,12 @@ const MODE_META = {
   surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' },
   blast: { label: 'ARCADE 04', title: '方块爆破', help: '把托盘里的拼块拖进 10×10 棋盘。整行或整列填满就会消除，一次消多行还有额外奖励；连续几手都能消除，分数倍率会一路涨。三个拼块都用完会补上新的一批，托盘里一个都放不下时回合结束。' },
   quest: { label: 'ARCADE 06', title: '三消勇者团', help: '交换相邻方块，三个同色相连就会让对应的英雄出手：⚔ 战士砍人、✦ 法师放穿透魔法、⛨ 盾卫举盾并嘲讽、✚ 牧师治疗。连成 4 个技能升级，5 个是大招；连一次 4 连以上还能多走一步。敌人头上会预告下一招，盾卫和牧师倒下了，他们的方块就没用了。点敌人可以换集火目标，一共 10 关，第 5、10 关是首领。' },
+  park: { label: 'ARCADE 07', title: '挪车接客', help: '点一辆车让它沿车顶的箭头开出去：前面没有挡路的车才开得动。开出来的车停进上方五个车位，候车区排在最前面的乘客会上同色的车，坐满就开走。车位停满、前面的乘客又找不到自己的车就输了，先看队伍里谁在前面，再决定挪哪辆。一共 30 关，点「提示」会让一辆不会死局的车闪一下。' },
   pour: { label: 'ARCADE 08', title: '倒水排序', help: '点一个瓶子再点另一个，把它顶上那一段同色的水倒过去：目标瓶要么是空的，要么顶上是同样的颜色，还得有空位。一瓶倒满同一种颜色就会封口收进上方的收集架，全部收集完过关。倒不动时用下面的道具：回退一步、加一个空瓶、打乱重排、提示一步；这些每关次数有限，用得越少星级越高，步数不超过「最少步数」是三星。一共 50 关，越往后颜色越多、空瓶越少；进度会保存在这台设备上。' },
   goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
-// 抓大鹅, 方块爆破 and 三消勇者团 are solo games: no seats, no snapshots, no co-op toggle.
-const SOLO_ONLY = ['blast', 'goose', 'quest', 'pour'];
+// 抓大鹅, 方块爆破, 三消勇者团, 挪车接客 and 倒水排序 are solo games: no seats, no snapshots, no co-op toggle.
+const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour'];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -58,6 +59,9 @@ let gooseMode = 'classic';
 // 三消勇者团 is plain DOM (quest.js, loaded on first use); app.js only frames it.
 let quest = null;
 let questToken = 0;
+// 挪车接客 is one canvas (park.js, loaded on first use); app.js only frames it.
+let park = null;
+let parkToken = 0;
 // 倒水排序 is one canvas (pour.js, loaded on first use); app.js only frames it.
 let pour = null;
 let pourToken = 0;
@@ -82,7 +86,7 @@ let lan = { role: 'solo', token: null, code: null, base: '', source: null, event
 let rtc = { peer: null, channel: null };
 
 function showScreen(id) {
-  if (id !== 'game') { stopGoose(); stopQuest(); }
+  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
@@ -262,9 +266,11 @@ function buildStage() {
   document.body.dataset.mode = mode;
   stopGoose();
   stopQuest();
+  stopPark();
   stopPour();
   if (mode === 'goose') return buildGooseStage(stage, meta);
   if (mode === 'quest') return buildQuestStage(stage, meta);
+  if (mode === 'park') return buildParkStage(stage, meta);
   if (mode === 'pour') return buildPourStage(stage, meta);
   // Only 泡噗2 is reskinned, so only that board gets the picker.
   const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
@@ -282,7 +288,7 @@ function startGame(nextMode) {
   if (SOLO_ONLY.includes(nextMode) && lan.role !== 'solo') return setHint(`${MODE_META[nextMode].title}是单机游戏，请先断开连接。`, true);
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   // The 2D loop idles while state is null, which leaves the frame to goose.js.
-  if (mode === 'goose' || mode === 'quest' || mode === 'pour') { state = null; buildStage(); showScreen('game'); return; }
+  if (mode === 'goose' || mode === 'quest' || mode === 'park' || mode === 'pour') { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame(); resetBlastView();
@@ -302,6 +308,30 @@ function stopQuest() {
   questToken += 1;
   quest?.destroy();
   quest = null;
+}
+function stopPark() {
+  parkToken += 1;
+  park?.destroy();
+  park = null;
+}
+function buildParkStage(stage, meta) {
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button type="button" id="park-hint">提示</button><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap park-wrap"></div><p class="game-help">${meta.help}</p>`;
+  $('#restart-game').addEventListener('click', () => park?.restart());
+  $('#park-hint').addEventListener('click', () => park?.hint());
+  mountParkView(stage.querySelector('.park-wrap'));
+}
+async function mountParkView(wrap) {
+  const token = parkToken;
+  try {
+    const { mountPark } = await import('./park.js');
+    // The player left (or rebuilt the stage) while the module was loading.
+    if (token !== parkToken) return;
+    park = mountPark(wrap, { onHud: (text) => { $('#score-text').textContent = text; }, onResult: reportScore });
+  } catch (error) {
+    if (token !== parkToken) return;
+    console.error(error);
+    wrap.innerHTML = '<p class="quest-loading">游戏加载失败，请刷新页面重试。</p>';
+  }
 }
 function stopPour() {
   pourToken += 1;
@@ -626,6 +656,7 @@ const pop3Record = () => state.endless && state.players.length === 1;
 // 每个游戏的每个模式各有一份全球榜。
 function boardId() {
   if (mode === 'quest') return 'quest';
+  if (mode === 'park') return 'park';
   if (mode === 'goose') return gooseMode === 'endless' ? 'goose-endless' : 'goose-classic';
   if (mode === 'pop3') return (state ? state.endless : pop3Endless) ? 'pop3-endless' : 'pop3-classic';
   return mode;
@@ -1096,7 +1127,7 @@ document.addEventListener('keydown', keyboard); document.addEventListener('keyup
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get pour() { return pour; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; } };
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';
