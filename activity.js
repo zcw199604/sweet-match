@@ -1,6 +1,8 @@
 // 游玩记录的浏览器端：只在游戏界面、页面可见、最近有点击 / 触摸 / 指针移动 / 按键时计时，定时把累计值报给 /api/activity。
 // 任何失败都静默忽略，不能影响游戏。服务端的约定见 activity-core.js。
+import { BOARDS } from './leaderboard-core.js';
 import { playerId, playerName } from './leaderboard.js';
+import { notePlayed } from './recent.js';
 
 const ENDPOINT = '/api/activity';
 const TICK_MS = 1000;
@@ -21,7 +23,7 @@ function payload(session, now) {
 }
 // beacon 用于页面即将关闭 / 切到后台时：普通 fetch 这时可能被取消。
 function send(session, beacon = false) {
-  if (session.activeMs < MIN_REPORT_MS || session.activeMs === session.sentMs) return;
+  if (session.activeMs < MIN_REPORT_MS || session.activeMs === session.sentMs || !playerId()) return; // 没登录就没有身份可记
   session.sentMs = session.activeMs;
   const body = payload(session, Date.now());
   try {
@@ -43,8 +45,10 @@ function tick() {
   if (!visible() || now - lastInput > IDLE_MS) return;
   if (now - current.countedAt > SPLIT_MS) resume(now);
   // 被浏览器节流后的大间隔不算时长。
-  current.activeMs += Math.min(now - current.countedAt, TICK_MS * 2.5);
+  const gained = Math.min(now - current.countedAt, TICK_MS * 2.5);
+  current.activeMs += gained;
   current.countedAt = now;
+  notePlayed(BOARDS[current.board]?.game, gained); // 首页「最近常玩」的累计时长，和上报同一套规则，不需要登录
   if (current.activeMs - current.sentMs >= HEARTBEAT_MS) send(current);
 }
 
