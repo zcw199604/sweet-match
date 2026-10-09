@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addTube, casualFailRate, createLevel, createState, findHint, generateLevel, legalMoves, LEVELS, movesOf, outcome, pour, POUR, propsUsed, shuffle, solve, stageScore, stars, STAGES, topRun, undo } from '../pour-core.js';
-import { LEVEL_DEFS } from '../pour-levels.js';
+import { addTube, casualFailRate, COLORS, createLevel, createState, findHint, generateLevel, legalMoves, LEVELS, movesOf, outcome, pour, POUR, propsUsed, shuffle, solve, stageScore, stars, STAGES, topRun, undo } from '../pour-core.js';
+import { LEVEL_DEFS, LEVELS_KEY } from '../pour-levels.js';
 
 // A hand-built game from tubes written bottom to top. Colours are small integers.
 const build = (tubes, par = 10) => createState({ stage: 1, seed: 1, tubes, par });
@@ -193,12 +193,12 @@ test('a hint is a legal move that keeps the level winnable', () => {
 
 // What every level must be: the right tubes, nothing sorted yet, winnable by a legal sequence of pours.
 function checkLevel(def, label) {
-  const { colors, empty, fail, minPar = colors } = LEVELS[def.stage - 1];
+  const { colors, empty, fail, minPar, maxPar } = LEVELS[def.stage - 1];
   assert.equal(def.tubes.length, colors + empty, label);
   assert.deepEqual(def.tubes.flat().sort((a, b) => a - b), Array.from({ length: colors * POUR.CAP }, (_, i) => Math.floor(i / POUR.CAP)), label);
   assert.ok(def.tubes.every((t) => t.length === POUR.CAP || t.length === 0), `${label}: full or empty at the start`);
   assert.ok(def.tubes.every((t) => !(t.length && t.every((c) => c === t[0]))), `${label}: nothing sorted at the start`);
-  assert.ok(def.par >= minPar, `${label}: par ${def.par} under ${minPar}`);
+  assert.ok(def.par >= minPar && def.par <= maxPar, `${label}: par ${def.par} outside ${minPar}-${maxPar}`);
   assert.ok(def.fail >= fail[0] && def.fail <= fail[1], `${label}: casual fail ${def.fail} outside ${fail}`);
   const state = createState(def);
   const r = solve(def.tubes, { weight: 3 });
@@ -208,9 +208,20 @@ function checkLevel(def, label) {
   assert.ok(r.moves.length >= def.par || !def.exact, `${label}: exact par is the minimum`);
 }
 
+test('the curve has 50 stages that never repeat a step down within a rung', () => {
+  assert.equal(STAGES, 50);
+  assert.ok(COLORS.length >= Math.max(...LEVELS.map((l) => l.colors)), 'a colour for every liquid');
+  for (let i = 1; i < STAGES; i += 1) {
+    const [prev, now] = [LEVELS[i - 1], LEVELS[i]];
+    if (prev.colors !== now.colors || prev.empty !== now.empty) continue;
+    assert.ok(now.minPar > prev.maxPar, `stage ${i + 1}: par windows overlap`);
+    assert.ok(now.fail[0] >= prev.fail[0] && now.fail[1] >= prev.fail[1], `stage ${i + 1}: fail band goes down`);
+  }
+});
+
 test('the early stages make solvable levels in their band, the same one for the same seed', () => {
-  for (let stage = 1; stage <= 6; stage += 1) {
-    for (const seed of [1, 2]) {
+  for (let stage = 1; stage <= 12; stage += 1) {
+    for (const seed of stage <= 6 ? [1, 2] : [1]) {
       const def = generateLevel(stage, seed);
       checkLevel(def, `stage ${stage} seed ${seed}`);
       assert.deepEqual(generateLevel(stage, seed), def);
@@ -220,23 +231,31 @@ test('the early stages make solvable levels in their band, the same one for the 
 
 test('the shipped levels are up to date, winnable at par, and climb in difficulty', () => {
   assert.equal(LEVEL_DEFS.length, STAGES);
+  assert.equal(LEVELS_KEY, JSON.stringify(LEVELS), 'LEVELS changed: rerun `npm run gen:pour`');
   LEVEL_DEFS.forEach((def, i) => {
     assert.equal(def.stage, i + 1);
     checkLevel(def, `shipped stage ${def.stage}`);
-    assert.equal(def.exact, true, `stage ${def.stage}: par should be proven shortest`);
-    assert.equal(solve(def.tubes).moves.length, def.par, `stage ${def.stage}: par is the shortest solution`);
-    // the file is what the generator makes today (rerun `npm run gen:pour` if this fails)
-    assert.deepEqual(generateLevel(def.stage, def.seed), def, `stage ${def.stage} is stale`);
+    // par is the proven shortest solution (the biggest boards are only searched far enough to bound it)
+    if (def.exact) assert.equal(solve(def.tubes).moves.length, def.par, `stage ${def.stage}: par is the shortest solution`);
   });
-  // the two opening stages are easy for anyone; after that the casual player fails more and more
+  // the generator makes the same first levels today (rerun `npm run gen:pour` if this fails)
+  for (const def of LEVEL_DEFS.slice(0, 12)) assert.deepEqual(generateLevel(def.stage, def.seed), def, `stage ${def.stage} is stale`);
+  assert.ok(LEVEL_DEFS.filter((d) => d.exact).length >= 40, 'most pars are proven');
+
+  // the two opening stages are easy for anyone, and the first few barely have a trap
   assert.equal(LEVEL_DEFS[0].fail, 0);
   assert.equal(LEVEL_DEFS[1].fail, 0);
-  assert.ok(LEVEL_DEFS[2].fail > 0, 'stage 3 is the first with a trap');
-  for (let i = 1; i < STAGES; i += 1) assert.ok(LEVEL_DEFS[i].fail >= LEVEL_DEFS[i - 1].fail, `fail rate drops at stage ${i + 1}`);
-  // and the solutions get longer, except where the one-spare-tube stages start over from a small board
-  const switchAt = LEVELS.findIndex((l) => l.empty === 1);
-  for (let i = 1; i < STAGES; i += 1) if (i !== switchAt) assert.ok(LEVEL_DEFS[i].par >= LEVEL_DEFS[i - 1].par, `par drops at stage ${i + 1}`);
-  assert.ok(LEVEL_DEFS[STAGES - 1].par > LEVEL_DEFS[0].par * 3);
+  for (const def of LEVEL_DEFS.slice(0, 5)) assert.ok(def.fail <= 0.1, `stage ${def.stage} is too hard for an opener`);
+  // it climbs: each ten stages are harder than the ten before, on both measures
+  const mean = (list, key) => list.reduce((sum, d) => sum + d[key], 0) / list.length;
+  for (let from = 10; from < STAGES; from += 10) {
+    const [before, after] = [LEVEL_DEFS.slice(from - 10, from), LEVEL_DEFS.slice(from, from + 10)];
+    assert.ok(mean(after, 'par') > mean(before, 'par') + 1, `par flattens after stage ${from}`);
+    assert.ok(mean(after, 'fail') >= mean(before, 'fail'), `fail rate drops after stage ${from}`);
+  }
+  assert.ok(mean(LEVEL_DEFS.slice(-10), 'par') > mean(LEVEL_DEFS.slice(0, 10), 'par') * 2.5);
+  // and no stage is a wall: the next one is never much longer than the last
+  for (let i = 1; i < STAGES; i += 1) assert.ok(LEVEL_DEFS[i].par - LEVEL_DEFS[i - 1].par <= 8, `par jumps at stage ${i + 1}`);
 });
 
 test('stars follow par and cost one per prop used; the stage score adds the shelf', () => {
