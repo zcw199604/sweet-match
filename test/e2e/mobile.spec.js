@@ -523,10 +523,8 @@ test('活跃时长只在游戏界面计时，离开时上报累计值，模式�
   await page.clock.runFor(3_000); // 在首页停留不计时
   await page.locator('[data-mode="pop3"]').click();
   await expect(page.locator('.game-canvas')).toBeVisible();
-  await page.mouse.move(100, 100);
   await page.clock.runFor(10_000);
   await page.locator('#mobile-controls .mode-toggle').click(); // 经典 → 无尽
-  await page.mouse.move(120, 120);
   await page.clock.runFor(8_000);
   await page.locator('#back-home').click();
   await expect.poll(() => reports.length).toBe(2);
