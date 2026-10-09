@@ -20,7 +20,13 @@ export const BOARDS = {
   // 三十关乘客共约 5900 人（每人 5 分）加关卡奖励 46500，合计不到 8 万，十五万封顶。
   park: { game: 'park', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 150_000 },
   // 五十关共 390 瓶（每瓶 10 分）加每关最多 300 分的星级奖励，满分 18900，两万封顶。
-  pour: { game: 'pour', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 20_000 }
+  pour: { game: 'pour', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 20_000 },
+  // 4×4 的 2048 理论最高分约 393 万，四百万封顶。
+  g2048: { game: 'g2048', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 4_000_000 },
+  // 数独按用时（0.1 秒存成整数）：只有没用提示的局才上榜。填满几十个空格再快也不会少于十几秒；三小时封顶。
+  'sudoku-easy': { game: 'sudoku', label: '简单', order: 'asc', unit: '秒', scale: 10, min: 100, max: 108_000 },
+  'sudoku-normal': { game: 'sudoku', label: '普通', order: 'asc', unit: '秒', scale: 10, min: 150, max: 108_000 },
+  'sudoku-hard': { game: 'sudoku', label: '困难', order: 'asc', unit: '秒', scale: 10, min: 200, max: 108_000 }
 };
 export const GAMES = [
   { id: 'pop2', title: '泡噗 2' },
@@ -30,7 +36,9 @@ export const GAMES = [
   { id: 'goose', title: '抓大鹅' },
   { id: 'quest', title: '三消勇者团' },
   { id: 'park', title: '挪车接客' },
-  { id: 'pour', title: '倒水排序' }
+  { id: 'pour', title: '倒水排序' },
+  { id: 'g2048', title: '2048' },
+  { id: 'sudoku', title: '数独' }
 ];
 export const boardsOf = (game) => Object.keys(BOARDS).filter((id) => BOARDS[id].game === game);
 
