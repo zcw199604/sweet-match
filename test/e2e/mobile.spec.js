@@ -16,15 +16,15 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes seven arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes eight arcade cards', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(7);
+  await expect(page.locator('.arcade-card')).toHaveCount(8);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
 
 test('each game shows its whole board and controls without scrolling', async ({ page }) => {
-  for (const mode of ['pop2', 'pop3', 'surge', 'blast', 'park']) {
+  for (const mode of ['pop2', 'pop3', 'surge', 'blast', 'park', 'pour']) {
     await open(page, mode);
     // Opening a game smooth-scrolls the page back to the top; on a phone the boards sit close
     // to the top edge, so measure once the scroll has landed.
@@ -644,4 +644,100 @@ test('挪车接客: a dead end shows 停车场堵死了, and 重试本关 deals 
   await expect(page.locator('.park-overlay')).toBeHidden();
   expect(await page.evaluate(() => JSON.stringify(window.__arcade.park.state.cars.map((car) => [car.r, car.c, car.dir, car.color])))).toBe(layout);
   expect((await park(page)).moves).toBe(0);
+});
+
+// 倒水排序 is one canvas; its live state is on window.__arcade.pour, which can also say where a tube is on the page.
+const pourState = (page) => page.evaluate(() => { const { state, busy, selected } = window.__arcade.pour; return { stage: state.stage, moves: state.moves, par: state.par, busy, selected, undo: state.left.undo, add: state.left.add, tubes: state.tubes.length, shelf: state.collected.length }; });
+async function openPour(page) {
+  await page.goto('/');
+  await page.locator('body[data-ready]').waitFor();
+  await page.locator('[data-mode="pour"]').click();
+  await page.waitForFunction(() => window.__arcade.pour);
+}
+async function clickTube(page, i) {
+  const spot = await page.evaluate((index) => window.__arcade.pour.locate(index), i);
+  await page.mouse.click(spot.x, spot.y);
+}
+// The props are drawn into the canvas: 回退 0, 空瓶 1, 打乱 2, 提示 3, 重来 4 (see BUTTONS in pour.js).
+async function clickProp(page, k) {
+  const box = await page.locator('.game-canvas').boundingBox();
+  const scale = box.width / 360;
+  const left = (360 - (5 * 60 + 4 * 8)) / 2 + k * 68;
+  await page.mouse.click(box.x + (left + 30) * scale, box.y + (548 + 6 + 28) * scale);
+}
+// Play the solver's answer for the current stage with real taps, waiting out each pour.
+async function playSolution(page) {
+  const moves = await page.evaluate(async () => {
+    const { solve } = await import('/pour-core.js');
+    const { state } = window.__arcade.pour;
+    return solve(state.tubes).moves;
+  });
+  for (const move of moves) {
+    await clickTube(page, move.from);
+    await clickTube(page, move.to);
+    await page.waitForFunction(() => !window.__arcade.pour.busy);
+  }
+  return moves.length;
+}
+
+test('倒水排序: a tap lifts a tube, a second tap pours it, and a wrong target just moves the choice', async ({ page }) => {
+  await openPour(page);
+  await expect(page.locator('#score-text')).toContainText('第 1/50 关');
+  const first = await page.evaluate(() => {
+    const { tubes } = window.__arcade.pour.state;
+    const color = tubes[0][tubes[0].length - 1];
+    return { from: 0, wrong: tubes.findIndex((t, i) => i > 0 && t.length && t[t.length - 1] !== color), empty: tubes.findIndex((t) => !t.length) };
+  });
+  await clickTube(page, first.from);
+  expect((await pourState(page)).selected).toBe(first.from);
+  await clickTube(page, first.from); // the same tube again puts it back
+  expect((await pourState(page)).selected).toBeNull();
+  await clickTube(page, first.from);
+  await clickTube(page, first.wrong); // a different colour on top: the choice moves, nothing is poured
+  expect(await pourState(page)).toMatchObject({ selected: first.wrong, moves: 0 });
+  await clickTube(page, first.empty);
+  await expect.poll(async () => (await pourState(page)).moves).toBe(1);
+  await page.waitForFunction(() => !window.__arcade.pour.busy);
+  await expect(page.locator('#score-text')).toContainText('1/');
+});
+
+test('倒水排序: the prop buttons work, and 回退 gives the pour back', async ({ page }) => {
+  await openPour(page);
+  const first = await page.evaluate(() => {
+    const { tubes } = window.__arcade.pour.state;
+    return { from: tubes.findIndex((t) => t.length), empty: tubes.findIndex((t) => !t.length) };
+  });
+  await clickTube(page, first.from);
+  await clickTube(page, first.empty);
+  await page.waitForFunction(() => !window.__arcade.pour.busy);
+  expect((await pourState(page)).moves).toBe(1);
+  await clickProp(page, 0);
+  expect(await pourState(page)).toMatchObject({ moves: 0, undo: 2 });
+  const tubes = (await pourState(page)).tubes;
+  await clickProp(page, 1);
+  expect(await pourState(page)).toMatchObject({ tubes: tubes + 1, add: 0 });
+  await clickProp(page, 3); // a hint lights two tubes and changes nothing
+  expect((await pourState(page)).moves).toBe(0);
+});
+
+test('倒水排序: solving stage 1 with taps submits the score, and the next visit resumes at stage 2', async ({ page }) => {
+  test.setTimeout(60_000);
+  const posts = await stubScores(page);
+  await openPour(page);
+  const steps = await playSolution(page);
+  await expect(page.locator('.pour-card strong')).toHaveText('第 1 关完成');
+  await expect(page.locator('.pour-card')).toContainText(`${steps} 步（最少 ${steps} 步）`);
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0].board).toBe('pour');
+  expect(posts[0].value).toBe(await page.evaluate(() => window.__arcade.pour.state.collected.length * 10 + 300));
+  await expect(page.locator('.pour-note')).toContainText('全球第 3 名');
+  await page.locator('.pour-again').click();
+  await expect(page.locator('#score-text')).toContainText('第 2/50 关');
+  // progress is kept on this device: leave and come back
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="pour"]').click();
+  await page.waitForFunction(() => window.__arcade.pour);
+  await expect(page.locator('#score-text')).toContainText('第 2/50 关');
+  await page.locator('#restart-game').click(); // 重新开始 means a new run
+  await expect(page.locator('#score-text')).toContainText('第 1/50 关 · 0 分');
 });

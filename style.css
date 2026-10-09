@@ -375,3 +375,24 @@ body.playing[data-mode=quest] .mobile-controls{padding:0 12px;margin-top:10px}
 @media(max-width:800px) and (orientation:portrait){
 body.playing[data-mode=park] .canvas-wrap.park-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .5625)));width:min(100%,max(240px,calc((100dvh - 190px) * .5625)))}
 }
+/* 倒水排序: one portrait canvas (360×640 logical px) with the shelf, the tubes and the props drawn into it; --u is 1% of its width. */
+.pour .art{background:radial-gradient(125% 125% at 20% 8%,#4f58b8,#2d3280 58%,#191c4d)}
+.art-tube{position:absolute;bottom:14px;width:44px;height:122px;display:flex;flex-direction:column-reverse;overflow:hidden;border:2px solid #ffffffb8;border-radius:8px 8px 22px 22px;background:#ffffff1c;box-shadow:0 8px 14px #0005}
+.art-tube i{display:block;height:25%}
+.art-tube.t0{left:30px}.art-tube.t1{left:96px;height:104px}.art-tube.t2{left:162px}
+.art-tube.t0 i:nth-child(1){background:#f04b4b}.art-tube.t0 i:nth-child(2){background:#3d8bff}.art-tube.t0 i:nth-child(3){background:#38c26b}
+.art-tube.t1 i:nth-child(1){background:#ffcf3d}.art-tube.t1 i:nth-child(2){background:#9b6bff}.art-tube.t1 i:nth-child(3){background:#ff8f2e}
+.art-tube.t2 i:nth-child(1){background:#2fcfd6}.art-tube.t2 i:nth-child(2){background:#ff77c0}
+.canvas-wrap.pour-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .5625)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .5625)));aspect-ratio:9/16}
+.pour-wrap .game-canvas{height:100%;touch-action:manipulation;background:radial-gradient(120% 90% at 50% 0%,#454fb0,#2a2f78 55%,#171a45);cursor:pointer}
+.pour-overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:calc(var(--u) * 5);background:#0b0f1ce6;border-radius:13px}
+.pour-overlay[hidden]{display:none}
+.pour-card{display:grid;gap:calc(var(--u) * 3);width:100%;padding:calc(var(--u) * 7) calc(var(--u) * 5);border-radius:calc(var(--u) * 5);background:#1d2438;border:1px solid #ffffff2e;text-align:center;font-size:calc(var(--u) * 3.8)}
+.pour-card strong{font-size:calc(var(--u) * 7.6);letter-spacing:-.02em}
+.pour-card p{margin:0;color:#c3c9d6;line-height:1.55}
+.pour-overlay.won .pour-card{border-color:var(--yellow)}
+.pour-note:empty{display:none}
+.pour-again{justify-self:center;padding:calc(var(--u) * 3) calc(var(--u) * 10);border:1px solid var(--pink);border-radius:calc(var(--u) * 3);background:var(--pink);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+@media(max-width:800px) and (orientation:portrait){
+body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .5625)));width:min(100%,max(240px,calc((100dvh - 190px) * .5625)))}
+}
