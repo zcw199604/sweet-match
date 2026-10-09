@@ -352,3 +352,21 @@ test('a bot can play whole games to the end, deterministically', () => {
     assert.deepEqual(botGame(seed), state);
   }
 });
+
+test('every event of a step names the hero who caused it, and an enemy cast names its move kind', () => {
+  const state = fresh(1);
+  line(state, M, 3);
+  state.board[2][0] = state.board[2][1] = state.board[2][2] = W;
+  cap(state.board, W, 3, 2);
+  const step = resolveStep(state);
+  assert.ok(step.events.length >= 2);
+  assert.deepEqual([...new Set(step.events.map((event) => event.by))].sort(), step.groups.map((group) => group.type).sort());
+  for (const event of step.events) assert.ok(step.groups.some((group) => group.type === event.by));
+
+  const foe = fresh(1);
+  foe.phase = 'enemy';
+  foe.actor = 0;
+  foe.enemies[0].intent = { n: '撞击', k: 'aoe', p: 4 };
+  const act = enemyStep(foe);
+  assert.equal(act.events.find((event) => event.kind === 'cast').k, 'aoe');
+});

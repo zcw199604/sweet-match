@@ -1,6 +1,8 @@
-// 三消勇者团: the view. Plain DOM — a row of enemies, the four heroes, and a 6×6 board.
+// 三消勇者团: the view. Plain DOM — a side-on battlefield (the party on the left, the
+// wave on the right, a parallax landscape behind them) above a 6×6 board.
 // quest-core.js decides what every match does; this module plays its events back
-// one beat at a time (flash, numbers, the enemies' answer) and handles taps / swipes.
+// as little scenes: the cleared tiles fly to their hero, the hero acts (the warrior
+// dashes in, the mage throws a bolt, …), and the enemies answer the same way.
 // Everything is built with textContent, never innerHTML, so no text can inject markup.
 import { chooseReward, createQuest, enemyStep, finishMove, HEROES, intentText, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from './quest-core.js';
 
@@ -13,6 +15,10 @@ const el = (tag, className, text) => {
   if (text !== undefined) node.textContent = text;
   return node;
 };
+const MOVE_ICON = { hit: '🗡', aoe: '💥', pierce: '🎯', drain: '🩸', mend: '💚' };
+// The road changes as the party travels: meadow, the gargoyle's canyon, a dusk forest, the lich's night.
+const zoneOf = (stage) => (stage <= 4 ? 'meadow' : stage === 5 ? 'canyon' : stage <= 9 ? 'dusk' : 'castle');
+const calm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   let alive = true;
@@ -22,41 +28,55 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   let selected = null;
   let drag = null;
   let hintTimer = 0;
+  let travelled = 0; // how far the landscape has scrolled, in px
   let best = readCount(STORE.best);
 
   const field = el('div', 'quest-field');
+  const scene = el('div', 'quest-scene');
+  const layers = ['far', 'near', 'ground'].map((name) => el('i', `qs-${name}`));
+  const route = el('div', 'quest-route');
+  const partyRow = el('div', 'quest-party');
   const enemiesRow = el('div', 'quest-enemies');
+  scene.append(...layers, route, enemiesRow, partyRow);
   const bar = el('div', 'quest-bar');
   const turn = el('span', 'quest-turn', '你的回合');
   const msg = el('span', 'quest-msg');
   msg.setAttribute('aria-live', 'polite');
   bar.append(turn, msg);
-  const partyRow = el('div', 'quest-party');
   const boardEl = el('div', 'quest-board');
+  const fx = el('div', 'quest-fx');
   const overlay = el('div', 'quest-overlay');
   overlay.hidden = true;
-  field.append(enemiesRow, bar, partyRow, boardEl);
-  wrap.replaceChildren(field, overlay);
+  field.append(scene, bar, boardEl);
+  wrap.replaceChildren(field, fx, overlay);
 
   // ---- build ----
+  const stops = Array.from({ length: QUEST.STAGES }, (_, index) => {
+    const stop = el('i');
+    if (QUEST.BOSS_STAGES.includes(index + 1)) stop.className = 'boss';
+    route.append(stop);
+    return stop;
+  });
+
   const heroCards = HEROES.map((hero, index) => {
     const card = el('div', 'qh');
     card.dataset.hero = String(index);
     card.title = `${hero.name} · ${hero.skill}：${hero.blurb}`;
-    const glyph = el('b', 'qh-glyph', hero.glyph);
-    const name = el('span', 'qh-name', `${hero.name}`);
-    const skill = el('span', 'qh-skill', hero.skill);
+    const shield = el('span', 'qh-shield');
     const hp = el('span', 'qh-hp');
     const fill = el('i');
     hp.append(fill);
     const num = el('span', 'qh-num');
-    const shield = el('span', 'qh-shield');
+    const fig = el('span', 'qh-fig');
+    const glyph = el('b', 'qh-glyph', hero.glyph);
+    fig.append(el('i', 'qh-head'), el('i', 'qh-body'), glyph);
+    const name = el('span', 'qh-name', hero.name);
+    card.append(shield, hp, num, fig, name);
     // Only the guardian taunts.
     const taunt = index === 2 ? el('span', 'qh-taunt', '嘲讽') : null;
-    card.append(glyph, name, skill, hp, num, shield);
     if (taunt) { taunt.hidden = true; card.append(taunt); }
     partyRow.append(card);
-    return { card, fill, num, shield, taunt };
+    return { card, fill, num, shield, taunt, fig, glyph };
   });
 
   const tiles = [];
@@ -80,35 +100,43 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
       const card = el('button', 'qe');
       card.type = 'button';
       card.dataset.uid = String(enemy.uid);
-      const glyph = el('b', 'qe-glyph', enemy.glyph);
-      const name = el('span', 'qe-name', enemy.boss ? `${enemy.name} · BOSS` : enemy.name);
+      card.dataset.id = enemy.id;
+      const intent = el('span', 'qe-intent');
       const hp = el('span', 'qe-hp');
       const fill = el('i');
       hp.append(fill);
       const num = el('span', 'qe-num');
-      const intent = el('span', 'qe-intent');
-      card.append(glyph, name, hp, num, intent);
+      const body = el('span', 'qe-body');
+      const glyph = el('b', 'qe-glyph', enemy.glyph);
+      body.append(glyph);
+      const name = el('span', 'qe-name', enemy.name);
+      card.append(intent, hp, num, body, name);
       card.classList.toggle('boss', enemy.boss);
       card.addEventListener('click', () => { if (busy) return; setTarget(state, index); paintEnemies(); });
       enemiesRow.append(card);
-      return { card, fill, num, intent };
+      return { card, fill, num, intent, body, glyph };
     });
   }
 
   // ---- paint ----
   const say = (text) => { msg.textContent = text; };
   const setTurnLabel = (label, enemy = false) => { turn.textContent = label; turn.classList.toggle('foe', enemy); };
+  const setFoeBar = (view, enemy, hp) => {
+    view.fill.style.width = `${Math.max(0, hp / enemy.maxHp) * 100}%`;
+    view.num.textContent = `${Math.max(0, hp)} / ${enemy.maxHp}`;
+  };
   function paintEnemies() {
+    const several = state.enemies.filter((other) => other.hp > 0).length > 1;
     state.enemies.forEach((enemy, index) => {
       const view = enemyCards[index];
       if (!view) return;
-      view.fill.style.width = `${Math.max(0, enemy.hp / enemy.maxHp) * 100}%`;
-      view.num.textContent = `${Math.max(0, enemy.hp)} / ${enemy.maxHp}`;
-      view.intent.textContent = enemy.hp > 0 ? (enemy.frozen > 0 ? '❄ 冻结中，跳过行动' : `预告：${intentText(enemy)}`) : '已击败';
+      setFoeBar(view, enemy, enemy.hp);
+      view.intent.textContent = enemy.hp <= 0 ? '' : enemy.frozen > 0 ? '❄ 冻结中，跳过行动' : `${MOVE_ICON[enemy.intent.k]} ${intentText(enemy)}`;
+      view.intent.dataset.k = enemy.frozen > 0 ? 'ice' : enemy.intent.k;
       view.card.classList.toggle('dead', enemy.hp <= 0);
-      view.card.classList.toggle('target', enemy.hp > 0 && state.target === index && state.enemies.filter((other) => other.hp > 0).length > 1);
+      view.card.classList.toggle('target', enemy.hp > 0 && state.target === index && several);
       view.card.classList.toggle('frozen', enemy.frozen > 0 && enemy.hp > 0);
-      view.card.setAttribute('aria-label', `${enemy.name} 生命 ${enemy.hp}/${enemy.maxHp}`);
+      view.card.setAttribute('aria-label', `${enemy.name} 生命 ${enemy.hp}/${enemy.maxHp}，下一招 ${intentText(enemy)}`);
     });
   }
   function paintParty() {
@@ -133,37 +161,367 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
       }
     }
   }
+  function paintRoute() {
+    scene.dataset.zone = zoneOf(state.stage);
+    stops.forEach((stop, index) => {
+      stop.classList.toggle('done', index + 1 < state.stage);
+      stop.classList.toggle('now', index + 1 === state.stage);
+    });
+  }
   function paintHud() {
     onHud(`第 ${state.stage}/${QUEST.STAGES} 关 · ${state.score} 分`);
   }
-  function paintAll() { paintEnemies(); paintParty(); paintBoard(); paintHud(); }
+  function paintAll() { paintEnemies(); paintParty(); paintBoard(); paintRoute(); paintHud(); }
 
-  // ---- feedback ----
+  // ---- motion helpers ----
+  // Web Animations for anything whose path depends on where things are on screen;
+  // with reduced motion every one of them is skipped and the numbers simply appear.
+  const animate = (node, frames, options) => (node?.animate && !calm() ? node.animate(frames, options) : null);
+  const done = (animation) => (animation ? animation.finished.then(() => {}, () => {}) : Promise.resolve());
+  const play = (node, frames, options) => done(animate(node, frames, options));
+  // Centre of a node in the wrap's coordinates (the fx layer covers the wrap).
+  const at = (node) => {
+    const a = node.getBoundingClientRect(), b = wrap.getBoundingClientRect();
+    return { x: a.left - b.left + a.width / 2, y: a.top - b.top + a.height / 2, w: a.width, h: a.height };
+  };
+  const unit = () => wrap.getBoundingClientRect().width / 100;
+  function spawn(className, point, text) {
+    const node = el('span', `qfx ${className}`, text);
+    node.style.left = `${point.x}px`;
+    node.style.top = `${point.y}px`;
+    fx.append(node);
+    return node;
+  }
+  // A short-lived effect: spawn it, play it, remove it.
+  function flash(className, point, frames, options, text) {
+    const node = spawn(className, point, text);
+    return play(node, frames, options).then(() => node.remove());
+  }
   function float(target, text, kind) {
     if (!target) return;
-    const node = el('span', `qfloat ${kind}`, text);
-    target.append(node);
+    const point = at(target);
+    const node = spawn(`qfloat ${kind}`, { x: point.x, y: point.y - point.h * 0.25 }, text);
     setTimeout(() => node.remove(), 1000);
   }
-  const enemyCard = (uid) => enemyCards[state.enemies.findIndex((enemy) => enemy.uid === uid)]?.card;
-  function showEvents(events) {
+  function burst(point, className, count, reach) {
+    for (let k = 0; k < count; k += 1) {
+      const angle = (k / count) * Math.PI * 2 + Math.random() * 0.6, far = reach * (0.6 + Math.random() * 0.6);
+      flash(`qpart ${className}`, point, [
+        { transform: 'translate(0,0) scale(1)', opacity: 1 },
+        { transform: `translate(${Math.cos(angle) * far}px,${Math.sin(angle) * far}px) scale(.2)`, opacity: 0 }
+      ], { duration: 420 + Math.random() * 160, easing: 'cubic-bezier(.2,.7,.3,1)' });
+    }
+  }
+  // Something flies from a to b along a shallow arc.
+  function shoot(className, a, b, duration, lift = 0) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    return flash(className, a, [
+      { transform: 'translate(0,0) scale(.6)' },
+      { transform: `translate(${dx * 0.5}px,${dy * 0.5 - lift}px) scale(1.1)` },
+      { transform: `translate(${dx}px,${dy}px) scale(.9)` }
+    ], { duration, easing: 'cubic-bezier(.45,0,.75,1)' });
+  }
+  const ring = (className, point, size = 1.6, duration = 420) => flash(`qring ${className}`, point, [
+    { transform: 'scale(.2)', opacity: 1 },
+    { transform: `scale(${size})`, opacity: 0 }
+  ], { duration, easing: 'ease-out' });
+  function banner(text, className, over) {
+    const node = spawn(`qbanner ${className}`, at(over), text);
+    const show = animate(node, [
+      { transform: 'scale(.3)', opacity: 0 },
+      { transform: 'scale(1.15)', opacity: 1, offset: 0.25 },
+      { transform: 'scale(1)', opacity: 1, offset: 0.7 },
+      { transform: 'scale(1.05) translateY(-20%)', opacity: 0 }
+    ], { duration: 900, easing: 'ease-out' });
+    if (show) done(show).then(() => node.remove());
+    else setTimeout(() => node.remove(), 700);
+  }
+  function stopMotion() {
+    for (const animation of wrap.getAnimations?.({ subtree: true }) ?? []) {
+      if (typeof CSSAnimation === 'undefined' || !(animation instanceof CSSAnimation)) animation.cancel();
+    }
+    fx.replaceChildren();
+  }
+
+  const foeView = (uid) => enemyCards[state.enemies.findIndex((enemy) => enemy.uid === uid)];
+  const foeOf = (uid) => state.enemies.find((enemy) => enemy.uid === uid);
+
+  // ---- the party's actions ----
+  // hp the bars show while a step plays out; the state already holds the step's end result.
+  let shownHp = new Map();
+  function hitFoe(ev) {
+    const view = foeView(ev.enemy), enemy = foeOf(ev.enemy);
+    if (!view) return;
+    const hp = (shownHp.has(ev.enemy) ? shownHp.get(ev.enemy) : enemy.hp + ev.amount) - ev.amount;
+    shownHp.set(ev.enemy, hp);
+    setFoeBar(view, enemy, hp);
+    float(view.body, `-${ev.amount}`, ev.pierce ? 'mag' : 'dmg');
+    play(view.glyph, [{ filter: 'brightness(1)' }, { filter: 'brightness(2.8) saturate(.2)' }, { filter: 'brightness(1)' }], { duration: 280 });
+    play(view.body, [{ transform: 'translateX(0)' }, { transform: 'translateX(10%) rotate(6deg)' }, { transform: 'translateX(-2%)' }, { transform: 'translateX(0)' }], { duration: 340, easing: 'ease-out' });
+  }
+  function killFoe(uid) {
+    const view = foeView(uid);
+    if (!view) return;
+    burst(at(view.body), 'smoke', 10, unit() * 9);
+    view.card.classList.add('dead');
+    view.intent.textContent = '';
+  }
+  // The rest of a hero's events that are not hits: kills, freezes.
+  function aftermath(events) {
     for (const ev of events) {
-      if (ev.kind === 'damage') float(enemyCard(ev.enemy), `-${ev.amount}`, ev.pierce ? 'mag' : 'dmg');
-      else if (ev.kind === 'kill') enemyCard(ev.enemy)?.classList.add('dead');
-      else if (ev.kind === 'freeze') float(enemyCard(ev.enemy), '冻结', 'ice');
-      else if (ev.kind === 'frozen') float(enemyCard(ev.enemy), '被冻住', 'ice');
-      else if (ev.kind === 'enemyHeal' && ev.amount) float(enemyCard(ev.enemy), `+${ev.amount}`, 'heal');
-      else if (ev.kind === 'heal' && ev.amount) float(heroCards[ev.hero].card, `+${ev.amount}`, 'heal');
-      else if (ev.kind === 'revive') float(heroCards[ev.hero].card, '复活！', 'heal');
-      else if (ev.kind === 'shield') float(heroCards[ev.hero].card, `🛡+${ev.amount}`, 'shield');
-      else if (ev.kind === 'fizzle') float(heroCards[ev.hero].card, '已倒下', 'dmg');
-      else if (ev.kind === 'hurt') {
-        const card = heroCards[ev.hero].card;
-        float(card, ev.amount ? `-${ev.amount}` : '挡住', ev.amount ? 'dmg' : 'shield');
-        if (ev.amount) { card.classList.remove('hit'); void card.offsetWidth; card.classList.add('hit'); }
+      if (ev.kind === 'kill') killFoe(ev.enemy);
+      else if (ev.kind === 'freeze') {
+        const view = foeView(ev.enemy);
+        if (view && foeOf(ev.enemy).hp > 0) { float(view.body, '冻结', 'ice'); ring('ice', at(view.body), 2.2, 520); burst(at(view.body), 'ice', 8, unit() * 8); }
       }
     }
   }
+
+  async function warrior(events, run, my) {
+    const hero = heroCards[0], hits = events.filter((ev) => ev.kind === 'damage');
+    const view = hits[0] && foeView(hits[0].enemy);
+    if (!view) return;
+    const a = at(hero.card), b = at(view.body);
+    const dx = b.x - a.x - b.w * 0.45, dy = b.y - a.y + a.h * 0.1;
+    const dash = animate(hero.card, [
+      { transform: 'translate(0,0)' },
+      { transform: `translate(${-unit() * 2}px,0) scale(.95)`, offset: 0.12 },
+      { transform: `translate(${dx}px,${dy}px)`, offset: 0.4 },
+      { transform: `translate(${dx}px,${dy}px)`, offset: 0.62 },
+      { transform: 'translate(0,0)' }
+    ], { duration: 640, easing: 'ease-in-out' });
+    play(hero.fig, [{ transform: 'rotate(0)' }, { transform: 'rotate(8deg)', offset: 0.35 }, { transform: 'rotate(-14deg)', offset: 0.5 }, { transform: 'rotate(0)' }], { duration: 640 });
+    if (!await waitMs(290, my)) return;
+    const point = at(view.body);
+    const swing = (angle) => flash('qslash', point, [
+      { transform: `rotate(${angle}deg) scale(.4)`, opacity: 1 },
+      { transform: `rotate(${angle + 50}deg) scale(1.15)`, opacity: 0 }
+    ], { duration: 320, easing: 'ease-out' });
+    swing(-70);
+    if (run >= 4) setTimeout(() => swing(20), 90);
+    burst(point, 't0', 7, unit() * 7);
+    for (const ev of hits) hitFoe(ev);
+    aftermath(events);
+    await done(dash);
+  }
+
+  async function mage(events, run, my) {
+    const hero = heroCards[1], hits = events.filter((ev) => ev.kind === 'damage');
+    play(hero.fig, [{ transform: 'translateY(0)' }, { transform: 'translateY(-14%) scale(1.06)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 520, easing: 'ease-out' });
+    ring('t1', at(hero.glyph), 1.4, 360);
+    if (!await waitMs(170, my)) return;
+    const from = at(hero.glyph);
+    await Promise.all(hits.map((ev, k) => {
+      const view = foeView(ev.enemy);
+      if (!view) return null;
+      return waitMs(k * 70, my).then((ok) => ok && shoot(`qbolt${run >= 5 ? ' big' : ''}`, from, at(view.body), 300, unit() * 6)).then(() => {
+        if (!live(my)) return;
+        ring('t1', at(view.body), 2, 380);
+        burst(at(view.body), 't1', 8, unit() * 7);
+        hitFoe(ev);
+      });
+    }));
+    if (!live(my)) return;
+    aftermath(events);
+    await waitMs(120, my);
+  }
+
+  async function guardian(events, run, my) {
+    const hero = heroCards[2];
+    play(hero.card, [{ transform: 'translateX(0)' }, { transform: `translateX(${unit() * 3}px)`, offset: 0.35 }, { transform: 'translateX(0)' }], { duration: 520, easing: 'ease-out' });
+    play(hero.fig, [{ transform: 'scale(1)' }, { transform: 'scale(1.14)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 520 });
+    if (!await waitMs(170, my)) return;
+    for (const ev of events) {
+      if (ev.kind !== 'shield') continue;
+      const target = heroCards[ev.hero];
+      flash('qbubble', at(target.fig), [
+        { transform: 'scale(.4)', opacity: 0 },
+        { transform: 'scale(1.05)', opacity: 1, offset: 0.35 },
+        { transform: 'scale(1)', opacity: 0.9, offset: 0.7 },
+        { transform: 'scale(1.2)', opacity: 0 }
+      ], { duration: 760, easing: 'ease-out' });
+      float(target.fig, `🛡+${ev.amount}`, 'shield');
+    }
+    if (events.some((ev) => ev.kind === 'taunt')) {
+      ring('t2 wide', at(hero.fig), 3.2, 560);
+      for (const view of enemyCards) if (!view.card.classList.contains('dead')) play(view.body, [{ transform: 'translateX(0)' }, { transform: 'translateX(-6%)' }, { transform: 'translateX(0)' }], { duration: 360 });
+    }
+    paintParty();
+    await waitMs(380, my);
+  }
+
+  async function priest(events, run, my) {
+    const hero = heroCards[3];
+    play(hero.fig, [{ transform: 'translateY(0)' }, { transform: 'translateY(-10%)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 520, easing: 'ease-out' });
+    ring('t3', at(hero.glyph), 1.6, 380);
+    if (!await waitMs(150, my)) return;
+    const from = at(hero.glyph);
+    await Promise.all(events.filter((ev) => ev.kind === 'heal' || ev.kind === 'revive').map((ev) => {
+      const target = heroCards[ev.hero];
+      return shoot('qmote', from, at(target.fig), 240, unit() * 5).then(() => {
+        if (!live(my)) return;
+        const point = at(target.fig);
+        if (ev.kind === 'revive') {
+          flash('qbeam', point, [{ transform: 'scaleY(.1)', opacity: 0 }, { transform: 'scaleY(1)', opacity: 1, offset: 0.3 }, { transform: 'scaleY(1)', opacity: 0 }], { duration: 700 });
+          float(target.fig, '复活！', 'heal');
+        } else if (ev.amount) float(target.fig, `+${ev.amount}`, 'heal');
+        for (let k = 0; k < 4; k += 1) {
+          flash('qsparkle', { x: point.x + (Math.random() - 0.5) * point.w, y: point.y + point.h * 0.2 }, [
+            { transform: 'translateY(0) scale(.5)', opacity: 0 },
+            { transform: `translateY(${-point.h * 0.3}px) scale(1)`, opacity: 1, offset: 0.3 },
+            { transform: `translateY(${-point.h * 0.8}px) scale(.6)`, opacity: 0 }
+          ], { duration: 640 + k * 60, easing: 'ease-out' }, '✚');
+        }
+      });
+    }));
+    paintParty();
+    await waitMs(220, my);
+  }
+
+  const ACTS = [warrior, mage, guardian, priest];
+  async function heroAct(group, events, my) {
+    const hero = heroCards[group.type];
+    if (events.some((ev) => ev.kind === 'fizzle')) {
+      float(hero.fig, '已倒下', 'dmg');
+      await play(hero.card, [{ transform: 'translateX(0)' }, { transform: 'translateX(-4%)' }, { transform: 'translateX(4%)' }, { transform: 'translateX(0)' }], { duration: 300 });
+      return;
+    }
+    await ACTS[group.type](events, group.run, my);
+  }
+
+  // ---- the board ----
+  // Every cleared tile pops, throws a few sparks, and sends a mote to the hero it belongs to.
+  function popCells(step) {
+    const my = epoch, size = tiles[0].getBoundingClientRect().width;
+    for (const group of step.groups) {
+      const dest = at(heroCards[group.type].fig);
+      group.cells.forEach(([r, c], k) => {
+        const tile = tileAt(r, c), point = at(tile);
+        tile.classList.add('pop');
+        burst(point, `t${group.type}`, 5, size * 0.75);
+        setTimeout(() => { if (live(my)) shoot(`qorb t${group.type}`, point, dest, 340, size); }, 60 + k * 22);
+      });
+      setTimeout(() => { if (live(my)) ring(`t${group.type}`, at(heroCards[group.type].fig), 1.3, 300); }, 420);
+    }
+  }
+  // After a step the core has already let the columns fall: each tile is drawn at its new
+  // place and slides down from where it was (new tiles come in from above the board).
+  function dropBoard(cleared) {
+    const gone = new Set(cleared.map(([r, c]) => `${r},${c}`));
+    paintBoard();
+    const pitch = tileAt(1, 0).getBoundingClientRect().top - tileAt(0, 0).getBoundingClientRect().top;
+    for (let c = 0; c < QUEST.COLS; c += 1) {
+      const kept = [];
+      for (let r = 0; r < QUEST.ROWS; r += 1) if (!gone.has(`${r},${c}`)) kept.push(r);
+      const fresh = QUEST.ROWS - kept.length;
+      if (!fresh) continue;
+      for (let r = 0; r < QUEST.ROWS; r += 1) {
+        const fall = r < fresh ? fresh : r - kept[r - fresh];
+        if (!fall) continue;
+        animate(tileAt(r, c), [
+          { transform: `translateY(${-fall * pitch}px)`, opacity: r < fresh ? 0.3 : 1 },
+          { transform: 'translateY(0)', opacity: 1, offset: 0.78 },
+          { transform: `translateY(${-pitch * 0.06}px)`, offset: 0.9 },
+          { transform: 'translateY(0)' }
+        ], { duration: 260 + fall * 55, easing: 'ease-in' });
+      }
+    }
+  }
+  // The two tiles slide into each other's place (and back again when the swap makes no match).
+  async function slide(a, b, back) {
+    const ta = tileAt(...a), tb = tileAt(...b), pa = at(ta), pb = at(tb);
+    const dx = pb.x - pa.x, dy = pb.y - pa.y;
+    const frames = (x, y) => (back
+      ? [{ transform: 'translate(0,0)' }, { transform: `translate(${x * 0.45}px,${y * 0.45}px)` }, { transform: 'translate(0,0)' }]
+      : [{ transform: 'translate(0,0)' }, { transform: `translate(${x}px,${y}px)` }]);
+    const options = { duration: back ? 280 : 160, easing: 'ease-in-out', fill: 'forwards' };
+    ta.style.zIndex = '2';
+    const moves = [animate(ta, frames(dx, dy), options), animate(tb, frames(-dx, -dy), options)];
+    await Promise.all(moves.map(done));
+    ta.style.zIndex = '';
+    return moves;
+  }
+
+  // ---- the enemies' answer ----
+  function hurtHero(ev) {
+    const view = heroCards[ev.hero];
+    float(view.fig, ev.amount ? `-${ev.amount}` : '挡住', ev.amount ? 'dmg' : 'shield');
+    if (ev.blocked) ring('t2', at(view.fig), 1.5, 360);
+    if (ev.amount) {
+      burst(at(view.fig), 'hurt', 6, unit() * 5);
+      play(view.fig, [{ transform: 'translateX(0)', filter: 'none' }, { transform: 'translateX(-14%) rotate(-8deg)', filter: 'brightness(1.6) sepia(1) hue-rotate(-50deg) saturate(4)', offset: 0.25 }, { transform: 'translateX(0)', filter: 'none' }], { duration: 380, easing: 'ease-out' });
+    }
+  }
+  async function foeAct(act, my) {
+    const view = foeView(act.enemy), enemy = foeOf(act.enemy);
+    const cast = act.events.find((ev) => ev.kind === 'cast');
+    const hurts = act.events.filter((ev) => ev.kind === 'hurt');
+    const heal = act.events.find((ev) => ev.kind === 'enemyHeal');
+    if (cast || heal) say(`${enemy.name}：${(cast || heal).move}`);
+    if (act.events.some((ev) => ev.kind === 'frozen')) {
+      float(view?.body, '被冻住', 'ice');
+      burst(at(view.body), 'ice', 6, unit() * 6);
+      await play(view.body, [{ transform: 'translateX(0)' }, { transform: 'translateX(-3%)' }, { transform: 'translateX(3%)' }, { transform: 'translateX(0)' }], { duration: 420 });
+      return waitMs(160, my);
+    }
+    if (!cast) {
+      // 自我修复: a green glow, no attack.
+      ring('t3 wide', at(view.body), 2.2, 520);
+      play(view.body, [{ transform: 'scale(1)' }, { transform: 'scale(1.1)' }, { transform: 'scale(1)' }], { duration: 520 });
+      if (!await waitMs(260, my)) return false;
+      if (heal?.amount) float(view.body, `+${heal.amount}`, 'heal');
+      paintEnemies();
+      return waitMs(380, my);
+    }
+    const victims = hurts.map((ev) => heroCards[ev.hero]);
+    const from = at(view.body);
+    if (cast.k === 'aoe') {
+      play(view.body, [{ transform: 'translateY(0)' }, { transform: 'translateY(-18%) scale(1.1)', offset: 0.45 }, { transform: 'translateY(0)' }], { duration: 560, easing: 'ease-out' });
+      if (!await waitMs(260, my)) return false;
+      const middle = at(partyRow);
+      ring('wave', { x: from.x, y: from.y }, 1.2, 300);
+      await shoot('qwave', from, { x: middle.x - middle.w * 0.2, y: from.y }, 260);
+      if (!live(my)) return false;
+      ring('wave', at(victims[0]?.fig ?? partyRow), 3, 420);
+    } else if (cast.k === 'pierce') {
+      play(view.body, [{ transform: 'translateX(0)' }, { transform: 'translateX(8%)', offset: 0.4 }, { transform: 'translateX(-6%)', offset: 0.6 }, { transform: 'translateX(0)' }], { duration: 520 });
+      if (!await waitMs(200, my)) return false;
+      if (victims[0]) await shoot('qdark', from, at(victims[0].fig), 260, unit() * 3);
+      if (!live(my)) return false;
+    } else {
+      // hit / drain: lunge at the victim.
+      const target = victims[0] && at(victims[0].fig), card = at(view.card);
+      const dx = target ? target.x - card.x + target.w * 0.9 : 0, dy = target ? target.y - from.y : 0;
+      const lunge = animate(view.card, [
+        { transform: 'translate(0,0)' },
+        { transform: `translate(${unit() * 3}px,0)`, offset: 0.15 },
+        { transform: `translate(${dx}px,${dy}px)`, offset: 0.42 },
+        { transform: `translate(${dx}px,${dy}px)`, offset: 0.58 },
+        { transform: 'translate(0,0)' }
+      ], { duration: 640, easing: 'ease-in-out' });
+      if (!await waitMs(290, my)) return false;
+      if (victims[0]) flash('qslash foe', at(victims[0].fig), [{ transform: 'rotate(110deg) scale(.4)', opacity: 1 }, { transform: 'rotate(160deg) scale(1.1)', opacity: 0 }], { duration: 300 });
+      for (const ev of hurts) hurtHero(ev);
+      paintParty();
+      await done(lunge);
+      if (!live(my)) return false;
+      if (heal?.amount) {
+        await shoot('qdark drain', at(victims[0].fig), at(view.body), 300, unit() * 4);
+        if (!live(my)) return false;
+        float(view.body, `+${heal.amount}`, 'heal');
+        paintEnemies();
+      }
+      return waitMs(160, my);
+    }
+    for (const ev of hurts) hurtHero(ev);
+    paintParty();
+    return waitMs(420, my);
+  }
+
+  // ---- turns ----
+  const live = (my) => alive && my === epoch;
+  const waitMs = (ms, my) => new Promise((resolve) => setTimeout(() => resolve(live(my)), ms));
+
   const castLine = (step) => {
     const parts = step.groups.map((g) => {
       const hero = HEROES[g.type];
@@ -173,41 +531,46 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
     return `${step.combo > 1 ? `连锁 ×${step.combo} · ` : ''}${parts.join(' · ')}`;
   };
 
-  // ---- turns ----
-  const live = (my) => alive && my === epoch;
-  const wait = (ms, my) => new Promise((resolve) => setTimeout(() => resolve(live(my)), ms));
-
   async function playSwap(a, b) {
     if (busy || state.phase !== 'player') return;
     const my = epoch;
     busy = true;
     selected = null;
     clearHint();
+    paintBoard();
     if (!swapTiles(state, a[0], a[1], b[0], b[1])) {
-      for (const [r, c] of [a, b]) { const tile = tileAt(r, c); tile.classList.remove('nope'); void tile.offsetWidth; tile.classList.add('nope'); }
-      paintBoard();
       say('这一步连不成三个，换个位置试试。');
-      busy = false;
+      const moves = await slide(a, b, true);
+      moves.forEach((move) => move?.cancel());
+      if (live(my)) busy = false;
       return;
     }
+    const moves = await slide(a, b, false);
+    if (!live(my)) return;
     paintBoard();
-    if (!await wait(110, my)) return;
+    moves.forEach((move) => move?.cancel());
     for (let step = resolveStep(state); step; step = resolveStep(state)) {
-      for (const [r, c] of step.cells) tileAt(r, c).classList.add('pop');
+      shownHp = new Map();
       say(castLine(step));
-      if (!await wait(230, my)) return;
-      showEvents(step.events);
+      popCells(step);
+      if (step.combo > 1) banner(`连锁 ×${step.combo}`, 'combo', boardEl);
+      const long = step.groups.find((g) => g.run >= 4);
+      if (long) setTimeout(() => { if (live(my)) banner(`${long.run} 连！`, `t${long.type}`, scene); }, 200);
+      if (!await waitMs(380, my)) return;
+      dropBoard(step.cells);
+      await Promise.all(step.groups.map((group, k) => waitMs(k * 200, my).then((ok) => ok && heroAct(group, step.events.filter((ev) => ev.by === group.type), my))));
+      if (!live(my)) return;
       paintAll();
-      if (!await wait(190, my)) return;
+      if (!await waitMs(140, my)) return;
     }
     const result = finishMove(state);
     paintAll();
     if (result.reshuffled) say('没有可走的步了，棋盘已重排。');
     if (result.outcome === 'cleared') {
       say('本关胜利！');
-      if (await wait(750, my)) showRewards();
+      if (await waitMs(800, my)) showRewards();
     } else if (result.outcome === 'won') {
-      if (await wait(900, my)) finish(true);
+      if (await waitMs(900, my)) finish(true);
     } else if (result.outcome === 'extra') {
       say(`${state.longest} 连！额外回合，敌人还没动。`);
       setTurnLabel('额外回合');
@@ -219,28 +582,40 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
 
   async function enemyPhase(my) {
     setTurnLabel('敌人行动', true);
-    if (!await wait(380, my)) return;
+    if (!await waitMs(360, my)) return;
     for (let act = enemyStep(state); act; act = enemyStep(state)) {
-      const card = enemyCard(act.enemy);
-      card?.classList.add('acting');
-      const cast = act.events.find((ev) => ev.kind === 'cast' || ev.kind === 'enemyHeal');
-      if (cast) say(`${state.enemies.find((e) => e.uid === act.enemy).name}：${cast.move}`);
-      if (!await wait(260, my)) return;
-      showEvents(act.events);
+      if (!await foeAct(act, my)) return;
       paintParty();
       paintEnemies();
-      if (!await wait(480, my)) return;
-      card?.classList.remove('acting');
     }
     paintAll();
     if (state.phase === 'lost') {
       say('全军覆没……');
-      if (await wait(800, my)) finish(false);
+      if (await waitMs(800, my)) finish(false);
       return;
     }
     setTurnLabel('你的回合');
     say(state.taunt > 0 ? '盾卫的嘲讽还在，敌人会盯着他打。' : '轮到你了。');
     busy = false;
+  }
+
+  // The wave walks in from the right; between stages the party marches on and the land scrolls by.
+  function enterWave(my, march) {
+    const width = scene.getBoundingClientRect().width;
+    const entering = enemyCards.map((view, k) => animate(view.card, [
+      { transform: `translateX(${width * 0.55}px)`, opacity: 0 },
+      { transform: 'translateX(0)', opacity: 1 }
+    ], { duration: 700, delay: (march ? 650 : 120) + k * 160, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' }));
+    if (!march) return Promise.resolve();
+    const from = travelled;
+    travelled -= width * 0.9;
+    layers.forEach((layer, k) => {
+      const rate = [0.25, 0.55, 1][k];
+      layer.style.backgroundPositionX = `${travelled * rate}px`;
+      animate(layer, [{ backgroundPositionX: `${from * rate}px` }, { backgroundPositionX: `${travelled * rate}px` }], { duration: 1300, easing: 'ease-in-out' });
+    });
+    partyRow.classList.add('walking');
+    return Promise.all([waitMs(1300, my), ...entering.map(done)]).then(() => { if (live(my)) partyRow.classList.remove('walking'); return live(my); });
   }
 
   function showRewards() {
@@ -264,14 +639,18 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
     overlay.append(card);
     overlay.hidden = false;
   }
-  function pickReward(id) {
+  async function pickReward(id) {
     if (!chooseReward(state, id)) return;
+    const my = epoch;
     overlay.hidden = true;
+    fx.replaceChildren();
     buildEnemies();
     paintAll();
-    setTurnLabel('你的回合');
+    setTurnLabel('前进中');
     const names = state.enemies.map((enemy) => enemy.name).join('、');
     say(`第 ${state.stage} 关：${names}${QUEST.BOSS_STAGES.includes(state.stage) ? '——首领！' : ''}`);
+    if (!await enterWave(my, true)) return;
+    setTurnLabel('你的回合');
     busy = false;
   }
 
@@ -296,18 +675,22 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
     }
   }
 
+  const opening = () => `第 1 关：${state.enemies.map((enemy) => enemy.name).join('、')}。点选两格相邻方块交换，也可以直接滑动；连成三个，同色的英雄就会出手。`;
   function restart() {
     epoch += 1;
+    stopMotion();
     state = createQuest();
     busy = false;
     selected = null;
     drag = null;
     clearHint();
     overlay.hidden = true;
+    partyRow.classList.remove('walking');
     buildEnemies();
     paintAll();
     setTurnLabel('你的回合');
-    say(`第 1 关：${state.enemies.map((enemy) => enemy.name).join('、')}。点选两格相邻方块交换，也可以直接滑动。`);
+    say(opening());
+    enterWave(epoch, false);
   }
 
   // ---- input ----
@@ -370,7 +753,8 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
 
   buildEnemies();
   paintAll();
-  say(`第 1 关：${state.enemies.map((enemy) => enemy.name).join('、')}。点选两格相邻方块交换，也可以直接滑动。`);
+  say(opening());
+  enterWave(epoch, false);
 
   return {
     get state() { return state; },
@@ -379,6 +763,7 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
     destroy() {
       alive = false;
       clearHint();
+      stopMotion();
       wrap.replaceChildren();
     },
     debug: { cell: tileAt, best: () => best }

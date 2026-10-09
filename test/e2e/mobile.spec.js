@@ -237,7 +237,8 @@ test('三消勇者团: enemies, party and the 6×6 board fit on one screen', asy
   if (page.viewportSize().width <= 800) await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.locator('.qh')).toHaveCount(4);
   await expect(page.locator('.qe')).toHaveCount(1);
-  await expect(page.locator('.qe-intent')).toContainText('预告');
+  await expect(page.locator('.qe-intent')).toContainText('攻击');
+  await expect(page.locator('.quest-scene')).toBeVisible();
   const fit = await page.evaluate(() => {
     const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
     const board = rect('.quest-board'), last = [...document.querySelectorAll('#mobile-controls button')].at(-1).getBoundingClientRect(), enemy = rect('.qe');
@@ -252,6 +253,8 @@ test('三消勇者团: a swap that lines up three resolves, then the enemy answe
   // A long cascade can finish the first wave outright; keep the slime alive so the enemy phase is what we watch.
   await page.evaluate(() => { const [slime] = window.__arcade.quest.state.enemies; slime.hp = slime.maxHp = 9999; });
   await tapSwap(page);
+  // The cleared tiles fly to their hero and the hero's action floats a number over someone.
+  await expect(page.locator('.quest-fx .qfloat').first()).toBeAttached();
   await expect(page.locator('.quest-turn')).toHaveText(/敌人行动|额外回合|你的回合/);
   // Back to the player: either the enemy has answered (turns +1) or a 4-line earned an extra move.
   await expect.poll(async () => { const s = await quest(page); return s.phase === 'player' && (s.turns >= 1 || s.bonus); }, { timeout: 8000 }).toBe(true);
@@ -342,6 +345,9 @@ test('三消勇者团: clearing a wave offers rewards and the next stage starts'
   await expect(page.locator('.quest-overlay')).toBeHidden();
   await expect(page.locator('#score-text')).toContainText('第 2/10 关');
   await expect(page.locator('.qe-name')).toHaveText('洞穴蝠');
+  await expect(page.locator('.quest-route i').nth(1)).toHaveClass(/now/);
+  // The party marches to the next wave; the board takes moves again once it arrives.
+  await expect(page.locator('.quest-turn')).toHaveText('你的回合', { timeout: 5000 });
 });
 
 // ---- 全球榜单：用桩接口代替线上的 /api/scores ----

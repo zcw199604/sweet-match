@@ -323,7 +323,10 @@ export function resolveStep(state) {
   // Warrior first, priest last, so a revive lands after the damage is counted.
   for (const group of groups.sort((a, b) => a.type - b.type)) {
     cells.push(...group.cells);
+    const start = events.length;
     castHero(state, group, mult, events);
+    // Tag who caused each event, so a view can animate one hero's action at a time.
+    for (let k = start; k < events.length; k += 1) events[k].by = group.type;
   }
   for (const [r, c] of cells) state.board[r][c] = null;
   gravity(state);
@@ -418,10 +421,10 @@ export function enemyStep(state) {
     enemy.hp += healed;
     events.push({ kind: 'enemyHeal', enemy: enemy.uid, amount: healed, move: move.n });
   } else if (move.k === 'aoe') {
-    events.push({ kind: 'cast', enemy: enemy.uid, move: move.n });
+    events.push({ kind: 'cast', enemy: enemy.uid, move: move.n, k: move.k });
     state.party.forEach((hero, i) => { if (hero.hp > 0) damageHero(state, i, Math.ceil(p / 2), events, enemy, false); });
   } else {
-    events.push({ kind: 'cast', enemy: enemy.uid, move: move.n });
+    events.push({ kind: 'cast', enemy: enemy.uid, move: move.n, k: move.k });
     const taken = damageHero(state, pickVictim(state), p, events, enemy, move.k === 'pierce');
     if (move.k === 'drain') {
       const healed = Math.min(enemy.maxHp - enemy.hp, Math.round(taken * 0.6));

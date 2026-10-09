@@ -157,8 +157,8 @@ body.playing[data-mode=surge] .stage-top{padding-top:42px}
 body.playing[data-mode=surge] .canvas-wrap.portrait{width:max(160px,calc((100vh - 12px) * 720 / var(--h,516)));width:max(160px,calc((100dvh - 12px) * 720 / var(--h,516)))}
 }
 
-/* 三消勇者团: a night-sky stage with candy-coloured tiles. One unit --u is 1% of the board's width,
-   so everything scales together; on a short landscape phone the board moves beside the party. */
+/* 三消勇者团: a side-on battlefield (party left, wave right) over a candy-tile board. One unit --u is
+   1% of the battlefield's width, so the whole scene scales together; on wide screens the board moves beside it. */
 .quest .art{background:radial-gradient(125% 125% at 20% 8%,#4a3a86,#2a2150 58%,#16112e)}
 .art-hero{position:absolute;top:92px;width:54px;height:54px;border-radius:15px;display:grid;place-items:center;font-size:26px;color:#fff;box-shadow:0 8px 16px #0006,inset 0 2px 0 #ffffff59,inset 0 -3px 0 #00000040}
 .art-hero.h0{left:24px;background:linear-gradient(180deg,#ffb3c4,#ff5d80 60%,#c22a52)}
@@ -166,56 +166,135 @@ body.playing[data-mode=surge] .canvas-wrap.portrait{width:max(160px,calc((100vh 
 .art-hero.h2{left:160px;background:linear-gradient(180deg,#ffe9a3,#ffd543 60%,#c49a0a);color:#5a4300}
 .art-hero.h3{left:228px;background:linear-gradient(180deg,#a8f0cc,#44c986 60%,#1f8f5a)}
 .art-foe{position:absolute;right:22px;top:18px;font-size:50px;filter:drop-shadow(0 6px 8px #0007)}
-.canvas-wrap.quest-wrap{--u:1cqw;container-type:inline-size;width:min(100%,520px,max(280px,calc((100vh - 430px) / 1.7)));width:min(100%,520px,max(280px,calc((100dvh - 430px) / 1.7)))}
+.canvas-wrap.quest-wrap{--u:1cqw;container-type:inline-size;width:min(100%,520px,max(280px,calc((100vh - 430px) / 1.72)));width:min(100%,520px,max(280px,calc((100dvh - 430px) / 1.72)))}
 .quest-field{display:grid;gap:calc(var(--u) * 2.2);color:#fff;touch-action:manipulation}
-.quest-enemies{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:calc(var(--u) * 2)}
-.qe{position:relative;display:grid;justify-items:center;gap:calc(var(--u) * .6);padding:calc(var(--u) * 2) calc(var(--u) * 1.5);border:1px solid #ffffff26;border-radius:calc(var(--u) * 2.6);background:#ffffff10;color:#fff;font:inherit;font-size:calc(var(--u) * 3);cursor:pointer}
-.qe.boss{border-color:#ffd54399;background:#ffd54314}
-.qe.target{border-color:var(--yellow);box-shadow:0 0 0 calc(var(--u) * .5) #ffd54366}
-.qe.dead{opacity:.35;filter:grayscale(1)}
-.qe.frozen{background:#58d4de26;border-color:#58d4de}
-.qe.acting{animation:qlunge .5s}
-.qe-glyph{font-size:calc(var(--u) * 11);line-height:1.1}
-.quest-enemies[data-count="1"] .qe-glyph{font-size:calc(var(--u) * 13)}
-.qe-name{font-weight:800}
-.qe-hp,.qh-hp{display:block;width:100%;height:calc(var(--u) * 1.8);border-radius:99px;background:#0008;overflow:hidden}
-.qe-hp i{display:block;height:100%;background:linear-gradient(90deg,#ff5d80,#ff8aa3);transition:width .3s}
+
+/* -- the battlefield: sky, two rows of hills and a striped road, each scrolling at its own rate -- */
+.quest-scene{--sky1:#7cc8f7;--sky2:#dff4ff;--far:#a9dcb0;--near:#5cb874;--grass:#62c26a;--soil:#8a6440;position:relative;aspect-ratio:16/10;overflow:hidden;border-radius:calc(var(--u) * 3);background:linear-gradient(var(--sky1),var(--sky2) 72%);box-shadow:inset 0 0 0 1px #ffffff1f;isolation:isolate}
+.quest-scene[data-zone=canyon]{--sky1:#f08a4b;--sky2:#ffdca8;--far:#d79466;--near:#a9603b;--grass:#c98a4e;--soil:#6e4128}
+.quest-scene[data-zone=dusk]{--sky1:#4b3a86;--sky2:#ff9fb4;--far:#7a5f9f;--near:#33645f;--grass:#4b8c6c;--soil:#3a2c48}
+.quest-scene[data-zone=castle]{--sky1:#0c1030;--sky2:#3b2c6c;--far:#2c2558;--near:#1b1838;--grass:#3a3468;--soil:#17132c}
+.quest-scene[data-zone=castle]::before,.quest-scene[data-zone=dusk]::before{content:"";position:absolute;inset:0 0 40%;background:radial-gradient(circle at 18% 20%,#fff 0 .12em,transparent .16em),radial-gradient(circle at 46% 12%,#fff 0 .1em,transparent .14em),radial-gradient(circle at 70% 26%,#fff 0 .12em,transparent .16em),radial-gradient(circle at 88% 10%,#fffbe0 0 calc(var(--u) * 3),transparent calc(var(--u) * 3.2));opacity:.75}
+.quest-scene[data-zone=dusk]::before{opacity:.35}
+.quest-scene>i{position:absolute;left:0;right:0;background-position:0 100%}
+.qs-far{bottom:22%;height:42%;background:radial-gradient(50% 100% at 50% 100%,var(--far) 98%,transparent 100%) 0 100%/calc(var(--u) * 36) 100% repeat-x}
+.qs-near{bottom:20%;height:20%;background:radial-gradient(50% 100% at 50% 100%,var(--near) 96%,transparent 100%) 0 100%/calc(var(--u) * 15) 80% repeat-x,radial-gradient(50% 100% at 50% 100%,var(--near) 96%,transparent 100%) calc(var(--u) * 8) 100%/calc(var(--u) * 22) 100% repeat-x;opacity:.92}
+.qs-ground{bottom:0;height:24%;background:repeating-linear-gradient(100deg,transparent 0 calc(var(--u) * 5),#0000001a 0 calc(var(--u) * 7)) 0 0/100% 100%,linear-gradient(var(--grass) 0 22%,#00000026 22% 26%,var(--soil) 26%)}
+.quest-route{position:absolute;top:calc(var(--u) * 2.2);left:50%;translate:-50% 0;z-index:5;display:flex;align-items:center;gap:calc(var(--u) * 1);padding:calc(var(--u) * .7) calc(var(--u) * 1.6);border-radius:99px;background:#0b0f1c66}
+.quest-route i{width:calc(var(--u) * 1.4);height:calc(var(--u) * 1.4);border-radius:50%;background:#ffffff59}
+.quest-route i.boss{border-radius:calc(var(--u) * .3);rotate:45deg;background:#ff5d8099}
+.quest-route i.done{background:#fff}.quest-route i.boss.done{background:#ff5d80}
+.quest-route i.now{width:calc(var(--u) * 2.2);height:calc(var(--u) * 2.2);background:var(--yellow);box-shadow:0 0 0 calc(var(--u) * .5) #ffd54366}
+
+/* -- the party, standing in a staggered line and facing right -- */
+.quest-party,.quest-enemies{position:absolute;inset:0}
+.quest-party{z-index:3;pointer-events:none}
+.quest-enemies{z-index:2}
+.qh{--c1:#ff8aa3;--c2:#e03a64;--hat:#c22a52;position:absolute;width:14%;display:grid;justify-items:center;gap:calc(var(--u) * .4);font-size:calc(var(--u) * 2.4)}
+.qh[data-hero="2"]{--c1:#ffe38a;--c2:#e0b300;--hat:#c49a0a;left:33%;bottom:4%;z-index:4}
+.qh[data-hero="0"]{left:22%;bottom:30%;z-index:3}
+.qh[data-hero="1"]{--c1:#b3a6ff;--c2:#6a55e0;--hat:#5440c9;left:11%;bottom:4%;z-index:4}
+.qh[data-hero="3"]{--c1:#7be6ae;--c2:#2ea870;--hat:#1f8f5a;left:0;bottom:30%;z-index:3}
+.qh-hp,.qe-hp{display:block;width:80%;height:calc(var(--u) * 1.3);border-radius:99px;background:#0009;overflow:hidden;box-shadow:0 0 0 calc(var(--u) * .25) #0b0f1c66}
 .qh-hp i{display:block;height:100%;background:linear-gradient(90deg,#44c986,#8ff0bb);transition:width .3s}
-.qe-num,.qh-num{font:calc(var(--u) * 2.6) 'DM Mono',monospace;color:#c3c9d6}
-.qe-intent{min-height:calc(var(--u) * 6.4);color:var(--yellow);font-size:calc(var(--u) * 2.8);line-height:1.15;font-weight:700}
+.qe-hp i{display:block;height:100%;background:linear-gradient(90deg,#ff5d80,#ff8aa3);transition:width .3s}
+.qh-num,.qe-num{margin-top:calc(var(--u) * -.2);font:700 calc(var(--u) * 2) 'DM Mono',monospace;color:#fff;text-shadow:0 1px 2px #000c,0 0 3px #000a}
+.qh-fig{position:relative;width:calc(var(--u) * 10);height:calc(var(--u) * 13);transform-origin:50% 100%;animation:qidle 1.8s ease-in-out infinite}
+.qh[data-hero="0"] .qh-fig{animation-delay:-.4s}.qh[data-hero="1"] .qh-fig{animation-delay:-.9s}.qh[data-hero="3"] .qh-fig{animation-delay:-1.3s}
+.qh-fig::after{content:"";position:absolute;left:5%;right:5%;bottom:calc(var(--u) * -.8);height:calc(var(--u) * 1.6);border-radius:50%;background:#0004;z-index:-1}
+.qh-head{position:absolute;left:calc(var(--u) * 1.8);top:calc(var(--u) * .4);z-index:2;width:calc(var(--u) * 6.4);height:calc(var(--u) * 6.4);border-radius:50%;background:radial-gradient(circle at 60% 58%,#2a2340 0 calc(var(--u) * .55),transparent calc(var(--u) * .65)),radial-gradient(circle at 84% 58%,#2a2340 0 calc(var(--u) * .55),transparent calc(var(--u) * .65)),radial-gradient(circle at 74% 76%,#ff9fb4aa 0 calc(var(--u) * .8),transparent calc(var(--u) * .9)),#ffe2c8;box-shadow:inset calc(var(--u) * -.4) calc(var(--u) * -.5) 0 #0000001a}
+.qh-head::before{content:"";position:absolute;left:calc(var(--u) * -.5);right:calc(var(--u) * -.5);top:calc(var(--u) * -.6);height:52%;border-radius:calc(var(--u) * 3.6) calc(var(--u) * 3.6) calc(var(--u) * .6) calc(var(--u) * .6);background:var(--hat)}
+.qh[data-hero="1"] .qh-fig{margin-top:calc(var(--u) * 3.4)}
+.qh[data-hero="1"] .qh-head::before{top:calc(var(--u) * -4.6);height:calc(var(--u) * 6.4);border-radius:0;clip-path:polygon(62% 0,100% 100%,0 100%)}
+.qh[data-hero="2"] .qh-head::before{height:46%;box-shadow:inset 0 calc(var(--u) * -.6) 0 #00000033}
+.qh[data-hero="3"] .qh-head::before{height:62%;left:calc(var(--u) * -.8);right:30%;border-radius:calc(var(--u) * 3.6) calc(var(--u) * 1) calc(var(--u) * 1) calc(var(--u) * 3.6)}
+.qh-body{position:absolute;left:calc(var(--u) * 1.6);top:calc(var(--u) * 6);width:calc(var(--u) * 6.8);height:calc(var(--u) * 5.6);border-radius:calc(var(--u) * 2.6) calc(var(--u) * 2.6) calc(var(--u) * 1) calc(var(--u) * 1);background:linear-gradient(var(--c1),var(--c2));box-shadow:inset 0 calc(var(--u) * -.6) 0 #0003}
+.qh-body::after{content:"";position:absolute;left:calc(var(--u) * 1.2);right:calc(var(--u) * 1.2);bottom:calc(var(--u) * -1.4);height:calc(var(--u) * 1.6);background:linear-gradient(90deg,#2a2340 0 36%,transparent 36% 64%,#2a2340 64%)}
+.qh-glyph{position:absolute;right:calc(var(--u) * -2.6);top:calc(var(--u) * 5);z-index:3;display:grid;place-items:center;width:calc(var(--u) * 5);height:calc(var(--u) * 5);border-radius:28%;background:linear-gradient(180deg,#fff8,transparent 50%),linear-gradient(var(--c1),var(--c2));color:#fff;font-size:calc(var(--u) * 3);box-shadow:0 calc(var(--u) * .4) calc(var(--u) * .8) #0005;text-shadow:0 1px 0 #0003}
+.qh[data-hero="2"] .qh-glyph{color:#5a4300;text-shadow:none}
+.qh-name{padding:0 calc(var(--u) * 1);border-radius:99px;background:#0b0f1ca6;font-weight:800;white-space:nowrap}
+.qh-shield{position:absolute;top:calc(var(--u) * -3);font-size:calc(var(--u) * 2.2);font-weight:800;color:var(--yellow);text-shadow:0 1px 2px #000c;white-space:nowrap}
+.qh-taunt{position:absolute;right:calc(var(--u) * -3);top:calc(var(--u) * 4);padding:0 calc(var(--u) * .8);border-radius:99px;background:var(--yellow);color:#5a4300;font-size:calc(var(--u) * 2);font-weight:800;animation:qhint 1.2s ease-in-out infinite}
+.qh-taunt[hidden]{display:none}
+.qh.low .qh-name{background:#ff5d80}
+.qh.down .qh-fig{animation:none;transform:rotate(-84deg) translate(calc(var(--u) * -3),calc(var(--u) * 2));filter:grayscale(1);opacity:.55}
+.qh.down .qh-hp,.qh.down .qh-shield{opacity:.4}
+.quest-party.walking .qh-fig{animation:qwalk .32s ease-in-out infinite}
+
+/* -- the wave, facing left; a speech bubble over each enemy says what it will do next -- */
+.qe{position:absolute;left:60%;bottom:5%;width:26%;display:grid;justify-items:center;gap:calc(var(--u) * .5);padding:0;border:0;background:none;color:#fff;font:inherit;font-size:calc(var(--u) * 2.4);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.quest-enemies[data-count="1"] .qe{left:62%;width:30%}
+.quest-enemies[data-count="2"] .qe:nth-child(1){left:50%;bottom:4%;z-index:2}
+.quest-enemies[data-count="2"] .qe:nth-child(2){left:74%;bottom:20%}
+.qe-intent{position:relative;max-width:100%;margin-bottom:calc(var(--u) * 1);padding:calc(var(--u) * .5) calc(var(--u) * 1.2);border-radius:calc(var(--u) * 1.4);background:#fff;color:#2a2340;font-size:calc(var(--u) * 2.2);font-weight:800;line-height:1.2;box-shadow:0 calc(var(--u) * .4) calc(var(--u) * 1) #0004}
+.qe-intent::after{content:"";position:absolute;left:50%;bottom:calc(var(--u) * -.9);margin-left:calc(var(--u) * -1);border:calc(var(--u) * 1) solid transparent;border-bottom:0;border-top-color:#fff}
+.qe-intent[data-k=aoe],.qe-intent[data-k=pierce]{background:#ffe3ea;color:#a3123a}.qe-intent[data-k=aoe]::after,.qe-intent[data-k=pierce]::after{border-top-color:#ffe3ea}
+.qe-intent[data-k=ice]{background:#d9f7fa;color:#11707b}.qe-intent[data-k=ice]::after{border-top-color:#d9f7fa}
+.qe-intent:empty{visibility:hidden}
+.qe-body{position:relative;display:grid;place-items:center;transition:opacity .5s,filter .5s,transform .5s}
+.qe-body::after{content:"";position:absolute;left:10%;right:10%;bottom:calc(var(--u) * -.6);height:calc(var(--u) * 1.8);border-radius:50%;background:#0004;z-index:-1}
+.qe-glyph{display:block;font-size:calc(var(--u) * 13);line-height:1.05;animation:qidle 2.2s ease-in-out infinite;filter:drop-shadow(0 calc(var(--u) * .6) 0 #0003)}
+.qe+.qe .qe-glyph{animation-delay:-1s}
+.qe.boss .qe-glyph{font-size:calc(var(--u) * 19)}
+.qe[data-id=slime] .qe-glyph{width:calc(var(--u) * 13);height:calc(var(--u) * 10);margin-top:calc(var(--u) * 2);font-size:0;border-radius:50% 50% 44% 44%/68% 68% 32% 32%;background:radial-gradient(circle at 26% 46%,#1d2b1a 0 calc(var(--u) * .8),transparent calc(var(--u) * .95)),radial-gradient(circle at 46% 46%,#1d2b1a 0 calc(var(--u) * .8),transparent calc(var(--u) * .95)),radial-gradient(circle at 60% 24%,#ffffffcc 0 calc(var(--u) * 1.1),transparent calc(var(--u) * 1.3)),radial-gradient(circle at 40% 30%,#c9ffb0,#5fd35a 48%,#2f9a3a);transform-origin:50% 100%;animation:qsquish 1.6s ease-in-out infinite}
+.qe-name{padding:0 calc(var(--u) * 1.2);border-radius:99px;background:#0b0f1ca6;font-weight:800;white-space:nowrap}
+.qe.boss .qe-name::before{content:"👑 "}
+.qe.target .qe-name{background:var(--yellow);color:#5a4300}
+.qe.target .qe-body::after{background:radial-gradient(closest-side,#ffd543aa,#ffd54333 70%,transparent);height:calc(var(--u) * 2.6);bottom:calc(var(--u) * -1)}
+.qe.frozen .qe-glyph{filter:saturate(.3) brightness(1.15) drop-shadow(0 0 calc(var(--u) * 1) #9be8ef)}
+.qe.frozen .qe-body::before{content:"❄";position:absolute;right:0;top:0;z-index:1;font-size:calc(var(--u) * 4);color:#c7f6fb;text-shadow:0 0 calc(var(--u) * 1) #58d4de}
+.qe.dead{cursor:default}
+.qe.dead .qe-body{opacity:.18;filter:grayscale(1);transform:translateY(8%) rotate(-10deg) scale(.82)}
+.qe.dead .qe-hp,.qe.dead .qe-num{visibility:hidden}
+.qe.dead .qe-name{opacity:.5}
+.qe:focus-visible{outline:calc(var(--u) * .5) solid var(--cyan);border-radius:calc(var(--u) * 2)}
+
+/* -- status line and board -- */
 .quest-bar{display:flex;align-items:center;gap:calc(var(--u) * 2);min-height:calc(var(--u) * 6);font-size:calc(var(--u) * 3)}
 .quest-turn{flex:none;padding:calc(var(--u) * .8) calc(var(--u) * 2.2);border-radius:99px;background:#58d4de33;color:#9be8ef;font-weight:800;white-space:nowrap}
 .quest-turn.foe{background:#ff5d8033;color:#ffb3c4}
 .quest-msg{color:#d9deea;line-height:1.25}
-.quest-party{display:grid;grid-template-columns:repeat(4,1fr);gap:calc(var(--u) * 1.6)}
-.qh{position:relative;display:grid;justify-items:center;gap:calc(var(--u) * .5);padding:calc(var(--u) * 1.6) calc(var(--u) * 1) calc(var(--u) * 1.4);border-radius:calc(var(--u) * 2.4);background:#ffffff10;border:1px solid #ffffff26;font-size:calc(var(--u) * 2.8)}
-.qh-glyph{display:grid;place-items:center;width:calc(var(--u) * 8.4);height:calc(var(--u) * 8.4);border-radius:50%;font-size:calc(var(--u) * 4.8);color:#fff;box-shadow:inset 0 calc(var(--u) * -.5) 0 #0004}
-.qh[data-hero="0"] .qh-glyph{background:linear-gradient(180deg,#ff8aa3,#e03a64)}
-.qh[data-hero="1"] .qh-glyph{background:linear-gradient(180deg,#b3a6ff,#6a55e0)}
-.qh[data-hero="2"] .qh-glyph{background:linear-gradient(180deg,#ffe38a,#e0b300);color:#5a4300}
-.qh[data-hero="3"] .qh-glyph{background:linear-gradient(180deg,#7be6ae,#2ea870)}
-.qh-name{font-weight:800}
-.qh-skill{margin-top:calc(var(--u) * -.4);font-size:calc(var(--u) * 2.3);color:#9aa3b5}
-.qh-shield{position:absolute;right:calc(var(--u) * .8);top:calc(var(--u) * .6);font-size:calc(var(--u) * 2.4);font-weight:800;color:var(--yellow)}
-.qh-taunt{position:absolute;left:calc(var(--u) * .8);top:calc(var(--u) * .6);padding:0 calc(var(--u) * 1);border-radius:99px;background:var(--yellow);color:#5a4300;font-size:calc(var(--u) * 2);font-weight:800}
-.qh-taunt[hidden]{display:none}
-.qh.low{border-color:#ff5d80}
-.qh.down{opacity:.4;filter:grayscale(1)}
-.qh.hit{animation:qshake .35s}
-.quest-board{display:grid;grid-template-columns:repeat(6,1fr);gap:calc(var(--u) * 1.3);padding:calc(var(--u) * 1.6);border-radius:calc(var(--u) * 3);background:#0d1421;box-shadow:inset 0 0 0 1px #ffffff14;touch-action:none}
-.qt{aspect-ratio:1;border:0;border-radius:24%;padding:0;color:#fff;font:inherit;font-size:calc(var(--u) * 7);line-height:1;display:grid;place-items:center;box-shadow:0 calc(var(--u) * .8) calc(var(--u) * 1.4) #0006,inset 0 2px 0 #ffffff59,inset 0 calc(var(--u) * -.8) 0 #0003;transition:transform .12s;-webkit-tap-highlight-color:transparent;text-shadow:0 2px 0 #0003}
+.quest-board{position:relative;display:grid;grid-template-columns:repeat(6,1fr);gap:calc(var(--u) * 1.3);padding:calc(var(--u) * 1.6);border-radius:calc(var(--u) * 3);background:#0d1421;box-shadow:inset 0 0 0 1px #ffffff14;touch-action:none;overflow:hidden}
+.qt{position:relative;aspect-ratio:1;border:0;border-radius:24%;padding:0;color:#fff;font:inherit;font-size:calc(var(--u) * 7);line-height:1;display:grid;place-items:center;box-shadow:0 calc(var(--u) * .8) calc(var(--u) * 1.4) #0006,inset 0 2px 0 #ffffff59,inset 0 calc(var(--u) * -.8) 0 #0003;transition:transform .12s;-webkit-tap-highlight-color:transparent;text-shadow:0 2px 0 #0003}
 .qt.t0{background:linear-gradient(180deg,#ffb3c4,#ff5d80 60%,#c22a52)}
 .qt.t1{background:linear-gradient(180deg,#cfc6ff,#8e7bff 60%,#5440c9)}
 .qt.t2{background:linear-gradient(180deg,#ffe9a3,#ffd543 60%,#c49a0a);color:#5a4300;text-shadow:none}
 .qt.t3{background:linear-gradient(180deg,#a8f0cc,#44c986 60%,#1f8f5a)}
 .qt.sel{transform:scale(1.12);outline:calc(var(--u) * .7) solid #fff;z-index:1}
-.qt.pop{animation:qpop .23s forwards}
-.qt.nope{animation:qshake .3s}
+.qt.pop{animation:qpop .3s ease-in forwards;z-index:1}
 .qt.hint{animation:qhint .7s ease-in-out infinite}
 .qt:focus-visible{outline:calc(var(--u) * .6) solid var(--cyan)}
-.qfloat{position:absolute;left:50%;top:25%;transform:translateX(-50%);font-weight:800;font-size:calc(var(--u) * 5);white-space:nowrap;pointer-events:none;text-shadow:0 2px 0 #000b;animation:qfloat 1s ease-out forwards;z-index:2}
-.qfloat.dmg{color:#ff6b88}.qfloat.mag{color:#b3a6ff}.qfloat.heal{color:#6ff0ab}.qfloat.shield{color:var(--yellow)}.qfloat.ice{color:#9be8ef}
-.quest-overlay{position:absolute;inset:0;z-index:3;display:grid;place-items:center;padding:calc(var(--u) * 3);background:#0b0f1ce6;border-radius:calc(var(--u) * 3)}
+
+/* -- effects: everything below lives in .quest-fx, placed in px by quest.js and centred with `translate` -- */
+.quest-fx{position:absolute;inset:0;z-index:2;pointer-events:none}
+.qfx{position:absolute;left:0;top:0;translate:-50% -50%;pointer-events:none}
+.quest-wrap .t0{--fx:#ff5d80}.quest-wrap .t1{--fx:#8e7bff}.quest-wrap .t2{--fx:#ffd543}.quest-wrap .t3{--fx:#44c986}
+.qpart{width:calc(var(--u) * 2);height:calc(var(--u) * 2);border-radius:30%;background:var(--fx,#fff)}
+.qpart.smoke{width:calc(var(--u) * 3);height:calc(var(--u) * 3);border-radius:50%;background:#e9e4f5}
+.qpart.ice{background:#bff4fa}.qpart.hurt{background:#ff6b88}
+.qorb{width:calc(var(--u) * 3.2);height:calc(var(--u) * 3.2);border-radius:50%;background:radial-gradient(circle,#fff 0 30%,var(--fx) 60%);box-shadow:0 0 calc(var(--u) * 1.6) calc(var(--u) * .4) var(--fx)}
+.qring{width:calc(var(--u) * 8);height:calc(var(--u) * 8);border-radius:50%;border:calc(var(--u) * .7) solid var(--fx,#fff);box-shadow:0 0 calc(var(--u) * 1.4) var(--fx,#fff)}
+.qring.wide{width:calc(var(--u) * 12);height:calc(var(--u) * 6)}
+.qring.ice{--fx:#9be8ef}.qring.wave{--fx:#ff5d80;width:calc(var(--u) * 14);height:calc(var(--u) * 8)}
+.qslash{width:calc(var(--u) * 18);height:calc(var(--u) * 18);border-radius:50%;border-top:calc(var(--u) * 1.4) solid #fff;border-right:calc(var(--u) * .5) solid #ffffff99;filter:drop-shadow(0 0 calc(var(--u) * 1) #ff5d80)}
+.qslash.foe{width:calc(var(--u) * 12);height:calc(var(--u) * 12);filter:drop-shadow(0 0 calc(var(--u) * 1) #ff2d55)}
+.qbolt{width:calc(var(--u) * 4);height:calc(var(--u) * 4);border-radius:50%;background:radial-gradient(circle,#fff 0 25%,#b3a6ff 50%,#6a55e0 75%,transparent);box-shadow:0 0 calc(var(--u) * 2.4) calc(var(--u) * .8) #8e7bff}
+.qbolt.big{width:calc(var(--u) * 6);height:calc(var(--u) * 6)}
+.qmote{width:calc(var(--u) * 2.4);height:calc(var(--u) * 2.4);border-radius:50%;background:radial-gradient(circle,#fff 0 30%,#6ff0ab 65%,transparent);box-shadow:0 0 calc(var(--u) * 1.6) #44c986}
+.qdark{width:calc(var(--u) * 3.6);height:calc(var(--u) * 3.6);border-radius:50%;background:radial-gradient(circle,#ffd0dc 0 20%,#d12a5c 55%,#4a0d2a 80%,transparent);box-shadow:0 0 calc(var(--u) * 2) #ff2d55}
+.qdark.drain{width:calc(var(--u) * 2.4);height:calc(var(--u) * 2.4)}
+.qwave{width:calc(var(--u) * 6);height:calc(var(--u) * 12);border-radius:50%;border-left:calc(var(--u) * 1.6) solid #ff6b88;filter:drop-shadow(0 0 calc(var(--u) * 1.2) #ff2d55)}
+.qbubble{width:calc(var(--u) * 15);height:calc(var(--u) * 17);border-radius:50%;background:radial-gradient(circle,transparent 55%,#ffd54355 75%,#ffd543cc);box-shadow:0 0 calc(var(--u) * 1.6) #ffd543}
+.qbeam{width:calc(var(--u) * 8);height:calc(var(--u) * 40);transform-origin:50% 100%;translate:-50% -85%;background:linear-gradient(transparent,#fffbe0cc 40%,#6ff0ab99);border-radius:calc(var(--u) * 4)}
+.qsparkle{color:#6ff0ab;font-weight:900;font-size:calc(var(--u) * 2.6);text-shadow:0 0 calc(var(--u) * 1) #44c986}
+.qbanner{z-index:3;white-space:nowrap;font-weight:900;font-size:calc(var(--u) * 8);letter-spacing:-.02em;color:#fff;-webkit-text-stroke:calc(var(--u) * .35) #2a2340;paint-order:stroke fill;text-shadow:0 calc(var(--u) * .6) 0 #2a2340}
+.qbanner.combo{color:var(--yellow)}
+.qbanner.t0,.qbanner.t1,.qbanner.t2,.qbanner.t3{color:var(--fx)}
+.qfloat{z-index:4;font-weight:900;font-size:calc(var(--u) * 4.4);white-space:nowrap;-webkit-text-stroke:calc(var(--u) * .25) #1a1530;paint-order:stroke fill;animation:qfloat 1s ease-out forwards}
+.qfloat.dmg{color:#ff6b88}.qfloat.mag{color:#c8bdff}.qfloat.heal{color:#6ff0ab}.qfloat.shield{color:var(--yellow)}.qfloat.ice{color:#9be8ef}
+
+/* -- overlays -- */
+.quest-overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:calc(var(--u) * 3);background:#0b0f1ce6;border-radius:calc(var(--u) * 3)}
 .quest-overlay[hidden]{display:none}
 .quest-card{display:grid;gap:calc(var(--u) * 2);width:100%;max-width:calc(var(--u) * 86);padding:calc(var(--u) * 5) calc(var(--u) * 4);border-radius:calc(var(--u) * 4);background:#1d2438;border:1px solid #ffffff2e;text-align:center;font-size:calc(var(--u) * 3.2)}
 .quest-card strong{font-size:calc(var(--u) * 6.4);letter-spacing:-.02em}
@@ -230,26 +309,32 @@ body.playing[data-mode=surge] .canvas-wrap.portrait{width:max(160px,calc((100vh 
 .quest-perk.t0{border-color:#ff5d80}.quest-perk.t1{border-color:#8e7bff}.quest-perk.t2{border-color:#ffd543}.quest-perk.t3{border-color:#44c986}
 .quest-again{justify-self:center;text-align:center;background:var(--pink);border-color:var(--pink);font-weight:800;padding:calc(var(--u) * 2.4) calc(var(--u) * 8)}
 .quest-loading{margin:0;padding:20px;text-align:center;color:#aeb5c4}
-@keyframes qpop{to{transform:scale(.2);opacity:0}}
-@keyframes qshake{20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
-@keyframes qlunge{40%{transform:translateY(calc(var(--u) * 2.4)) scale(1.05)}}
+@keyframes qpop{0%{transform:scale(1)}35%{transform:scale(1.22);filter:brightness(1.8)}100%{transform:scale(.1);opacity:0;filter:brightness(2.4)}}
 @keyframes qhint{50%{transform:scale(1.14);box-shadow:0 0 0 calc(var(--u) * .8) #fff9}}
-@keyframes qfloat{from{opacity:1;top:25%}to{opacity:0;top:-12%}}
-@media(prefers-reduced-motion:reduce){.qt.pop,.qt.hint,.qe.acting,.qh.hit,.qt.nope{animation:none}.qfloat{animation-duration:.01s}}
+@keyframes qidle{50%{transform:translateY(-4%) scaleY(1.02)}}
+@keyframes qwalk{25%{transform:translateY(-8%) rotate(-3deg)}75%{transform:translateY(-8%) rotate(3deg)}}
+@keyframes qsquish{50%{transform:scale(1.08,.9)}}
+@keyframes qfloat{0%{transform:translateY(0) scale(.5);opacity:0}15%{transform:translateY(-10%) scale(1.2);opacity:1}30%{transform:translateY(-30%) scale(1)}100%{transform:translateY(-160%);opacity:0}}
+@media(prefers-reduced-motion:reduce){.qt.pop,.qt.hint,.qh-fig,.qe-glyph,.qh-taunt,.quest-party.walking .qh-fig{animation:none}.qfloat{animation-duration:.01s}}
 @media(max-width:800px) and (orientation:portrait){
-body.playing[data-mode=quest] .canvas-wrap.quest-wrap{width:100%;max-width:max(250px,calc((100vh - 190px) / 1.7));max-width:max(250px,calc((100dvh - 190px) / 1.7));padding:0 8px}
+body.playing[data-mode=quest] .canvas-wrap.quest-wrap{width:100%;max-width:max(250px,calc((100vh - 190px) / 1.74));max-width:max(250px,calc((100dvh - 190px) / 1.74));padding:0 8px}
 body.playing[data-mode=quest] .mobile-controls{padding:0 12px;margin-top:10px}
 }
-/* Wide screens (desktop, tablet or phone on its side): enemies and party on the left, the board beside them. */
+/* Wide screens (desktop, tablet or phone on its side): the battlefield on the left, the board beside it. */
 @media(orientation:landscape) and (min-width:801px){
-.canvas-wrap.quest-wrap{width:min(100%,920px,max(480px,calc((100vh - 430px) * 1.75)));width:min(100%,920px,max(480px,calc((100dvh - 430px) * 1.75)))}
+.canvas-wrap.quest-wrap{width:min(100%,960px,max(480px,calc((100vh - 400px) * 2)));width:min(100%,960px,max(480px,calc((100dvh - 400px) * 2)))}
 }
 @media(orientation:landscape) and (min-width:801px),(orientation:landscape) and (max-height:600px){
 .canvas-wrap.quest-wrap{--u:.5cqw}
-.quest-field{grid-template-columns:1fr 1fr;grid-template-areas:"e b" "s b" "p b";align-content:start;column-gap:calc(var(--u) * 4)}
-.quest-enemies{grid-area:e}.quest-bar{grid-area:s}.quest-party{grid-area:p}.quest-board{grid-area:b}
+.quest-field{grid-template-columns:1fr 1fr;grid-template-rows:1fr auto;grid-template-areas:"e b" "s b";align-content:start;column-gap:calc(var(--u) * 4)}
+.quest-scene{grid-area:e;aspect-ratio:auto;min-height:calc(var(--u) * 70)}
+.quest-bar{grid-area:s}.quest-board{grid-area:b}
+/* The battlefield is nearly square here: bigger figures, and the back row stands further up the road. */
+.quest-party,.quest-enemies{--u:.6cqw}
+.qh[data-hero="0"],.qh[data-hero="3"]{bottom:34%}
+.quest-enemies[data-count="2"] .qe:nth-child(2){bottom:28%}
 }
 @media(orientation:landscape) and (max-height:600px){
 /* The stage is a grid here and a container-query box has no intrinsic width, so the width is spelled out in viewport units. */
-.canvas-wrap.quest-wrap{width:min(calc((100vh - 70px) * 1.7),calc(100vw - 200px));width:min(calc((100dvh - 70px) * 1.7),calc(100vw - 200px))}
+.canvas-wrap.quest-wrap{width:min(calc((100vh - 70px) * 2),calc(100vw - 200px));width:min(calc((100dvh - 70px) * 2),calc(100vw - 200px))}
 }
