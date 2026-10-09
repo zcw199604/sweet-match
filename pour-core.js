@@ -19,20 +19,24 @@ export const POUR = {
   SHUFFLE: 1
 };
 export const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'brown', 'lime'];
-// colors: how many of COLORS; empty: spare tubes at the start. Later levels have one spare only.
+// colors: how many of COLORS; empty: spare tubes at the start; fail: the band the level's
+// `casualFailRate` must land in; minPar: the shortest solution allowed (the casual player is
+// stuck every time from stage 9 on, so the step count keeps those stages climbing). The first two stages are a stroll; then more colours add
+// difficulty a little at a time on two spare tubes, and from stage 7 on there is only one
+// spare, which is a different game: each pour has to be planned.
 export const LEVELS = [
-  { colors: 3, empty: 2 },
-  { colors: 4, empty: 2 },
-  { colors: 5, empty: 2 },
-  { colors: 6, empty: 2 },
-  { colors: 7, empty: 2 },
-  { colors: 8, empty: 2 },
-  { colors: 8, empty: 2 },
-  { colors: 8, empty: 1 },
-  { colors: 9, empty: 1 },
-  { colors: 9, empty: 1 },
-  { colors: 10, empty: 1 },
-  { colors: 10, empty: 1 }
+  { colors: 3, empty: 2, fail: [0, 0] },
+  { colors: 4, empty: 2, fail: [0, 0] },
+  { colors: 5, empty: 2, fail: [0.05, 0.2] },
+  { colors: 6, empty: 2, fail: [0.2, 0.4] },
+  { colors: 7, empty: 2, fail: [0.35, 0.55], minPar: 22 },
+  { colors: 8, empty: 2, fail: [0.55, 0.75], minPar: 25 },
+  { colors: 5, empty: 1, fail: [0.55, 0.8], minPar: 15 },
+  { colors: 6, empty: 1, fail: [0.75, 0.95], minPar: 18 },
+  { colors: 7, empty: 1, fail: [0.9, 1], minPar: 21 },
+  { colors: 8, empty: 1, fail: [0.95, 1], minPar: 24 },
+  { colors: 9, empty: 1, fail: [1, 1], minPar: 27 },
+  { colors: 10, empty: 1, fail: [1, 1], minPar: 30 }
 ];
 export const STAGES = LEVELS.length;
 
@@ -187,13 +191,15 @@ export function solve(tubes, { cap = POUR.CAP, maxNodes = 200000, weight = 1 } =
 
 // ---- levels ----
 
-// A level definition: { stage, seed, tubes, par, exact }. The tubes are the opening position;
-// `par` is the solver's step count (exact when the search ran to the end, otherwise a close
-// upper bound). The same (stage, seed) always gives the same level. With one spare tube only
-// 1–4% of random deals can be won, so it deals again until the solver says yes; unwinnable
-// deals are refuted in a millisecond or so, which keeps even the hardest stages quick.
-export function generateLevel(stage, seed, { attempts = 5000 } = {}) {
-  const { colors, empty } = LEVELS[stage - 1];
+// A level definition: { stage, seed, tubes, par, exact, fail }. The tubes are the opening
+// position; `par` is the solver's step count (exact when the search ran to the end, otherwise
+// a close upper bound); `fail` is its casualFailRate. The same (stage, seed) always gives the
+// same level. It deals again until the solver says the deal can be won and the casual player's
+// failure rate falls in the stage's band — with one spare tube only 1–4% of random deals can be
+// won, but unwinnable deals are refuted in a millisecond, so even stage 12 takes a second or two.
+// That is why the game ships the finished levels (pour-levels.js) instead of making them live.
+export function generateLevel(stage, seed, { attempts = 30000 } = {}) {
+  const { colors, empty, fail: band, minPar = colors } = LEVELS[stage - 1];
   const rng = makeRng(seed * 7919 + stage);
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const cells = [];
@@ -205,8 +211,11 @@ export function generateLevel(stage, seed, { attempts = 5000 } = {}) {
     if (tubes.some((t) => isSealable(t, POUR.CAP))) continue;
     let result = solve(tubes, { maxNodes: 40000 });
     if (!result.ok && result.capped) result = solve(tubes, { maxNodes: 150000, weight: 3 });
-    if (!result.ok || result.moves.length < colors) continue;
-    return { stage, seed, tubes, par: result.moves.length, exact: result.exact };
+    if (!result.ok || result.moves.length < minPar) continue;
+    const par = result.moves.length;
+    const fail = casualFailRate({ tubes, par }, { runs: 20, seed: 1 });
+    if (fail < band[0] || fail > band[1]) continue;
+    return { stage, seed, tubes, par, exact: result.exact, fail };
   }
   throw new Error(`no level for stage ${stage} seed ${seed}`);
 }

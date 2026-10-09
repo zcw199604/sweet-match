@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addTube, casualFailRate, createLevel, createState, findHint, generateLevel, legalMoves, LEVELS, movesOf, outcome, pour, POUR, propsUsed, shuffle, solve, stageScore, stars, STAGES, topRun, undo } from '../pour-core.js';
+import { LEVEL_DEFS } from '../pour-levels.js';
 
 // A hand-built game from tubes written bottom to top. Colours are small integers.
 const build = (tubes, par = 10) => createState({ stage: 1, seed: 1, tubes, par });
@@ -190,26 +191,52 @@ test('a hint is a legal move that keeps the level winnable', () => {
   assert.equal(findHint(build([[0, 1, 0, 1], [1, 0, 1, 0]])), null);
 });
 
-test('every stage makes a solvable, non-trivial level, the same one for the same seed', () => {
-  for (let stage = 1; stage <= STAGES; stage += 1) {
+// What every level must be: the right tubes, nothing sorted yet, winnable by a legal sequence of pours.
+function checkLevel(def, label) {
+  const { colors, empty, fail, minPar = colors } = LEVELS[def.stage - 1];
+  assert.equal(def.tubes.length, colors + empty, label);
+  assert.deepEqual(def.tubes.flat().sort((a, b) => a - b), Array.from({ length: colors * POUR.CAP }, (_, i) => Math.floor(i / POUR.CAP)), label);
+  assert.ok(def.tubes.every((t) => t.length === POUR.CAP || t.length === 0), `${label}: full or empty at the start`);
+  assert.ok(def.tubes.every((t) => !(t.length && t.every((c) => c === t[0]))), `${label}: nothing sorted at the start`);
+  assert.ok(def.par >= minPar, `${label}: par ${def.par} under ${minPar}`);
+  assert.ok(def.fail >= fail[0] && def.fail <= fail[1], `${label}: casual fail ${def.fail} outside ${fail}`);
+  const state = createState(def);
+  const r = solve(def.tubes, { weight: 3 });
+  assert.equal(r.ok, true, label);
+  for (const move of r.moves) assert.equal(pour(state, move.from, move.to).ok, true, label);
+  assert.equal(outcome(state), 'won', label);
+  assert.ok(r.moves.length >= def.par || !def.exact, `${label}: exact par is the minimum`);
+}
+
+test('the early stages make solvable levels in their band, the same one for the same seed', () => {
+  for (let stage = 1; stage <= 6; stage += 1) {
     for (const seed of [1, 2]) {
       const def = generateLevel(stage, seed);
-      const { colors, empty } = LEVELS[stage - 1];
-      assert.equal(def.tubes.length, colors + empty);
-      assert.deepEqual(def.tubes.flat().sort((a, b) => a - b), Array.from({ length: colors * POUR.CAP }, (_, i) => Math.floor(i / POUR.CAP)));
-      assert.ok(def.tubes.every((t) => t.length === POUR.CAP || t.length === 0), 'full or empty at the start');
-      assert.ok(def.tubes.every((t) => !(t.length && t.every((c) => c === t[0]))), 'nothing sorted at the start');
-      assert.ok(def.par >= colors, `stage ${stage} seed ${seed}: par ${def.par}`);
-      // par is a real, playable solution
-      const state = createState(def);
-      const r = solve(def.tubes, { weight: 3 });
-      assert.equal(r.ok, true);
-      for (const move of r.moves) assert.equal(pour(state, move.from, move.to).ok, true);
-      assert.equal(outcome(state), 'won');
-      assert.ok(r.moves.length >= def.par || !def.exact, 'exact par is the minimum');
+      checkLevel(def, `stage ${stage} seed ${seed}`);
       assert.deepEqual(generateLevel(stage, seed), def);
     }
   }
+});
+
+test('the shipped levels are up to date, winnable at par, and climb in difficulty', () => {
+  assert.equal(LEVEL_DEFS.length, STAGES);
+  LEVEL_DEFS.forEach((def, i) => {
+    assert.equal(def.stage, i + 1);
+    checkLevel(def, `shipped stage ${def.stage}`);
+    assert.equal(def.exact, true, `stage ${def.stage}: par should be proven shortest`);
+    assert.equal(solve(def.tubes).moves.length, def.par, `stage ${def.stage}: par is the shortest solution`);
+    // the file is what the generator makes today (rerun `npm run gen:pour` if this fails)
+    assert.deepEqual(generateLevel(def.stage, def.seed), def, `stage ${def.stage} is stale`);
+  });
+  // the two opening stages are easy for anyone; after that the casual player fails more and more
+  assert.equal(LEVEL_DEFS[0].fail, 0);
+  assert.equal(LEVEL_DEFS[1].fail, 0);
+  assert.ok(LEVEL_DEFS[2].fail > 0, 'stage 3 is the first with a trap');
+  for (let i = 1; i < STAGES; i += 1) assert.ok(LEVEL_DEFS[i].fail >= LEVEL_DEFS[i - 1].fail, `fail rate drops at stage ${i + 1}`);
+  // and the solutions get longer, except where the one-spare-tube stages start over from a small board
+  const switchAt = LEVELS.findIndex((l) => l.empty === 1);
+  for (let i = 1; i < STAGES; i += 1) if (i !== switchAt) assert.ok(LEVEL_DEFS[i].par >= LEVEL_DEFS[i - 1].par, `par drops at stage ${i + 1}`);
+  assert.ok(LEVEL_DEFS[STAGES - 1].par > LEVEL_DEFS[0].par * 3);
 });
 
 test('stars follow par and cost one per prop used; the stage score adds the shelf', () => {
@@ -236,10 +263,11 @@ test('stars follow par and cost one per prop used; the stage score adds the shel
 });
 
 test('a short-sighted player breezes through the first stages and gets stuck on the last', () => {
-  const rate = (stage) => casualFailRate(generateLevel(stage, 1), { runs: 20 });
-  assert.ok(rate(1) <= 0.2, 'stage 1 should be easy');
-  assert.ok(rate(STAGES) >= 0.8, 'the last stage should need planning');
+  const rate = (stage) => casualFailRate(LEVEL_DEFS[stage - 1], { runs: 20 });
+  assert.equal(rate(1), 0);
+  assert.equal(rate(2), 0);
+  assert.equal(rate(STAGES), 1);
   // same seed, same rate
-  const def = generateLevel(6, 1);
+  const def = LEVEL_DEFS[5];
   assert.equal(casualFailRate(def, { seed: 3 }), casualFailRate(def, { seed: 3 }));
 });
