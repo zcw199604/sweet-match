@@ -351,3 +351,26 @@ body.playing[data-mode=quest] .mobile-controls{padding:0 12px;margin-top:10px}
 /* The stage is a grid here and a container-query box has no intrinsic width, so the width is spelled out in viewport units. */
 .canvas-wrap.quest-wrap{width:min(calc((100vh - 70px) * 2),calc(100vw - 200px));width:min(calc((100dvh - 70px) * 2),calc(100vw - 200px))}
 }
+/* 挪车接客: one portrait canvas (360×640 logical px) with the queue and bays drawn into it; --u is 1% of its width. */
+.park .art{background:radial-gradient(125% 125% at 20% 8%,#5a6a8a,#3a455e 58%,#232b40)}
+.art-car{position:absolute;width:86px;height:40px;border-radius:13px;display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800;box-shadow:0 8px 14px #0005,inset 0 2px 0 #ffffff59,inset 0 -3px 0 #00000040}
+.art-car::before{content:'';position:absolute;inset:8px 22px 8px 14px;border-radius:7px;background:#25324a}
+.art-car::after{content:'➜';position:absolute;inset:0;display:grid;place-items:center;font-size:20px;text-shadow:0 1px 2px #0008}
+.art-car.c0{left:22px;top:44px;background:linear-gradient(180deg,#ff8d8d,#f04b4b 60%,#a82626)}
+.art-car.c1{left:120px;top:44px;background:linear-gradient(180deg,#8dbbff,#3d8bff 60%,#1f55b3);transform:rotate(90deg) translate(24px,-22px)}
+.art-car.c2{left:160px;top:98px;background:linear-gradient(180deg,#86e3a8,#38c26b 60%,#1d8444)}
+.art-car.c3{left:34px;top:112px;background:linear-gradient(180deg,#ffe58a,#ffcf3d 60%,#b88c0a)}
+.art-car.c3::after{transform:rotate(180deg)}
+.canvas-wrap.park-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .5625)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .5625)));aspect-ratio:9/16}
+.park-wrap .game-canvas{height:100%;touch-action:manipulation;background:#1b2132;cursor:pointer}
+.park-overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:calc(var(--u) * 5);background:#0b0f1ce6;border-radius:13px}
+.park-overlay[hidden]{display:none}
+.park-card{display:grid;gap:calc(var(--u) * 3);width:100%;padding:calc(var(--u) * 7) calc(var(--u) * 5);border-radius:calc(var(--u) * 5);background:#1d2438;border:1px solid #ffffff2e;text-align:center;font-size:calc(var(--u) * 3.8)}
+.park-card strong{font-size:calc(var(--u) * 7.6);letter-spacing:-.02em}
+.park-card p{margin:0;color:#c3c9d6;line-height:1.55}
+.park-overlay.won .park-card{border-color:var(--yellow)}
+.park-note:empty{display:none}
+.park-again{justify-self:center;padding:calc(var(--u) * 3) calc(var(--u) * 10);border:1px solid var(--pink);border-radius:calc(var(--u) * 3);background:var(--pink);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+@media(max-width:800px) and (orientation:portrait){
+body.playing[data-mode=park] .canvas-wrap.park-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .5625)));width:min(100%,max(240px,calc((100dvh - 190px) * .5625)))}
+}
