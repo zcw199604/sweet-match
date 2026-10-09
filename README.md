@@ -17,12 +17,13 @@
 
 抓大鹅的玩法参照 [DarkGoldBar/catch-goose](https://github.com/DarkGoldBar/catch-goose)（漏斗形物品堆、7 格暂存栏、晃一下、经典 / 无尽两种模式）。该仓库没有附带许可证，所以这里没有复用它的任何代码、模型、背景图或音乐：十二种物品都是用 Three.js 基本体现场拼出来的（`goose-art.js`），碗、暂存栏和桌布也都是代码绘制。与原作不同的有两处：放进暂存栏的物品会排到同类旁边，凑对时一眼就能看到；物品从原作的 9 种增加到 12 种，同一时间能直接凑齐的组更少，难度更高。
 
-三消勇者团的玩法思路参考了 [splargdotcom/atventurerer](https://github.com/splargdotcom/atventurerer)（MIT License）：方块各管一种效果、敌人提前预告下一招、连出 4 个以上多走一步。这里没有复用它的代码和画面，规则是按「四职业各配一种颜色」重新设计和实现的：它只有一个主角，这里是四个有各自生命的英雄，敌人要选谁打、盾卫的嘲讽、牧师复活、法师冻结都是新增的。敌人头像用系统自带的 emoji，所以不同设备上看起来略有差别。
+三消勇者团的玩法思路参考了 [splargdotcom/atventurerer](https://github.com/splargdotcom/atventurerer)（MIT License）：方块各管一种效果、敌人提前预告下一招、连出 4 个以上多走一步。这里没有复用它的代码和画面，规则是按「四职业各配一种颜色」重新设计和实现的：它只有一个主角，这里是四个有各自生命的英雄，敌人要选谁打、盾卫的嘲讽、牧师复活、法师冻结都是新增的。英雄和怪物都是 `quest-art.js` 里手绘的原创 SVG（Q 版、统一描边与平涂阴影），各设备上看起来一致。
 
 ### 三消勇者团的结构
 
 - `quest-core.js`：纯规则（棋盘、四个英雄的技能、敌人预告与行动、关卡、强化、计分），不碰 DOM，`test/quest.test.js` 直接测它。一回合是 `swapTiles` → 反复 `resolveStep`（每一步返回它引起的事件）→ `finishMove` →（轮到敌人时）反复 `enemyStep`；界面只负责把这些事件一步步放出来。
 - `quest.js`：DOM 视图。上方是横版战场（左边四位英雄、右边敌人，背景分草原 / 峡谷 / 黄昏森林 / 夜之城堡，过关时小队向右行进、背景视差卷动、下一波敌人从右侧入场），下方是 6×6 棋盘，再加强化和结算卡片。动画按 `resolveStep` / `enemyStep` 的事件逐个播放：方块交换滑动、消除爆粒子并化成光球飞向对应英雄、战士冲上去砍、法师放光弹、盾卫张护盾、牧师发治疗光、空位方块下落补齐；敌人扑击、发射穿透弹或放全体冲击波。核心事件上的 `by`（哪位英雄引起）和 `k`（敌人招式类型）就是给这些动画用的。系统开启「减少动态效果」时动画全部跳过。支持点选两格和直接滑动，点「提示」会高亮一步能成的交换。首次点进这个游戏时才加载。
+- `quest-art.js`：四位英雄和九种怪物的 SVG 造型。英雄朝右、怪物朝左；武器手臂（`qa-arm`）、眼睛、翅膀、披风、发光部位各自成组，CSS 负责眨眼、扇翅、飘动、呼吸光，`quest.js` 在出手时单独挥动武器手臂。造型是静态字符串，首次用到时用 `DOMParser` 解析一次后克隆。
 - 难度参数在 `quest-core.js` 的 `QUEST`（`HP_GROWTH`、`ATK_BASE`、`ATK_GROWTH`）。调过一轮：随机乱走的 bot 大约在第 5 关倒下，一个能预知补牌的贪心 bot 通关率约六成，真人介于两者之间。
 
 ### 抓大鹅的结构与第三方库
@@ -125,7 +126,7 @@ npm run lan
 - **Build output directory**：`/`（项目根目录）
 - **Functions**：无需配置
 
-`app.js`、`art.js`、`themes.js`、`game-core.js`、`blast-shapes.js`、`goose.js`、`goose-core.js`、`goose-art.js`、`quest.js`、`quest-core.js`、`vendor/`、`style.css` 和 `index.html` 会作为静态资源直接发布。Node 局域网服务不能由 Pages 进程托管，需要在局域网电脑或另一台可访问的 Node 主机上运行。
+`app.js`、`art.js`、`themes.js`、`game-core.js`、`blast-shapes.js`、`goose.js`、`goose-core.js`、`goose-art.js`、`quest.js`、`quest-core.js`、`quest-art.js`、`vendor/`、`style.css` 和 `index.html` 会作为静态资源直接发布。Node 局域网服务不能由 Pages 进程托管，需要在局域网电脑或另一台可访问的 Node 主机上运行。
 
 ### GitHub Actions 自动部署
 

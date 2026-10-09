@@ -3,8 +3,10 @@
 // quest-core.js decides what every match does; this module plays its events back
 // as little scenes: the cleared tiles fly to their hero, the hero acts (the warrior
 // dashes in, the mage throws a bolt, …), and the enemies answer the same way.
-// Everything is built with textContent, never innerHTML, so no text can inject markup.
+// Everything is built with textContent, never innerHTML, so no text can inject markup;
+// the figures come from quest-art.js, static SVG parsed once and cloned.
 import { chooseReward, createQuest, enemyStep, finishMove, HEROES, intentText, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from './quest-core.js';
+import { foeSprite, heroSprite } from './quest-art.js';
 
 const STORE = { best: 'pao-quest-best' };
 const readCount = (key) => { try { return Math.max(0, Number(localStorage.getItem(key)) || 0); } catch { return 0; } };
@@ -68,15 +70,19 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
     hp.append(fill);
     const num = el('span', 'qh-num');
     const fig = el('span', 'qh-fig');
+    const art = heroSprite(index);
+    fig.append(art ?? el('b', 'qh-fallback', hero.glyph));
+    // The badge in the name tag matches this hero's tile, so the board and the party read as one.
     const glyph = el('b', 'qh-glyph', hero.glyph);
-    fig.append(el('i', 'qh-head'), el('i', 'qh-body'), glyph);
-    const name = el('span', 'qh-name', hero.name);
+    const name = el('span', 'qh-name');
+    name.append(glyph, hero.name);
     card.append(shield, hp, num, fig, name);
     // Only the guardian taunts.
     const taunt = index === 2 ? el('span', 'qh-taunt', '嘲讽') : null;
     if (taunt) { taunt.hidden = true; card.append(taunt); }
     partyRow.append(card);
-    return { card, fill, num, shield, taunt, fig, glyph };
+    // arm: the weapon arm that swings on its own; tip: where a spell leaves from.
+    return { card, fill, num, shield, taunt, fig, glyph, arm: art?.querySelector('.qa-arm'), tip: art?.querySelector('.qa-tip') ?? fig };
   });
 
   const tiles = [];
@@ -107,14 +113,16 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
       hp.append(fill);
       const num = el('span', 'qe-num');
       const body = el('span', 'qe-body');
-      const glyph = el('b', 'qe-glyph', enemy.glyph);
+      const art = foeSprite(enemy.id);
+      const glyph = el('b', 'qe-glyph', art ? undefined : enemy.glyph);
+      if (art) glyph.append(art);
       body.append(glyph);
       const name = el('span', 'qe-name', enemy.name);
       card.append(intent, hp, num, body, name);
       card.classList.toggle('boss', enemy.boss);
       card.addEventListener('click', () => { if (busy) return; setTarget(state, index); paintEnemies(); });
       enemiesRow.append(card);
-      return { card, fill, num, intent, body, glyph };
+      return { card, fill, num, intent, body, glyph, arm: art?.querySelector('.qa-arm') };
     });
   }
 
@@ -221,6 +229,8 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
       { transform: `translate(${dx}px,${dy}px) scale(.9)` }
     ], { duration, easing: 'cubic-bezier(.45,0,.75,1)' });
   }
+  // A weapon arm swinging through a list of [offset, degrees] keys about its own pivot.
+  const swing = (arm, keys, duration) => play(arm, keys.map(([offset, deg]) => ({ offset, transform: `rotate(${deg}deg)` })), { duration, easing: 'ease-in-out' });
   const ring = (className, point, size = 1.6, duration = 420) => flash(`qring ${className}`, point, [
     { transform: 'scale(.2)', opacity: 1 },
     { transform: `scale(${size})`, opacity: 0 }
@@ -290,15 +300,17 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
       { transform: `translate(${dx}px,${dy}px)`, offset: 0.62 },
       { transform: 'translate(0,0)' }
     ], { duration: 640, easing: 'ease-in-out' });
-    play(hero.fig, [{ transform: 'rotate(0)' }, { transform: 'rotate(8deg)', offset: 0.35 }, { transform: 'rotate(-14deg)', offset: 0.5 }, { transform: 'rotate(0)' }], { duration: 640 });
+    // Wind up behind the shoulder, then bring the sword down through the enemy.
+    swing(hero.arm, [[0, 0], [0.3, -55], [0.46, 80], [0.68, 64], [1, 0]], 640);
+    play(hero.fig, [{ transform: 'rotate(0)' }, { transform: 'rotate(-6deg)', offset: 0.3 }, { transform: 'rotate(8deg)', offset: 0.48 }, { transform: 'rotate(0)' }], { duration: 640 });
     if (!await waitMs(290, my)) return;
     const point = at(view.body);
-    const swing = (angle) => flash('qslash', point, [
+    const slash = (angle) => flash('qslash', point, [
       { transform: `rotate(${angle}deg) scale(.4)`, opacity: 1 },
       { transform: `rotate(${angle + 50}deg) scale(1.15)`, opacity: 0 }
     ], { duration: 320, easing: 'ease-out' });
-    swing(-70);
-    if (run >= 4) setTimeout(() => swing(20), 90);
+    slash(-70);
+    if (run >= 4) setTimeout(() => slash(20), 90);
     burst(point, 't0', 7, unit() * 7);
     for (const ev of hits) hitFoe(ev);
     aftermath(events);
@@ -308,9 +320,10 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   async function mage(events, run, my) {
     const hero = heroCards[1], hits = events.filter((ev) => ev.kind === 'damage');
     play(hero.fig, [{ transform: 'translateY(0)' }, { transform: 'translateY(-14%) scale(1.06)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 520, easing: 'ease-out' });
-    ring('t1', at(hero.glyph), 1.4, 360);
-    if (!await waitMs(170, my)) return;
-    const from = at(hero.glyph);
+    swing(hero.arm, [[0, 0], [0.3, -22], [0.5, 30], [1, 0]], 560);
+    ring('t1', at(hero.tip), 1.4, 360);
+    if (!await waitMs(200, my)) return;
+    const from = at(hero.tip);
     await Promise.all(hits.map((ev, k) => {
       const view = foeView(ev.enemy);
       if (!view) return null;
@@ -329,7 +342,8 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   async function guardian(events, run, my) {
     const hero = heroCards[2];
     play(hero.card, [{ transform: 'translateX(0)' }, { transform: `translateX(${unit() * 3}px)`, offset: 0.35 }, { transform: 'translateX(0)' }], { duration: 520, easing: 'ease-out' });
-    play(hero.fig, [{ transform: 'scale(1)' }, { transform: 'scale(1.14)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 520 });
+    play(hero.fig, [{ transform: 'scale(1)' }, { transform: 'scale(1.1)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 520 });
+    swing(hero.arm, [[0, 0], [0.35, -16], [0.6, -10], [1, 0]], 560);
     if (!await waitMs(170, my)) return;
     for (const ev of events) {
       if (ev.kind !== 'shield') continue;
@@ -353,9 +367,10 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   async function priest(events, run, my) {
     const hero = heroCards[3];
     play(hero.fig, [{ transform: 'translateY(0)' }, { transform: 'translateY(-10%)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 520, easing: 'ease-out' });
-    ring('t3', at(hero.glyph), 1.6, 380);
-    if (!await waitMs(150, my)) return;
-    const from = at(hero.glyph);
+    swing(hero.arm, [[0, 0], [0.35, -30], [0.7, -24], [1, 0]], 600);
+    ring('t3', at(hero.tip), 1.6, 380);
+    if (!await waitMs(180, my)) return;
+    const from = at(hero.tip);
     await Promise.all(events.filter((ev) => ev.kind === 'heal' || ev.kind === 'revive').map((ev) => {
       const target = heroCards[ev.hero];
       return shoot('qmote', from, at(target.fig), 240, unit() * 5).then(() => {
@@ -477,6 +492,7 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
     const from = at(view.body);
     if (cast.k === 'aoe') {
       play(view.body, [{ transform: 'translateY(0)' }, { transform: 'translateY(-18%) scale(1.1)', offset: 0.45 }, { transform: 'translateY(0)' }], { duration: 560, easing: 'ease-out' });
+      swing(view.arm, [[0, 0], [0.45, 40], [0.7, -20], [1, 0]], 560);
       if (!await waitMs(260, my)) return false;
       const middle = at(partyRow);
       ring('wave', { x: from.x, y: from.y }, 1.2, 300);
@@ -485,6 +501,7 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
       ring('wave', at(victims[0]?.fig ?? partyRow), 3, 420);
     } else if (cast.k === 'pierce') {
       play(view.body, [{ transform: 'translateX(0)' }, { transform: 'translateX(8%)', offset: 0.4 }, { transform: 'translateX(-6%)', offset: 0.6 }, { transform: 'translateX(0)' }], { duration: 520 });
+      swing(view.arm, [[0, 0], [0.4, 30], [0.6, -34], [1, 0]], 520);
       if (!await waitMs(200, my)) return false;
       if (victims[0]) await shoot('qdark', from, at(victims[0].fig), 260, unit() * 3);
       if (!live(my)) return false;
@@ -499,6 +516,8 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
         { transform: `translate(${dx}px,${dy}px)`, offset: 0.58 },
         { transform: 'translate(0,0)' }
       ], { duration: 640, easing: 'ease-in-out' });
+      // Facing left, a forward blow is a counter-clockwise swing.
+      swing(view.arm, [[0, 0], [0.3, 38], [0.46, -60], [0.62, -48], [1, 0]], 640);
       if (!await waitMs(290, my)) return false;
       if (victims[0]) flash('qslash foe', at(victims[0].fig), [{ transform: 'rotate(110deg) scale(.4)', opacity: 1 }, { transform: 'rotate(160deg) scale(1.1)', opacity: 0 }], { duration: 300 });
       for (const ev of hurts) hurtHero(ev);

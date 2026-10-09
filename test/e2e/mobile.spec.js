@@ -239,6 +239,8 @@ test('三消勇者团: enemies, party and the 6×6 board fit on one screen', asy
   await expect(page.locator('.qe')).toHaveCount(1);
   await expect(page.locator('.qe-intent')).toContainText('攻击');
   await expect(page.locator('.quest-scene')).toBeVisible();
+  await expect(page.locator('.qh-fig svg.qa')).toHaveCount(4);
+  await expect(page.locator('.qe-glyph svg.qa')).toHaveCount(1);
   const fit = await page.evaluate(() => {
     const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
     const board = rect('.quest-board'), last = [...document.querySelectorAll('#mobile-controls button')].at(-1).getBoundingClientRect(), enemy = rect('.qe');
@@ -246,6 +248,17 @@ test('三消勇者团: enemies, party and the 6×6 board fit on one screen', asy
   });
   expect(fit).toMatchObject({ wide: true, board: true, enemy: true, controls: true });
   expect(fit.size).toBeGreaterThan(240);
+});
+
+test('三消勇者团: every hero and monster has a drawn figure that parses', async ({ page }) => {
+  await page.goto('/');
+  const art = await page.evaluate(async () => {
+    const { heroSprite, foeSprite, FOE_IDS } = await import('/quest-art.js');
+    return { heroes: [0, 1, 2, 3].map((i) => heroSprite(i)?.tagName), foes: FOE_IDS.map((id) => foeSprite(id)?.tagName), ids: FOE_IDS };
+  });
+  expect(art.heroes).toEqual(['svg', 'svg', 'svg', 'svg']);
+  expect(art.foes).toEqual(art.ids.map(() => 'svg'));
+  expect([...art.ids].sort()).toEqual(['bat', 'drake', 'gargoyle', 'goblin', 'lich', 'ogre', 'skeleton', 'slime', 'wraith']);
 });
 
 test('三消勇者团: a swap that lines up three resolves, then the enemy answers', async ({ page }) => {
@@ -260,6 +273,30 @@ test('三消勇者团: a swap that lines up three resolves, then the enemy answe
   await expect.poll(async () => { const s = await quest(page); return s.phase === 'player' && (s.turns >= 1 || s.bonus); }, { timeout: 8000 }).toBe(true);
   expect((await quest(page)).score).toBeGreaterThanOrEqual(0);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test('三消勇者团: each hero\'s action animation plays through and hands the turn back', async ({ page }) => {
+  test.setTimeout(45_000);
+  await openQuest(page);
+  for (const type of [0, 1, 2, 3]) {
+    await page.locator('#restart-game').click();
+    // A swap whose first step makes this hero act; the slime is kept alive so the enemy answers.
+    const move = await page.evaluate(async (type) => {
+      const { validSwaps, swapTiles, resolveStep } = await import('/quest-core.js');
+      const { state } = window.__arcade.quest;
+      state.enemies[0].hp = state.enemies[0].maxHp = 9999;
+      for (const swap of validSwaps(state.board)) {
+        const copy = structuredClone(state);
+        swapTiles(copy, ...swap.a, ...swap.b);
+        if (resolveStep(copy).groups.some((group) => group.type === type)) return swap;
+      }
+      return null;
+    }, type);
+    if (!move) continue;
+    await page.locator(`.qt[data-r="${move.a[0]}"][data-c="${move.a[1]}"]`).click();
+    await page.locator(`.qt[data-r="${move.b[0]}"][data-c="${move.b[1]}"]`).click();
+    await expect.poll(async () => { const s = await quest(page); return s.phase === 'player' && (s.turns >= 1 || s.bonus); }, { timeout: 9000 }).toBe(true);
+  }
 });
 
 test('三消勇者团: a swap that makes no match is refused without costing the turn', async ({ page }) => {
