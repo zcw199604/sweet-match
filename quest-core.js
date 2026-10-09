@@ -12,10 +12,13 @@
 export const QUEST = {
   COLS: 6,
   ROWS: 6,
-  STAGES: 12,
-  BOSS_STAGES: [6, 12],
+  STAGES: 50,
+  ACT_LEN: 10,
+  BOSS_STAGES: [10, 20, 30, 40, 50],
   COMBO_STEP: 0.25,
-  PERK_CAP: 3,
+  PERK_CAP: 12,
+  VIGOR_CAP: 12,
+  RALLY_CAP: 4,
   PERK_STEP: 0.25,
   GUARDIAN_REDUCE: 0.3,
   TAUNT_TURNS: 2,
@@ -25,7 +28,8 @@ export const QUEST = {
   HP_START: 1.5,
   HP_GROWTH: 0.10,
   ATK_BASE: 2.2,
-  ATK_GROWTH: 0.13
+  ATK_GROWTH: 0.05,
+  SCORE_GROWTH: 0.08
 };
 
 export const HEROES = [
@@ -47,15 +51,39 @@ const ENEMIES = [
   { id: 'wraith', name: '幽灵', glyph: '👻', hp: 78, def: 3, score: 100, moves: [{ n: '附身', k: 'drain', p: 12 }, { n: '哀嚎', k: 'aoe', p: 13 }] },
   { id: 'ogre', name: '食人魔', glyph: '👹', hp: 110, def: 6, score: 130, moves: [{ n: '重锤', k: 'hit', p: 18 }, { n: '咆哮', k: 'aoe', p: 11 }, { n: '蛮力', k: 'hit', p: 12 }] },
   { id: 'drake', name: '幼龙', glyph: '🐲', hp: 124, def: 5, score: 160, moves: [{ n: '龙息', k: 'aoe', p: 16 }, { n: '利爪', k: 'hit', p: 16 }, { n: '俯冲', k: 'pierce', p: 15 }] },
-  { id: 'lich', name: '巫妖王', glyph: '🧙', hp: 420, def: 6, score: 1000, boss: true, moves: [{ n: '死亡射线', k: 'pierce', p: 22 }, { n: '灵魂风暴', k: 'aoe', p: 20 }, { n: '汲魂', k: 'drain', p: 20 }, { n: '白骨重塑', k: 'mend', p: 0 }, { n: '末日裁决', k: 'hit', p: 28 }] }
+  { id: 'lich', name: '巫妖王', glyph: '🧙', hp: 420, def: 6, score: 1000, boss: true, moves: [{ n: '死亡射线', k: 'pierce', p: 22 }, { n: '灵魂风暴', k: 'aoe', p: 20 }, { n: '汲魂', k: 'drain', p: 20 }, { n: '白骨重塑', k: 'mend', p: 0 }, { n: '末日裁决', k: 'hit', p: 28 }] },
+  { id: 'mushroom', name: '毒蘑菇', glyph: '🍄', hp: 48, def: 1, score: 50, moves: [{ n: '头槌', k: 'hit', p: 7 }, { n: '孢子云', k: 'aoe', p: 9 }] },
+  { id: 'wolf', name: '野狼', glyph: '🐺', hp: 52, def: 1, score: 55, moves: [{ n: '撕咬', k: 'hit', p: 8 }, { n: '嚎叫', k: 'aoe', p: 7 }, { n: '扑杀', k: 'hit', p: 11 }] },
+  { id: 'spider', name: '毒蜘蛛', glyph: '🕷', hp: 60, def: 2, score: 70, moves: [{ n: '毒牙', k: 'pierce', p: 8 }, { n: '吐丝', k: 'hit', p: 6 }, { n: '毒液', k: 'hit', p: 11 }] },
+  { id: 'assassin', name: '影刃', glyph: '🥷', hp: 58, def: 3, score: 90, moves: [{ n: '飞刀', k: 'hit', p: 8 }, { n: '背刺', k: 'pierce', p: 14 }] },
+  { id: 'fire', name: '火精灵', glyph: '🔥', hp: 70, def: 2, score: 110, moves: [{ n: '灼烧', k: 'hit', p: 11 }, { n: '烈焰风暴', k: 'aoe', p: 13 }, { n: '引燃', k: 'drain', p: 10 }] },
+  { id: 'knight', name: '黑骑士', glyph: '🛡', hp: 120, def: 7, score: 150, moves: [{ n: '斩击', k: 'hit', p: 16 }, { n: '暗影突刺', k: 'pierce', p: 14 }, { n: '十字斩', k: 'aoe', p: 12 }] },
+  { id: 'golem', name: '岩石魔像', glyph: '🗿', hp: 150, def: 8, score: 170, moves: [{ n: '重拳', k: 'hit', p: 20 }, { n: '地震', k: 'aoe', p: 13 }, { n: '岩肤修补', k: 'mend', p: 0 }] },
+  { id: 'spiderqueen', name: '蛛后', glyph: '🕸', hp: 320, def: 4, score: 600, boss: true, moves: [{ n: '毒牙', k: 'pierce', p: 18 }, { n: '蛛网缠绕', k: 'aoe', p: 13 }, { n: '啃食', k: 'drain', p: 17 }, { n: '产卵修复', k: 'mend', p: 0 }, { n: '猎杀', k: 'hit', p: 22 }] },
+  { id: 'infernal', name: '炎魔', glyph: '😈', hp: 520, def: 7, score: 1500, boss: true, moves: [{ n: '烈焰鞭', k: 'hit', p: 24 }, { n: '地狱火', k: 'aoe', p: 20 }, { n: '熔岩弹', k: 'pierce', p: 22 }, { n: '吸魂', k: 'drain', p: 18 }, { n: '狱火重生', k: 'mend', p: 0 }, { n: '毁灭一击', k: 'hit', p: 32 }] }
 ];
 const byId = (id) => ENEMIES.find((entry) => entry.id === id);
 
-// Who turns up on each stage. Stage 6 and 12 end on a boss.
-const WAVES = [
-  ['slime'], ['slime', 'bat'], ['bat', 'goblin'], ['goblin', 'bat'], ['goblin', 'skeleton'], ['gargoyle'],
-  ['skeleton', 'wraith'], ['wraith', 'ogre'], ['ogre', 'skeleton'], ['drake', 'wraith'], ['drake', 'ogre'], ['lich', 'wraith']
-];
+// Who turns up on each stage. Every tenth stage ends an act on a boss; the fifth of each act
+// is an elite pair. Ordinary waves are built from a roster that gets tougher every seven stages,
+// so the table stays a function instead of fifty hand-written rows.
+const ROSTER = ['slime', 'bat', 'mushroom', 'wolf', 'goblin', 'spider', 'skeleton', 'assassin', 'fire', 'wraith', 'knight', 'ogre', 'drake', 'golem'];
+const BOSS_WAVES = { 10: ['gargoyle'], 20: ['spiderqueen', 'spider'], 30: ['lich', 'assassin'], 40: ['gargoyle', 'spiderqueen'], 50: ['infernal', 'lich'] };
+export function waveOf(stage) {
+  if (BOSS_WAVES[stage]) return BOSS_WAVES[stage];
+  if (stage === 1) return ['slime'];
+  const top = ROSTER.length - 1;
+  const lead = Math.min(top, Math.floor(((stage - 1) * ROSTER.length) / QUEST.STAGES));
+  if (stage % QUEST.ACT_LEN === 5) return [ROSTER[Math.min(top, lead + 1)], ROSTER[lead]];
+  // The partner is one of the ranks around the lead, never a copy of it; stepping by 7 walks the whole window.
+  const window = [];
+  for (let rank = Math.max(0, lead - 3); rank <= Math.min(top, lead + 2); rank += 1) if (rank !== lead) window.push(rank);
+  const partner = window[(stage * 7) % window.length];
+  return [ROSTER[lead], ROSTER[partner]];
+}
+export const actOf = (stage) => Math.ceil(stage / QUEST.ACT_LEN);
+// Later stages are worth more, but gently: a flawless 50-stage run must stay under the board's 100k cap.
+export const stageValue = (stage) => 1 + (stage - 1) * QUEST.SCORE_GROWTH;
 
 export const PERKS = [
   { id: 'warrior', name: '战士 · 精锐', desc: '战士的方块效果 +25%', hero: 0 },
@@ -65,7 +93,7 @@ export const PERKS = [
   { id: 'vigor', name: '全队强健', desc: '全员最大生命 +18，并立刻回复 18', hero: -1 },
   { id: 'rally', name: '战场鼓舞', desc: '连击加成再多 +10%', hero: -1 }
 ];
-const perkCap = (perk) => (perk.id === 'vigor' || perk.id === 'rally' ? 4 : QUEST.PERK_CAP);
+const perkCap = (perk) => (perk.id === 'vigor' ? QUEST.VIGOR_CAP : perk.id === 'rally' ? QUEST.RALLY_CAP : QUEST.PERK_CAP);
 
 function random(state) {
   state.rng = (Math.imul(state.rng, 1664525) + 1013904223) >>> 0;
@@ -152,7 +180,7 @@ function gravity(state) {
 const hpScale = (stage) => QUEST.HP_START + (stage - 1) * QUEST.HP_GROWTH;
 const atkScale = (stage) => QUEST.ATK_BASE * (1 + (stage - 1) * QUEST.ATK_GROWTH);
 function spawn(stage) {
-  return WAVES[stage - 1].map((id, index) => {
+  return waveOf(stage).map((id, index) => {
     const base = byId(id), hp = Math.round(base.hp * hpScale(stage));
     return {
       id: base.id, name: base.name, glyph: base.glyph, boss: Boolean(base.boss), uid: index,
@@ -249,7 +277,7 @@ function hurtEnemy(state, enemy, amount, events, hero, pierce) {
   events.push({ kind: 'damage', enemy: enemy.uid, amount: dealt, hero, pierce });
   if (enemy.hp <= 0) {
     state.kills += 1;
-    state.score += enemy.score * state.stage;
+    state.score += Math.round(enemy.score * stageValue(state.stage));
     events.push({ kind: 'kill', enemy: enemy.uid });
   }
 }
@@ -342,7 +370,7 @@ function ensurePlayable(state) {
 
 function offerPerks(state) {
   const open = PERKS.filter((perk) => perkLevel(state, perk.id) < perkCap(perk));
-  const pool = [...open], offers = [];
+  const pool = open.length ? [...open] : [...PERKS], offers = [];
   while (offers.length < 3 && pool.length) offers.push(pool.splice(pick(state, pool.length), 1)[0].id);
   return offers;
 }
@@ -354,9 +382,9 @@ function offerPerks(state) {
 export function finishMove(state) {
   if (state.phase !== 'resolving') return { outcome: 'none' };
   if (!state.enemies.some((enemy) => enemy.hp > 0)) {
-    state.score += 100 * state.stage + 60 * living(state).length + Math.max(0, 10 - state.turns) * 15;
+    state.score += Math.round(100 * stageValue(state.stage)) + 60 * living(state).length + Math.max(0, 10 - state.turns) * 15;
     if (state.stage >= QUEST.STAGES) {
-      state.score += 1000;
+      state.score += 3000;
       state.phase = 'won';
       return { outcome: 'won' };
     }

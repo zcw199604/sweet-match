@@ -174,7 +174,8 @@ body.playing[data-mode=surge] .canvas-wrap.portrait{width:max(160px,calc((100vh 
 .quest-scene[data-zone=canyon]{--sky1:#f08a4b;--sky2:#ffdca8;--far:#d79466;--near:#a9603b;--grass:#c98a4e;--soil:#6e4128}
 .quest-scene[data-zone=dusk]{--sky1:#4b3a86;--sky2:#ff9fb4;--far:#7a5f9f;--near:#33645f;--grass:#4b8c6c;--soil:#3a2c48}
 .quest-scene[data-zone=castle]{--sky1:#0c1030;--sky2:#3b2c6c;--far:#2c2558;--near:#1b1838;--grass:#3a3468;--soil:#17132c}
-.quest-scene[data-zone=castle]::before,.quest-scene[data-zone=dusk]::before{content:"";position:absolute;inset:0 0 40%;background:radial-gradient(circle at 18% 20%,#fff 0 .12em,transparent .16em),radial-gradient(circle at 46% 12%,#fff 0 .1em,transparent .14em),radial-gradient(circle at 70% 26%,#fff 0 .12em,transparent .16em),radial-gradient(circle at 88% 10%,#fffbe0 0 calc(var(--u) * 3),transparent calc(var(--u) * 3.2));opacity:.75}
+.quest-scene[data-zone=ember]{--sky1:#2a0a14;--sky2:#d9482a;--far:#6b1f2a;--near:#3d1020;--grass:#5a2230;--soil:#1c0a12}
+.quest-scene[data-zone=ember]::before,.quest-scene[data-zone=castle]::before,.quest-scene[data-zone=dusk]::before{content:"";position:absolute;inset:0 0 40%;background:radial-gradient(circle at 18% 20%,#fff 0 .12em,transparent .16em),radial-gradient(circle at 46% 12%,#fff 0 .1em,transparent .14em),radial-gradient(circle at 70% 26%,#fff 0 .12em,transparent .16em),radial-gradient(circle at 88% 10%,#fffbe0 0 calc(var(--u) * 3),transparent calc(var(--u) * 3.2));opacity:.75}
 .quest-scene[data-zone=dusk]::before{opacity:.35}
 .quest-scene>i{position:absolute;left:0;right:0;background-position:0 100%}
 .qs-far{bottom:22%;height:42%;background:radial-gradient(50% 100% at 50% 100%,var(--far) 98%,transparent 100%) 0 100%/calc(var(--u) * 36) 100% repeat-x}
@@ -233,7 +234,7 @@ body.playing[data-mode=surge] .canvas-wrap.portrait{width:max(160px,calc((100vh 
 .qe.boss .qe-glyph{font-size:calc(var(--u) * 19)}
 .qe.boss .qe-glyph .qa{width:calc(var(--u) * 24);height:calc(var(--u) * 24)}
 /* Fliers hover higher and bob more; the slime squashes instead of bobbing. */
-.qe:is([data-id=bat],[data-id=wraith],[data-id=lich]) .qe-glyph{animation:qhover 2.6s ease-in-out infinite}
+.qe:is([data-id=bat],[data-id=wraith],[data-id=lich],[data-id=fire],[data-id=assassin]) .qe-glyph{animation:qhover 2.6s ease-in-out infinite}
 .qe-name{padding:0 calc(var(--u) * 1.2);border-radius:99px;background:#0b0f1ca6;font-weight:800;white-space:nowrap}
 .qe.boss .qe-name::before{content:"👑 "}
 .qe.target .qe-name{background:var(--yellow);color:#5a4300}
@@ -313,7 +314,7 @@ body.playing[data-mode=surge] .canvas-wrap.portrait{width:max(160px,calc((100vh 
 .qh[data-hero="1"] .qa-blink{animation-delay:-1.4s}.qh[data-hero="2"] .qa-blink{animation-delay:-2.6s}.qe+.qe .qa-blink{animation-delay:-3.2s}
 .qa .qa-wing{--s:1;animation:qflap .5s ease-in-out infinite alternate}
 .qa .qa-wing.r{--s:-1;animation-delay:-.08s}
-.qe[data-id=gargoyle] .qa-wing,.qe[data-id=drake] .qa-wing{animation-duration:1.4s}
+.qe[data-id=gargoyle] .qa-wing,.qe[data-id=drake] .qa-wing,.qe[data-id=infernal] .qa-wing{animation-duration:1.4s}
 .qa .qa-cape{transform-box:fill-box;transform-origin:100% 50%;animation:qsway 1.5s ease-in-out infinite alternate}
 .qa .qa-glow{animation:qglow 1.4s ease-in-out infinite alternate}
 .qe[data-id=slime] .qe-glyph{animation:qsquish 1.6s ease-in-out infinite;transform-origin:50% 100%}

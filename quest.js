@@ -5,7 +5,7 @@
 // dashes in, the mage throws a bolt, …), and the enemies answer the same way.
 // Everything is built with textContent, never innerHTML, so no text can inject markup;
 // the figures come from quest-art.js, static SVG parsed once and cloned.
-import { chooseReward, createQuest, enemyStep, finishMove, HEROES, intentText, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from './quest-core.js';
+import { actOf, chooseReward, createQuest, enemyStep, finishMove, HEROES, intentText, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from './quest-core.js';
 import { foeSprite, heroSprite } from './quest-art.js';
 
 const STORE = { best: 'pao-quest-best' };
@@ -18,8 +18,9 @@ const el = (tag, className, text) => {
   return node;
 };
 const MOVE_ICON = { hit: '🗡', aoe: '💥', pierce: '🎯', drain: '🩸', mend: '💚' };
-// The road changes as the party travels: meadow, the gargoyle's canyon, a dusk forest, the lich's night.
-const zoneOf = (stage) => (stage <= 5 ? 'meadow' : stage === 6 ? 'canyon' : stage <= 11 ? 'dusk' : 'castle');
+// The road changes with each act of ten stages: meadow, canyon, dusk forest, the lich's night, an ember waste.
+const ZONES = ['meadow', 'canyon', 'dusk', 'castle', 'ember'];
+const zoneOf = (stage) => ZONES[Math.min(ZONES.length - 1, actOf(stage) - 1)];
 const calm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
@@ -53,9 +54,10 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   wrap.replaceChildren(field, fx, overlay);
 
   // ---- build ----
-  const stops = Array.from({ length: QUEST.STAGES }, (_, index) => {
+  // The route shows the current act only: ten stops, the last one a boss.
+  const stops = Array.from({ length: QUEST.ACT_LEN }, (_, index) => {
     const stop = el('i');
-    if (QUEST.BOSS_STAGES.includes(index + 1)) stop.className = 'boss';
+    if (index === QUEST.ACT_LEN - 1) stop.className = 'boss';
     route.append(stop);
     return stop;
   });
@@ -171,9 +173,10 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   }
   function paintRoute() {
     scene.dataset.zone = zoneOf(state.stage);
+    const first = (actOf(state.stage) - 1) * QUEST.ACT_LEN;
     stops.forEach((stop, index) => {
-      stop.classList.toggle('done', index + 1 < state.stage);
-      stop.classList.toggle('now', index + 1 === state.stage);
+      stop.classList.toggle('done', first + index + 1 < state.stage);
+      stop.classList.toggle('now', first + index + 1 === state.stage);
     });
   }
   function paintHud() {
