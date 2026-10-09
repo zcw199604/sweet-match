@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOARDS, cleanName, d1Store, derivePid, formatValue, handlePlayer, handleScores, isPassword, isPlayerId, memoryStore, sha256Hex } from '../leaderboard-core.js';
+import { BOARDS, boardsOf, cleanName, GAMES, d1Store, derivePid, formatValue, handlePlayer, handleScores, isPassword, isPlayerId, memoryStore, sha256Hex } from '../leaderboard-core.js';
 
 const PID = (n) => `player-${String(n).padStart(4, '0')}`;
 const post = (store, body, now) => handleScores(new Request('http://x/api/scores', { method: 'POST', body: JSON.stringify(body) }), store, now);
@@ -155,4 +155,24 @@ test('身份: 密码格式与身份接口的参数校验', async () => {
   assert.equal((await handlePlayer(new Request('http://x/api/player', { method: 'POST', body: '{坏的' }), store)).status, 400);
   assert.equal((await handlePlayer(new Request('http://x/api/player', { method: 'POST', body: 'x'.repeat(2000) }), store)).status, 413);
   assert.equal((await handlePlayer(new Request('http://x/api/player', { method: 'DELETE' }), store)).status, 405);
+});
+
+test('2048 and 数独 boards: 数独 ranks by time (lower is better) in three levels, and every board belongs to a listed game', () => {
+  assert.deepEqual(boardsOf('sudoku'), ['sudoku-easy', 'sudoku-normal', 'sudoku-hard']);
+  assert.ok(boardsOf('sudoku').every((id) => BOARDS[id].order === 'asc' && BOARDS[id].scale === 10));
+  assert.equal(formatValue('sudoku-easy', 1234), '123.4 秒');
+  assert.deepEqual(boardsOf('g2048'), ['g2048']);
+  assert.equal(BOARDS.g2048.order, 'desc');
+  assert.ok(Object.values(BOARDS).every((board) => GAMES.some((game) => game.id === board.game)));
+});
+
+test('数独 and 2048 reject values outside their range', async () => {
+  const store = memoryStore();
+  const bad = async (board, value) => (await post(store, { board, pid: PID(1), name: 'A', value })).status;
+  assert.equal(await bad('g2048', BOARDS.g2048.max + 1), 400);
+  assert.equal(await bad('sudoku-hard', BOARDS['sudoku-hard'].min - 1), 400);
+  assert.equal(await bad('sudoku-hard', BOARDS['sudoku-hard'].max + 1), 400);
+  assert.equal(await bad('sudoku-hard', 6000), 200);
+  const { entries } = await (await get(store, 'board=sudoku-hard')).json();
+  assert.equal(entries[0].value, 6000);
 });

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { GAMES } from '../leaderboard-core.js';
 import { addPlayed, d1Store, emptyState, forOwner, formatAgo, formatPlayed, handleRecent, markOpened, memoryStore, parseState, pendingItems, recentList, restorePending, takePending, viewOf, withServer } from '../recent-core.js';
 
 const MIN = 60_000;
@@ -131,7 +132,7 @@ test('最近常玩: 拒绝非法玩家标识、未知游戏和不合理的数值
   assert.equal(await bad({ items: [{ ...item, ms: -1 }] }), 400);
   assert.equal(await bad({ items: [{ ...item, ms: 13 * 3600_000 }] }), 400);
   assert.equal(await bad({ items: [{ ...item, ms: '1000' }] }), 400);
-  assert.equal(await bad({ items: Array(9).fill(item) }), 400);
+  assert.equal(await bad({ items: Array(GAMES.length + 1).fill(item) }), 400);
   assert.equal(await bad({ items: [null] }), 400);
   assert.deepEqual((await (await get(store, PID(1))).json()).games, {}); // 出错的请求不写入
   const future = await (await post(store, { pid: PID(2), items: [{ game: 'pop2', last: 9_999_999_999_999, ms: 0 }] }, 1_000_000)).json();

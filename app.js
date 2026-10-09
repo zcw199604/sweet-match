@@ -22,10 +22,12 @@ const MODE_META = {
   quest: { label: 'ARCADE 06', title: '三消勇者团', help: '交换相邻方块，三个同色相连就会让对应的英雄出手：⚔ 战士砍人、✦ 法师放穿透魔法、⛨ 盾卫举盾并嘲讽、✚ 牧师治疗。连成 4 个技能升级，5 个是大招；连一次 4 连以上还能多走一步。敌人头上会预告下一招，盾卫和牧师倒下了，他们的方块就没用了。点敌人可以换集火目标，一共 50 关，分成 5 章，每章最后（第 10、20、30、40、50 关）是首领。' },
   park: { label: 'ARCADE 07', title: '挪车接客', help: '点一辆车让它沿车顶的箭头开出去：前面没有挡路的车才开得动。开出来的车停进上方五个车位，候车区排在最前面的乘客会上同色的车，坐满就开走。车位停满、前面的乘客又找不到自己的车就输了，先看队伍里谁在前面，再决定挪哪辆。一共 30 关，点「提示」会让一辆不会死局的车闪一下。' },
   pour: { label: 'ARCADE 08', title: '倒水排序', help: '点一个瓶子再点另一个，把它顶上那一段同色的水倒过去：目标瓶要么是空的，要么顶上是同样的颜色，还得有空位。一瓶倒满同一种颜色就会封口收进上方的收集架，全部收集完过关。倒不动时用下面的道具：回退一步、加一个空瓶、打乱重排、提示一步；这些每关次数有限，用得越少星级越高，步数不超过「最少步数」是三星。一共 50 关，越往后颜色越多、空瓶越少；进度会保存在这台设备上。' },
+  g2048: { label: 'ARCADE 09', title: '2048', help: '滑动屏幕（或按方向键 / WASD），所有方块一起朝那个方向滑，两个相同数字撞上就合成一个、分数加上新数字。每滑一次，空位里会冒出一个 2 或 4。合出 2048 就算通关，之后还能接着往上合；方块塞满、又没有能合的就结束。每局有 3 次「撤销」（也可以按 Z）；没打完的一局会存在这台设备上，分数在结束或重新开始时提交榜单。' },
+  sudoku: { label: 'ARCADE 10', title: '数独', help: '每行、每列、每个 3×3 宫都要填进 1～9，且不能重复。点一格再点下面的数字填入；填错会亮红并扣一次机会，错满 3 次本局失败。打开「笔记」可以在格子里记候选数，填对一个数时同行同列同宫的候选会自动划掉。点「提示」会直接填出一格，但用了提示的局不计入榜单；其余按用时排名。简单、普通、困难各有自己的榜单和各自没做完的题，题目都保证只有唯一解：简单和普通光靠「只剩一个可能」就能推完，困难需要更多技巧。电脑上可以用 1～9、方向键、Backspace、N、Z、H。' },
   goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
-// 抓大鹅, 方块爆破, 三消勇者团, 挪车接客 and 倒水排序 are solo games: no seats, no snapshots, no co-op toggle.
-const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour'];
+// 抓大鹅, 方块爆破, 三消勇者团, 挪车接客, 倒水排序, 2048 and 数独 are solo games: no seats, no snapshots, no co-op toggle.
+const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'sudoku'];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -66,6 +68,12 @@ let parkToken = 0;
 // 倒水排序 is one canvas (pour.js, loaded on first use); app.js only frames it.
 let pour = null;
 let pourToken = 0;
+// 2048 and 数独 are one canvas each (g2048.js / sudoku.js, loaded on first use); app.js only frames them.
+let g2048 = null;
+let g2048Token = 0;
+let sudoku = null;
+let sudokuToken = 0;
+let sudokuLevel = 'normal';
 // 泡噗3 无尽模式: the choice is remembered, and so is the best single-player score.
 let pop3Endless = false;
 let pop3Best = 0;
@@ -87,7 +95,7 @@ let lan = { role: 'solo', token: null, code: null, base: '', source: null, event
 let rtc = { peer: null, channel: null };
 
 function showScreen(id) {
-  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); }
+  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSudoku(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
@@ -270,10 +278,14 @@ function buildStage() {
   stopQuest();
   stopPark();
   stopPour();
+  stopG2048();
+  stopSudoku();
   if (mode === 'goose') return buildGooseStage(stage, meta);
   if (mode === 'quest') return buildQuestStage(stage, meta);
   if (mode === 'park') return buildParkStage(stage, meta);
   if (mode === 'pour') return buildPourStage(stage, meta);
+  if (mode === 'g2048') return buildG2048Stage(stage, meta);
+  if (mode === 'sudoku') return buildSudokuStage(stage, meta);
   // Only 泡噗2 is reskinned, so only that board gets the picker.
   const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
   stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap${viewHeight() === HEIGHT ? '' : ' portrait'}" style="--h:${viewHeight()}"><canvas class="game-canvas" width="720" height="${viewHeight()}" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
@@ -291,7 +303,7 @@ function startGame(nextMode) {
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   noteOpened(mode);
   // The 2D loop idles while state is null, which leaves the frame to goose.js.
-  if (mode === 'goose' || mode === 'quest' || mode === 'park' || mode === 'pour') { state = null; buildStage(); showScreen('game'); return; }
+  if (['goose', 'quest', 'park', 'pour', 'g2048', 'sudoku'].includes(mode)) { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame(); resetBlastView();
@@ -374,6 +386,61 @@ async function mountQuestView(wrap) {
     quest = mountQuest(wrap, { onHud: (text) => { $('#score-text').textContent = text; }, onResult: reportScore });
   } catch (error) {
     if (token !== questToken) return;
+    console.error(error);
+    wrap.innerHTML = '<p class="quest-loading">游戏加载失败，请刷新页面重试。</p>';
+  }
+}
+function stopG2048() {
+  g2048Token += 1;
+  g2048?.destroy();
+  g2048 = null;
+}
+function buildG2048Stage(stage, meta) {
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap g2048-wrap"></div><p class="game-help">${meta.help}</p>`;
+  $('#restart-game').addEventListener('click', () => g2048?.restart());
+  mountG2048View(stage.querySelector('.g2048-wrap'));
+}
+async function mountG2048View(wrap) {
+  const token = g2048Token;
+  try {
+    const { mountG2048 } = await import('./g2048.js');
+    // The player left (or rebuilt the stage) while the module was loading.
+    if (token !== g2048Token) return;
+    g2048 = mountG2048(wrap, { onHud: (text) => { $('#score-text').textContent = text; }, onResult: reportScore });
+  } catch (error) {
+    if (token !== g2048Token) return;
+    console.error(error);
+    wrap.innerHTML = '<p class="quest-loading">游戏加载失败，请刷新页面重试。</p>';
+  }
+}
+function stopSudoku() {
+  sudokuToken += 1;
+  sudoku?.destroy();
+  sudoku = null;
+}
+const SUDOKU_LEVELS = ['easy', 'normal', 'hard'];
+const SUDOKU_LABEL = { easy: '简单', normal: '普通', hard: '困难' };
+const sudokuLevelLabel = () => `${SUDOKU_LABEL[sudokuLevel]} · 切换${SUDOKU_LABEL[SUDOKU_LEVELS[(SUDOKU_LEVELS.indexOf(sudokuLevel) + 1) % 3]]}`;
+function buildSudokuStage(stage, meta) {
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">换一题</button></div></div><div class="canvas-wrap sudoku-wrap"></div><div class="mobile-controls" id="mobile-controls"><button type="button" class="player-toggle" id="sudoku-level">${sudokuLevelLabel()}</button></div><p class="game-help">${meta.help}</p>`;
+  $('#restart-game').addEventListener('click', () => sudoku?.restart());
+  $('#sudoku-level').addEventListener('click', (event) => {
+    sudokuLevel = SUDOKU_LEVELS[(SUDOKU_LEVELS.indexOf(sudokuLevel) + 1) % 3];
+    try { localStorage.setItem('pao-sudoku-level', sudokuLevel); } catch { /* private mode */ }
+    event.currentTarget.textContent = sudokuLevelLabel();
+    sudoku?.setLevel(sudokuLevel);
+    syncActivity();
+  });
+  mountSudokuView(stage.querySelector('.sudoku-wrap'));
+}
+async function mountSudokuView(wrap) {
+  const token = sudokuToken;
+  try {
+    const { mountSudoku } = await import('./sudoku.js');
+    if (token !== sudokuToken) return;
+    sudoku = mountSudoku(wrap, { diff: sudokuLevel, onHud: (text) => { $('#score-text').textContent = text; }, onResult: reportScore });
+  } catch (error) {
+    if (token !== sudokuToken) return;
     console.error(error);
     wrap.innerHTML = '<p class="quest-loading">游戏加载失败，请刷新页面重试。</p>';
   }
@@ -660,6 +727,7 @@ const pop3Record = () => state.endless && state.players.length === 1;
 function boardId() {
   if (mode === 'quest') return 'quest';
   if (mode === 'park') return 'park';
+  if (mode === 'sudoku') return `sudoku-${sudokuLevel}`;
   if (mode === 'goose') return gooseMode === 'endless' ? 'goose-endless' : 'goose-classic';
   if (mode === 'pop3') return (state ? state.endless : pop3Endless) ? 'pop3-endless' : 'pop3-classic';
   return mode;
@@ -1125,12 +1193,13 @@ $$('.tab').forEach((tab) => tab.addEventListener('click', () => { $$('.tab').for
 $('#lan-server-url').value = new URLSearchParams(location.search).get('lan') || localStorage.getItem('pao-lan-server') || location.origin;
 loadBlastBest(); loadPop3Prefs();
 try { gooseMode = localStorage.getItem('pao-goose-mode') === 'endless' ? 'endless' : 'classic'; } catch { /* private mode */ }
+try { const saved = localStorage.getItem('pao-sudoku-level'); if (SUDOKU_LEVELS.includes(saved)) sudokuLevel = saved; } catch { /* private mode */ }
 for (const type of ['pointermove', 'pointerup', 'pointercancel']) document.addEventListener(type, type === 'pointermove' ? pointerMove : pointerUp, { passive: false });
 document.addEventListener('keydown', keyboard); document.addEventListener('keyup', keyboard);
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get sudoku() { return sudoku; } };
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';

@@ -23,15 +23,15 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes eight arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes ten arcade cards', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(8);
+  await expect(page.locator('.arcade-card')).toHaveCount(10);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
 
 test('each game shows its whole board and controls without scrolling', async ({ page }) => {
-  for (const mode of ['pop2', 'pop3', 'surge', 'blast', 'park', 'pour']) {
+  for (const mode of ['pop2', 'pop3', 'surge', 'blast', 'park', 'pour', 'g2048', 'sudoku']) {
     await open(page, mode);
     // Opening a game smooth-scrolls the page back to the top; on a phone the boards sit close
     // to the top edge, so measure once the scroll has landed.
@@ -752,4 +752,164 @@ test('倒水排序: solving stage 1 with taps submits the score, and the next vi
   await expect(page.locator('#score-text')).toContainText('第 2/50 关');
   await page.locator('#restart-game').click(); // 重新开始 means a new run
   await expect(page.locator('#score-text')).toContainText('第 1/50 关 · 0 分');
+});
+
+// 2048 is one canvas; its live state is on window.__arcade.g2048, and `load` sets a hand-made board.
+const tilesOf = (page) => page.evaluate(() => window.__arcade.g2048.state.tiles.map(({ r, c, v }) => ({ r, c, v })));
+async function openG2048(page, tiles) {
+  await open(page, 'g2048');
+  await page.waitForFunction(() => window.__arcade.g2048);
+  await page.evaluate((t) => window.__arcade.g2048.load(t), tiles);
+}
+async function swipe(page, dx, dy) {
+  const box = await page.locator('.game-canvas').boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height * 0.45;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx, y + dy, { steps: 4 });
+  await page.mouse.up();
+}
+
+test('2048: a swipe slides the tiles and merges equal ones, and the game is kept when you leave', async ({ page }) => {
+  await openG2048(page, [{ r: 0, c: 0, v: 2 }, { r: 0, c: 3, v: 2 }, { r: 3, c: 3, v: 8 }]);
+  await swipe(page, -90, 0);
+  await expect.poll(async () => (await tilesOf(page)).find((t) => t.r === 0 && t.c === 0)?.v).toBe(4);
+  expect(await page.evaluate(() => window.__arcade.g2048.state.score)).toBe(4);
+  expect(await tilesOf(page)).toHaveLength(3); // the 4, the 8 and the new tile
+  await expect(page.locator('#score-text')).toContainText('4 分');
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="g2048"]').click();
+  await page.waitForFunction(() => window.__arcade.g2048);
+  expect(await page.evaluate(() => window.__arcade.g2048.state.score)).toBe(4);
+});
+
+test('2048: a swipe that moves nothing is ignored, and undo takes a move back', async ({ page }) => {
+  await openG2048(page, [{ r: 0, c: 0, v: 2 }, { r: 0, c: 1, v: 4 }]);
+  await swipe(page, -90, 0); // already against the left wall
+  expect(await page.evaluate(() => window.__arcade.g2048.state.moves)).toBe(0);
+  await swipe(page, 0, 90);
+  await expect.poll(() => page.evaluate(() => window.__arcade.g2048.state.moves)).toBe(1);
+  const box = await page.locator('.game-canvas').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * (502 / 540)); // the 撤销 button
+  await expect.poll(() => page.evaluate(() => window.__arcade.g2048.state.moves)).toBe(0);
+  expect(await page.evaluate(() => window.__arcade.g2048.state.undosLeft)).toBe(2);
+});
+
+test('2048: a game with no moves left ends, posts its score, and 再来一局 starts over', async ({ page }) => {
+  const posts = await stubScores(page);
+  // One merge (16 + 16) is the only move; whatever then spawns in the gap cannot merge.
+  const rows = [[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 8], [4, 2, 16, 16]];
+  await openG2048(page, rows.flatMap((row, r) => row.map((v, c) => ({ r, c, v }))));
+  await swipe(page, -90, 0);
+  await expect(page.locator('.g2048-card strong')).toHaveText('没有可走的步了');
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toMatchObject({ board: 'g2048', value: 32 });
+  await expect(page.locator('.g2048-note')).toContainText('全球第 3 名');
+  await page.locator('.g2048-again').click();
+  await expect.poll(() => page.evaluate(() => window.__arcade.g2048.state.score)).toBe(0);
+  expect(await tilesOf(page)).toHaveLength(2);
+});
+
+test('2048: making 2048 offers to go on, and the board keeps playing', async ({ page }) => {
+  await openG2048(page, [{ r: 0, c: 0, v: 1024 }, { r: 0, c: 1, v: 1024 }]);
+  await swipe(page, -90, 0);
+  await expect(page.locator('.g2048-card strong')).toHaveText('合出 2048！');
+  await page.locator('.g2048-again').first().click(); // 继续挑战
+  await expect(page.locator('.g2048-overlay')).toBeHidden();
+  await swipe(page, 0, 90);
+  await expect.poll(() => page.evaluate(() => window.__arcade.g2048.state.moves)).toBe(2);
+});
+
+// 数独: a puzzle that is the answer with one cell blanked, so a whole game is a couple of taps.
+const sudokuState = (page) => page.evaluate(() => {
+  const { state, selected } = window.__arcade.sudoku;
+  return { status: state.status, mistakes: state.mistakes, hints: state.hints, diff: state.diff, selected, empty: state.cells.filter((d) => d === 0).length };
+});
+async function openSudoku(page, blanks = [0]) {
+  await open(page, 'sudoku');
+  await page.waitForFunction(() => window.__arcade.sudoku);
+  return page.evaluate(async (cells) => {
+    const { generate } = await import('/sudoku-core.js');
+    const { solution } = generate('easy');
+    const puzzle = [...solution].map((d, i) => (cells.includes(i) ? '0' : d)).join('');
+    window.__arcade.sudoku.load({ puzzle, solution });
+    return solution;
+  }, blanks);
+}
+async function tapCell(page, i) {
+  const spot = await page.evaluate((index) => window.__arcade.sudoku.locate('cell', index), i);
+  await page.mouse.click(spot.x, spot.y);
+}
+async function tapDigit(page, d) {
+  const spot = await page.evaluate((digit) => window.__arcade.sudoku.locate('pad', digit), d);
+  await page.mouse.click(spot.x, spot.y);
+}
+const tapTool = async (page, id) => {
+  const spot = await page.evaluate((tool) => window.__arcade.sudoku.locate('tool', tool), id);
+  await page.mouse.click(spot.x, spot.y);
+};
+
+test('数独: the right digit solves the puzzle and posts the time to the level\'s board', async ({ page }) => {
+  const posts = await stubScores(page);
+  const solution = await openSudoku(page, [40]);
+  await tapCell(page, 40);
+  expect((await sudokuState(page)).selected).toBe(40);
+  await tapDigit(page, Number(solution[40]));
+  await expect(page.locator('.sudoku-card strong')).toHaveText('解出来了！');
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0].board).toBe('sudoku-normal');
+  expect(Number.isInteger(posts[0].value)).toBe(true);
+  await expect(page.locator('.sudoku-note')).toContainText('全球第 3 名');
+  await page.locator('.sudoku-again').click(); // 下一题
+  await expect(page.locator('.sudoku-overlay')).toBeHidden();
+  expect((await sudokuState(page)).empty).toBeGreaterThan(20);
+});
+
+test('数独: a wrong digit costs a try, three lose the game, and 重试本题 starts the same puzzle again', async ({ page }) => {
+  const solution = await openSudoku(page, [0, 1, 2]);
+  for (const i of [0, 1, 2]) {
+    await tapCell(page, i);
+    await tapDigit(page, Number(solution[i]) === 1 ? 2 : 1);
+  }
+  await expect(page.locator('.sudoku-card strong')).toHaveText('错了 3 次');
+  await page.locator('.sudoku-again').first().click();
+  expect(await sudokuState(page)).toMatchObject({ status: 'playing', mistakes: 0, empty: 3 });
+});
+
+test('数独: a hint solves a cell but takes the game off the board; notes and erase work', async ({ page }) => {
+  const posts = await stubScores(page);
+  const solution = await openSudoku(page, [10, 11]);
+  await tapCell(page, 10);
+  await tapTool(page, 'note');
+  await tapDigit(page, 4);
+  await tapDigit(page, 6);
+  expect(await page.evaluate(() => window.__arcade.sudoku.state.notes[10])).toBe((1 << 4) | (1 << 6));
+  await tapTool(page, 'erase');
+  expect(await page.evaluate(() => window.__arcade.sudoku.state.notes[10])).toBe(0);
+  await tapTool(page, 'note'); // notes off again
+  await tapCell(page, 11);
+  await tapTool(page, 'hint');
+  expect(await page.evaluate(() => window.__arcade.sudoku.state.cells[11])).toBe(Number(solution[11]));
+  await tapCell(page, 10);
+  await tapDigit(page, Number(solution[10]));
+  await expect(page.locator('.sudoku-card')).toContainText('用了提示的局不计入榜单');
+  await page.waitForTimeout(300);
+  expect(posts).toHaveLength(0);
+});
+
+test('数独: switching level opens that level\'s own puzzle and is remembered', async ({ page }) => {
+  await open(page, 'sudoku');
+  await page.waitForFunction(() => window.__arcade.sudoku);
+  expect((await sudokuState(page)).diff).toBe('normal');
+  await expect(page.locator('#sudoku-level')).toHaveText('普通 · 切换困难');
+  await page.locator('#sudoku-level').click();
+  await expect(page.locator('#sudoku-level')).toHaveText('困难 · 切换简单');
+  expect((await sudokuState(page)).diff).toBe('hard');
+  expect(await page.evaluate(() => localStorage.getItem('pao-sudoku-level'))).toBe('hard');
+  // the unfinished puzzle of a level is waiting when you come back to it
+  const hardPuzzle = await page.evaluate(() => window.__arcade.sudoku.state.puzzle);
+  await page.locator('#sudoku-level').click();
+  await page.locator('#sudoku-level').click();
+  await page.locator('#sudoku-level').click();
+  expect(await page.evaluate(() => window.__arcade.sudoku.state.puzzle)).toBe(hardPuzzle);
 });

@@ -411,9 +411,47 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .recent-list{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .recent-card{--c:var(--violet);position:relative;display:grid;gap:4px;text-align:left;border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;background:#fff;padding:14px 16px;transition:.2s}
 .recent-card:hover{transform:translateY(-3px);box-shadow:0 14px 34px #26333418}
-.recent-card[data-game=pop2]{--c:var(--pink)}.recent-card[data-game=pop3]{--c:var(--violet)}.recent-card[data-game=surge]{--c:var(--yellow)}.recent-card[data-game=blast]{--c:var(--cyan)}.recent-card[data-game=goose]{--c:var(--green)}.recent-card[data-game=quest]{--c:#ff9a3c}.recent-card[data-game=park]{--c:#4a8dff}.recent-card[data-game=pour]{--c:#2ec4b6}
+.recent-card[data-game=pop2]{--c:var(--pink)}.recent-card[data-game=pop3]{--c:var(--violet)}.recent-card[data-game=surge]{--c:var(--yellow)}.recent-card[data-game=blast]{--c:var(--cyan)}.recent-card[data-game=goose]{--c:var(--green)}.recent-card[data-game=quest]{--c:#ff9a3c}.recent-card[data-game=park]{--c:#4a8dff}.recent-card[data-game=pour]{--c:#2ec4b6}.recent-card[data-game=g2048]{--c:#1fb8c4}.recent-card[data-game=sudoku]{--c:#e0559a}
 .recent-title{font-size:16px;letter-spacing:-.04em;padding-right:84px}
 .recent-ago{font:10px 'DM Mono';color:var(--muted)}
 .recent-time{position:absolute;top:12px;right:14px;font:700 11px 'DM Mono';color:var(--ink);background:#f1efe8;border-radius:999px;padding:3px 9px}
 #recent-more[hidden]{display:none}
 @media(max-width:800px){.recent-list{grid-template-columns:1fr}}
+
+/* 2048 and 数独: one portrait canvas each (360×540 and 360×560 logical px) with everything drawn into it; --u is 1% of its width. */
+.g2048 .art{background:radial-gradient(125% 125% at 20% 8%,#1f8a98,#14566a 58%,#0a2a3d)}
+.art-well{position:absolute;left:50%;top:50%;width:138px;height:138px;margin:-69px 0 0 -69px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;border-radius:20px;background:linear-gradient(180deg,#1a1840,#0d0c24);border:2px solid #58d4de99;box-shadow:0 0 22px #58d4de55,0 10px 18px #0006}
+.art-well i{display:grid;place-items:center;border-radius:12px;color:#fff;font:800 24px Manrope,system-ui,sans-serif;font-style:normal;text-shadow:0 2px 0 #0004;box-shadow:0 4px 0 #0000004d,inset 0 2px 0 #ffffff66,inset 0 -3px 0 #00000033}
+.art-well .n2{background:linear-gradient(180deg,#a8f0f6,#58d4de 30%,#1f93a3)}
+.art-well .n4{background:linear-gradient(180deg,#8fe8b8,#44c986 30%,#1c8a55)}
+.art-well .n8{background:linear-gradient(180deg,#ffeb9a,#ffd543 30%,#c29a0c)}
+.art-well .n16{background:linear-gradient(180deg,#ffcb8a,#ffa23c 30%,#c0680a)}
+.sudoku .art{background:radial-gradient(125% 125% at 20% 8%,#a23a7a,#5e2257 58%,#2e1030)}
+.art-sudoku{position:absolute;left:50%;top:50%;width:138px;height:138px;margin:-69px 0 0 -69px;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border-radius:18px;background:linear-gradient(180deg,#2a2670,#14123a);border:2px solid #58d4de80;box-shadow:0 10px 18px #0006}
+.art-sudoku i{display:grid;place-items:center;border-radius:9px;color:#fff;font:800 19px Manrope,system-ui,sans-serif;font-style:normal;text-shadow:0 2px 0 #0004;box-shadow:0 3px 0 #0000004d,inset 0 2px 0 #ffffff66,inset 0 -2px 0 #00000033}
+.art-sudoku i:nth-child(1){background:linear-gradient(180deg,#ff8d8d,#f04b4b 35%,#a82626)}
+.art-sudoku i:nth-child(2){background:linear-gradient(180deg,#ffbb7a,#ff8f2e 35%,#b3560a)}
+.art-sudoku i:nth-child(3){background:linear-gradient(180deg,#ffe58a,#ffcf3d 35%,#b88c0a)}
+.art-sudoku i:nth-child(4){background:linear-gradient(180deg,#d3f27f,#a9e03a 35%,#6c9210)}
+.art-sudoku i:nth-child(5){background:linear-gradient(180deg,#86e3a8,#38c26b 35%,#1d8444)}
+.art-sudoku i:nth-child(6){background:linear-gradient(180deg,#8ceef2,#2fcfd6 35%,#17878d)}
+.art-sudoku i:nth-child(7){background:linear-gradient(180deg,#8dbbff,#3d8bff 35%,#1f55b3)}
+.art-sudoku i:nth-child(8){background:linear-gradient(180deg,#c6aaff,#9b6bff 35%,#6038c4)}
+.art-sudoku i:nth-child(9){background:linear-gradient(180deg,#ffb0dc,#ff77c0 35%,#b83d86)}
+.canvas-wrap.g2048-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6667)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6667)));aspect-ratio:360/540}
+.canvas-wrap.sudoku-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 340px) * .6429)));width:min(100%,420px,max(240px,calc((100dvh - 340px) * .6429)));aspect-ratio:360/560}
+.g2048-wrap .game-canvas{height:100%;touch-action:none;background:radial-gradient(120% 90% at 50% 0%,#3a2f8a,#1f1a58 55%,#100e30);cursor:grab}
+.sudoku-wrap .game-canvas{height:100%;touch-action:manipulation;background:radial-gradient(120% 90% at 50% 0%,#4a2a86,#2a1a62 55%,#120e32);cursor:pointer}
+.g2048-overlay,.sudoku-overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:calc(var(--u) * 5);background:#0b0f1ce6;border-radius:13px}
+.g2048-overlay[hidden],.sudoku-overlay[hidden]{display:none}
+.g2048-card,.sudoku-card{display:grid;gap:calc(var(--u) * 3);width:100%;padding:calc(var(--u) * 7) calc(var(--u) * 5);border-radius:calc(var(--u) * 5);background:#1d2438;border:1px solid #ffffff2e;text-align:center;font-size:calc(var(--u) * 3.8)}
+.g2048-card strong,.sudoku-card strong{font-size:calc(var(--u) * 7.6);letter-spacing:-.02em}
+.g2048-card p,.sudoku-card p{margin:0;color:#c3c9d6;line-height:1.55}
+.g2048-overlay.won .g2048-card,.sudoku-overlay.won .sudoku-card{border-color:var(--yellow)}
+.g2048-note:empty,.sudoku-note:empty{display:none}
+.g2048-again,.sudoku-again{justify-self:center;padding:calc(var(--u) * 3) calc(var(--u) * 10);border:1px solid var(--pink);border-radius:calc(var(--u) * 3);background:var(--pink);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.g2048-again.ghost,.sudoku-again.ghost{background:transparent;border-color:#ffffff59;color:#d5daf0}
+@media(max-width:800px) and (orientation:portrait){
+body.playing[data-mode=g2048] .canvas-wrap.g2048-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .6667)));width:min(100%,max(240px,calc((100dvh - 190px) * .6667)))}
+body.playing[data-mode=sudoku] .canvas-wrap.sudoku-wrap{width:min(100%,max(240px,calc((100vh - 260px) * .6429)));width:min(100%,max(240px,calc((100dvh - 260px) * .6429)))}
+}
