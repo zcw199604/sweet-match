@@ -1,4 +1,4 @@
-// 三消勇者团 sprites: original SVG figures for the four heroes and the nine monsters.
+// 三消勇者团 sprites: original SVG figures for the four heroes and eighteen monsters.
 //
 // The same language as art.js: chibi proportions (about 2.5 heads tall), one chunky
 // ink outline so every shape reads at phone size, flat colour with a single shadow
@@ -467,8 +467,222 @@ const LICH = svg('0 0 120 120', `
   </g>`,
   '<radialGradient id="qa-lich-aura"><stop offset=".3" stop-color="#7dffb0" stop-opacity=".22"/><stop offset="1" stop-color="#7dffb0" stop-opacity="0"/></radialGradient>');
 
+// ---- second bestiary (also 120 × 120, facing left) ----
+
+// 蘑菇怪: a red spotted cap on a cream stalk, cross brow, spore puffs drifting up.
+const MUSHROOM = svg('0 0 120 120', `
+  <circle class="qa-glow" cx="84" cy="16" r="3.4" fill="#d9f2a0" stroke="none" opacity=".85"/>
+  <circle class="qa-glow" cx="96" cy="26" r="2.4" fill="#d9f2a0" stroke="none" opacity=".7"/>
+  <circle class="qa-glow" cx="30" cy="14" r="2.6" fill="#d9f2a0" stroke="none" opacity=".7"/>
+  <ellipse cx="46" cy="112" rx="11" ry="5.4" fill="#f3e3c3"/><ellipse cx="76" cy="112" rx="11" ry="5.4" fill="#f3e3c3"/>
+  <path d="M42 64 Q35 90 40 106 Q60 113 82 106 Q87 90 79 64 Z" fill="#f7ecd2"/>
+  <path stroke="none" fill="#e0cfa6" d="M71 66 Q81 90 78 105 Q73 107 69 108 Q75 88 71 66 Z"/>
+  ${limb('M80 86 Q91 90 94 80', '#f7ecd2', 4.6)}
+  <circle cx="94" cy="78.6" r="3.8" fill="#f7ecd2"/>
+  <ellipse cx="50" cy="84" rx="3.2" ry="4.2" fill="${INK}" stroke="none" class="qa-blink"/><ellipse cx="68" cy="84" rx="3.2" ry="4.2" fill="${INK}" stroke="none" class="qa-blink"/>
+  <circle cx="51" cy="82.6" r="1.1" fill="#fff" stroke="none"/><circle cx="69" cy="82.6" r="1.1" fill="#fff" stroke="none"/>
+  <path d="M43 77 L56 81.4 M75 77 L62 81.4" fill="none" stroke-width="2.6"/>
+  <path d="M52 95 Q59 90.6 66 95 Q59 100 52 95 Z" fill="#8c2f3b"/>
+  ${blush(43, 92)}${blush(75, 92)}
+  <path d="M12 68 Q8 28 60 22 Q112 28 108 68 Q60 79 12 68 Z" fill="#e8553f"/>
+  <path stroke="none" fill="#c23a2e" d="M86 27 Q109 36 108 68 Q98 72 87 74 Q99 50 86 27 Z"/>
+  <circle cx="34" cy="46" r="7.4" fill="#fff4d8"/><circle cx="62" cy="36" r="5.4" fill="#fff4d8"/><circle cx="82" cy="52" r="6.4" fill="#fff4d8"/><circle cx="27" cy="63" r="4" fill="#fff4d8"/><circle cx="98" cy="37" r="3.4" fill="#fff4d8"/>
+  <path stroke="none" fill="#fff" opacity=".6" d="M24 40 Q30 30 42 28 Q32 34 28 44 Z"/>
+  <g class="qa-arm" style="transform-origin:40px 80px">
+    ${limb('M40 86 Q29 90 26 79', '#f7ecd2', 4.6)}
+    <circle cx="26" cy="77.6" r="3.8" fill="#f7ecd2"/>
+  </g>`);
+
+// 野狼: a grey wolf mid-pounce: pointed ears, yellow slit eye, white fangs, bushy tail streaming back.
+const WOLF = svg('0 0 120 120', `
+  <path class="qa-cape" d="M96 74 Q118 70 114 44 Q106 58 92 62 Z" fill="#7d8aa3"/>
+  <path stroke="none" fill="#eef1f8" d="M112 50 Q114 60 108 66 Q113 58 112 50 Z"/>
+  <path d="M82 92 Q80 114 90 114 H102 Q104 108 97 104 L97 90 Z" fill="#6b7790"/>
+  <path d="M44 66 Q60 54 94 60 Q110 74 100 94 Q72 106 46 96 Z" fill="#8f9bb3"/>
+  <path stroke="none" fill="#6b7790" d="M80 60 Q108 66 102 90 Q92 98 84 100 Q98 80 80 60 Z"/>
+  <path stroke="none" fill="#dfe5f0" d="M48 86 Q72 98 98 88 Q96 96 84 100 Q64 104 48 96 Z"/>
+  <path d="M66 94 Q64 114 74 114 H86 Q88 108 80 104 L80 92 Z" fill="#7d8aa3"/>
+  <path d="M40 92 Q38 114 48 114 H60 Q62 108 54 104 L56 90 Z" fill="#9aa6bd"/>
+  <path d="M42 100 L40 110 M47 101 L46 111" fill="none" stroke-width="1.4"/>
+  <path d="M33 36 L28 10 L48 30 Z" fill="#7d8aa3"/><path stroke="none" fill="#ffb3c0" d="M33.6 31 L31 18 L42 29 Z"/>
+  <path d="M10 56 Q18 52 23 40 Q33 27 52 31 Q68 38 66 58 Q62 73 44 73 Q30 73 22 65 Q13 63 10 56 Z" fill="#9aa6bd"/>
+  <path d="M50 31 L62 10 L68 36 Z" fill="#6b7790"/>
+  <path stroke="none" fill="#dfe5f0" d="M10 57 Q20 62 30 68 Q36 74 44 73 Q30 76 22 66 Q13 63 10 57 Z"/>
+  <ellipse cx="11" cy="55.6" rx="4.4" ry="3.4" fill="${INK}"/>
+  <path d="M16 63 Q30 71 46 67" fill="none" stroke-width="1.8"/>
+  <path d="M20 64 L23 72 L26 66 M32 68.6 L35 75 L38 69" fill="#fff" stroke-width="1.4"/>
+  <g class="qa-blink"><ellipse cx="36" cy="47" rx="5" ry="3.6" fill="#ffd54a"/><ellipse cx="36" cy="47" rx="1.5" ry="3.2" fill="${INK}" stroke="none"/></g>
+  <path d="M28 40 L44 46" fill="none" stroke-width="3"/>
+  <path d="M46 56 Q52 52 58 58" fill="none" stroke="#6b7790" stroke-width="1.6"/>`);
+
+// 毒蜘蛛: a violet abdomen with a bone-white hourglass, six red eyes, dripping green fangs, bent legs.
+const SPIDER = svg('0 0 120 120', `
+  ${limb('M70 70 Q96 40 112 70', '#4b2f68', 3.6)}${limb('M74 78 Q108 66 114 100', '#4b2f68', 3.6)}
+  ${limb('M60 78 Q56 100 64 116', '#4b2f68', 3.6)}${limb('M78 84 Q94 96 96 116', '#4b2f68', 3.6)}
+  <path d="M60 52 Q56 20 86 18 Q116 26 112 62 Q106 90 82 90 Q64 84 60 52 Z" fill="#7b4fa8"/>
+  <path stroke="none" fill="#5a3880" d="M96 22 Q116 32 112 62 Q106 88 84 90 Q104 70 96 22 Z"/>
+  <path d="M82 38 L96 38 L84 52 L98 66 L82 66 L92 52 Z" fill="#f1ead8" stroke-width="1.6"/>
+  <path stroke="none" fill="#fff" opacity=".35" d="M68 30 Q74 22 84 20 Q74 28 72 40 Z"/>
+  ${limb('M44 66 Q22 52 10 74', '#5b3a7a', 3.8)}${limb('M40 74 Q14 82 12 106', '#5b3a7a', 3.8)}
+  ${limb('M46 84 Q34 100 32 116', '#5b3a7a', 3.8)}${limb('M54 86 Q50 104 46 116', '#5b3a7a', 3.8)}
+  <path d="M30 70 Q28 44 52 44 Q74 46 72 70 Q70 88 52 88 Q36 88 30 70 Z" fill="#6a45a0"/>
+  <path stroke="none" fill="#4b2f78" d="M62 46 Q74 50 72 70 Q70 86 56 88 Q66 70 62 46 Z"/>
+  <g class="qa-blink"><circle cx="40" cy="58" r="4.6" fill="#ff4d6d"/><circle cx="53" cy="55" r="4" fill="#ff4d6d"/><circle cx="46" cy="49" r="2.8" fill="#ff4d6d"/><circle cx="58" cy="49" r="2.4" fill="#ff4d6d"/></g>
+  <circle cx="39" cy="56.6" r="1.4" fill="#fff" stroke="none"/><circle cx="52" cy="53.6" r="1.2" fill="#fff" stroke="none"/>
+  <g class="qa-arm" style="transform-origin:38px 74px">
+    <path d="M34 72 Q26 76 28 88 Q32 82 38 78 Z" fill="#e8e0cc"/>
+    <path d="M46 74 Q40 82 42 92 Q47 84 50 78 Z" fill="#e8e0cc"/>
+    <path class="qa-glow" d="M28.6 86 Q27 92 29 94 Q31 92 30.4 87 Z M42 90 Q41 96 43 98 Q45 96 44.4 91 Z" fill="#7dffb0" stroke="none"/>
+  </g>`);
+
+// 影刃: a hooded assassin in indigo, a void for a face with two pink slit eyes, a long scarf and twin daggers.
+const ASSASSIN = svg('0 0 120 120', `
+  <path class="qa-cape" d="M78 54 C92 50 104 58 116 52 C110 62 112 68 104 74 C96 70 88 70 80 66 Z" fill="#e0407f"/>
+  <path stroke="none" fill="#a02a5c" d="M80 60 C92 58 100 62 110 58 C106 66 104 70 100 72 C94 68 88 66 82 64 Z"/>
+  <path d="M42 108 Q38 116 46 116 H56 Q60 116 58 108 Z M62 108 Q60 116 68 116 H78 Q82 116 78 108 Z" fill="#2b2250"/>
+  <path d="M34 112 Q28 78 40 62 Q56 54 72 62 Q86 78 82 112 Q58 118 34 112 Z" fill="#3a3070"/>
+  <path stroke="none" fill="#2b2250" d="M66 62 Q86 78 82 112 Q74 114 68 114 Q78 84 66 62 Z"/>
+  <path d="M38 88 Q58 96 80 88" fill="none" stroke="#e0407f" stroke-width="2.4"/>
+  <path d="M40 66 Q58 74 76 66" fill="none" stroke="#2b2250" stroke-width="2"/>
+  ${limb('M70 74 Q82 80 88 92', '#3a3070', 5.4)}<circle cx="89" cy="93" r="3.6" fill="#2b2250"/>
+  <path d="M82 96 L95 100 L92 104 Z" fill="#d7e0ee" stroke-width="1.6"/>
+  <path d="M30 46 Q30 18 56 16 Q82 18 82 46 Q82 60 72 66 L40 66 Q30 60 30 46 Z" fill="#3a3070"/>
+  <path stroke="none" fill="#2b2250" d="M70 20 Q84 28 82 46 Q82 60 72 66 L66 66 Q76 46 70 20 Z"/>
+  <path d="M34 48 Q34 30 52 30 Q68 30 70 46 Q70 58 60 62 L44 62 Q34 58 34 48 Z" fill="#120b26"/>
+  <g class="qa-blink"><path d="M38 46 L50 49 L49 53 L38 51 Z" fill="#ff5fa3" stroke="none" class="qa-glow"/><path d="M62 46 L52 49 L53 53 L62 51 Z" fill="#ff5fa3" stroke="none" class="qa-glow"/></g>
+  <path d="M30 40 Q22 36 24 28 Q28 36 36 36 Z" fill="#3a3070" stroke-width="1.6"/>
+  <g class="qa-arm" style="transform-origin:42px 72px">
+    ${limb('M44 72 Q30 74 22 70', '#3a3070', 5.4)}<circle cx="21" cy="69.6" r="3.6" fill="#2b2250"/>
+    <path d="M18 64 L4 52 L8 66 Z" fill="#e8f0ff" stroke-width="1.8"/>
+    <path stroke="none" fill="#fff" opacity=".8" d="M16 63.6 L7 55 L9 62.6 Z"/>
+    <path d="M17 72 L6 82 L16 76 Z" fill="#c4cfe2" stroke-width="1.6"/>
+  </g>`);
+
+// 魔像: a block of warm stone with moss, a single glowing slit for a face, a rune core in its chest and two huge fists.
+const GOLEM = svg('0 0 120 120', `
+  <path d="M38 98 H56 V116 H36 Q34 108 38 98 Z M64 98 H84 Q86 108 82 116 H64 Z" fill="#8a7660"/>
+  <path d="M30 46 Q28 90 38 102 H84 Q94 90 92 46 Q62 36 30 46 Z" fill="#b09a82"/>
+  <path stroke="none" fill="#8a7660" d="M76 44 Q94 48 92 60 Q94 90 84 102 H72 Q84 84 76 44 Z"/>
+  <path d="M34 70 L46 66 L50 76 M70 56 L78 64 L74 74 M56 92 L62 84 L70 90" fill="none" stroke="#6e5c48" stroke-width="1.6"/>
+  <path stroke="none" fill="#6fae5a" d="M30 48 Q36 42 44 46 Q38 52 31 52 Z M70 100 Q78 96 84 100 Q78 104 71 103 Z"/>
+  <circle class="qa-glow" cx="60" cy="76" r="9" fill="#ffb347"/>
+  <path d="M60 68 V84 M54 74 L66 74 M55 80 L65 70" fill="none" stroke="#fff0c2" stroke-width="2" class="qa-glow"/>
+  <path d="M88 52 Q108 52 110 70 Q108 84 94 84 Q86 82 84 68 Z" fill="#b09a82"/>
+  <path d="M94 62 L104 60 M94 70 L106 70 M94 77 L104 79" fill="none" stroke="#6e5c48" stroke-width="1.6"/>
+  <path d="M40 20 H80 L82 46 H38 Z" fill="#c2ad94"/>
+  <path stroke="none" fill="#8a7660" d="M70 20 H80 L82 46 H70 Z"/>
+  <path d="M42 28 H78" fill="none" stroke="#6e5c48" stroke-width="1.6"/>
+  <rect class="qa-blink" x="42" y="31" width="30" height="7" rx="3.4" fill="${INK}"/>
+  <rect class="qa-glow" x="45" y="32.6" width="10" height="3.8" rx="1.9" fill="#ffd27a" stroke="none"/><rect class="qa-glow" x="60" y="32.6" width="9" height="3.8" rx="1.9" fill="#ffd27a" stroke="none"/>
+  <g class="qa-arm" style="transform-origin:32px 54px">
+    ${limb('M32 52 Q16 58 14 76', '#9d8870', 11)}
+    <path d="M2 74 Q2 62 14 62 Q28 64 28 80 Q26 94 12 94 Q2 90 2 74 Z" fill="#b09a82"/>
+    <path stroke="none" fill="#8a7660" d="M20 66 Q29 72 27 84 Q24 92 14 94 Q22 82 20 66 Z"/>
+    <path d="M6 78 H20 M7 86 H18" fill="none" stroke="#6e5c48" stroke-width="1.6"/>
+  </g>`);
+
+// 火精灵: a teardrop of flame with an ember core, angry coal eyes, a jagged grin and two flickering arms.
+const FIRE = svg('0 0 120 120', `
+  <circle class="qa-glow" cx="96" cy="20" r="2.6" fill="#ffd27a" stroke="none"/><circle class="qa-glow" cx="22" cy="30" r="2.2" fill="#ffd27a" stroke="none"/><circle class="qa-glow" cx="104" cy="48" r="1.8" fill="#ff9a4a" stroke="none"/>
+  <path class="qa-glow" d="M60 6 Q72 32 90 50 Q106 72 92 98 Q78 118 60 118 Q40 118 28 98 Q14 72 30 52 Q42 42 46 24 Q54 34 60 6 Z" fill="#ff6a2b"/>
+  <path stroke="none" fill="#d9381e" d="M72 22 Q84 44 92 56 Q106 74 92 98 Q80 116 62 118 Q92 98 84 70 Q78 52 72 22 Z"/>
+  <path d="M60 40 Q74 62 82 78 Q88 100 60 110 Q34 102 38 78 Q46 62 60 40 Z" fill="#ffb52e"/>
+  <path stroke="none" fill="#ffe58a" d="M60 62 Q70 78 70 90 Q66 102 58 102 Q48 96 50 86 Q54 74 60 62 Z"/>
+  <g class="qa-arm" style="transform-origin:34px 80px">
+    <path d="M36 78 Q18 74 8 60 Q14 78 22 86 Q30 90 38 90 Z" fill="#ff7a2b"/>
+    <path stroke="none" fill="#ffd27a" d="M30 80 Q20 76 14 68 Q18 80 26 86 Z"/>
+  </g>
+  <path d="M80 82 Q92 78 102 66 Q98 82 90 88 Z" fill="#ff7a2b"/>
+  <g class="qa-blink"><ellipse cx="46" cy="76" rx="4.4" ry="5.4" fill="${INK}" stroke="none"/><ellipse cx="66" cy="76" rx="4.4" ry="5.4" fill="${INK}" stroke="none"/><circle cx="47.4" cy="74" r="1.4" fill="#fff" stroke="none"/><circle cx="67.4" cy="74" r="1.4" fill="#fff" stroke="none"/></g>
+  <path d="M38 68 L51 73 M74 68 L61 73" fill="none" stroke-width="2.6"/>
+  <path d="M44 90 L48 94 L52 89 L56 94 L60 89 L64 94 L68 90 Q56 100 44 90 Z" fill="#7a1a10" stroke-width="1.4"/>`);
+
+// 黑骑士: black plate with violet trim, horned helm with one red visor slit, a pitted greatsword and a tattered cape.
+const KNIGHT = svg('0 0 120 120', `
+  <path class="qa-cape" d="M70 52 C84 50 100 58 112 52 C110 70 108 90 100 106 C88 104 78 96 72 88 Z" fill="#5b2a86"/>
+  <path stroke="none" fill="#3d1b5e" d="M74 58 C88 58 100 62 108 58 C106 76 104 92 98 104 C90 100 84 94 80 88 Z"/>
+  <path d="M38 100 V112 Q38 116 44 116 H54 Q56 116 56 112 V100 Z M62 100 V112 Q62 116 68 116 H80 Q82 116 80 112 V100 Z" fill="#2c2742"/>
+  <path d="M34 58 Q32 86 36 102 Q58 108 82 102 Q86 86 82 58 Q58 50 34 58 Z" fill="#3d3a5c"/>
+  <path stroke="none" fill="#2c2742" d="M70 56 Q84 60 82 76 Q84 92 80 102 L72 103 Q80 82 70 56 Z"/>
+  <path stroke="none" fill="#8a86b8" opacity=".55" d="M40 60 Q46 58 52 59 Q46 70 44 82 Q40 72 40 60 Z"/>
+  <path d="M34 92 Q58 98 82 92 L82 98 Q58 104 34 98 Z" fill="#7a4a2a"/><rect x="52" y="93" width="12" height="8" rx="2" fill="#b58be8"/>
+  <path d="M52 64 L58 80 L64 64" fill="none" stroke="#b58be8" stroke-width="2.2"/>
+  <ellipse cx="34" cy="62" rx="12" ry="10" fill="#4d4a74"/><path stroke="none" fill="#2c2742" d="M40 54 Q46 60 42 70 Q46 66 46 58 Z"/>
+  <path d="M30 56 L26 50 M36 52 L36 46" fill="none" stroke="#b58be8" stroke-width="2.4"/>
+  <path d="M34 30 Q34 12 58 12 Q82 12 82 30 L82 52 Q82 62 70 64 L46 64 Q34 62 34 52 Z" fill="#4d4a74"/>
+  <path stroke="none" fill="#2c2742" d="M70 14 Q82 20 82 32 L82 52 Q82 62 70 64 L64 64 Q74 40 70 14 Z"/>
+  <path stroke="none" fill="#8a86b8" opacity=".6" d="M40 22 Q46 16 54 15 Q44 22 42 34 Z"/>
+  <path d="M38 8 Q28 0 24 16 Q30 10 40 18 Z M78 8 Q88 0 92 16 Q86 10 76 18 Z" fill="#e8e0cc"/>
+  <path d="M38 34 H80 V46 Q58 50 38 46 Z" fill="#120b26"/>
+  <rect class="qa-glow qa-blink" x="40" y="37.6" width="22" height="4.6" rx="2.3" fill="#ff4d6d" stroke="none"/>
+  <path d="M38 52 Q58 58 78 52 M56 34 V64" fill="none" stroke="#2c2742" stroke-width="1.6"/>
+  <g class="qa-arm" style="transform-origin:40px 72px">
+    ${limb('M44 72 Q30 76 24 70', '#4d4a74', 7)}<circle cx="23" cy="69" r="4.6" fill="#2c2742"/>
+    <path d="M17 66 H29 L28 72 H18 Z" fill="#b58be8" stroke-width="1.6"/>
+    <path d="M22 64 L18 12 L22 2 L27 12 L24 64 Z" fill="#cfd6e6" stroke-width="2"/>
+    <path stroke="none" fill="#fff" opacity=".7" d="M21.4 58 L19 14 L22 6 L22.6 56 Z"/>
+    <path d="M19.6 28 H24 M19.4 40 H23.8" fill="none" stroke="#8d97ad" stroke-width="1.4"/>
+  </g>`);
+
+// 蛛后 (boss): a huge black-green spider queen, a gold crown over eight red eyes, venom-dripping fangs and a skull on her back.
+const SPIDERQUEEN = svg('0 0 120 120', `
+  ${limb('M68 62 Q92 24 116 50', '#2f3a2c', 4.4)}${limb('M76 74 Q112 52 118 92', '#2f3a2c', 4.4)}${limb('M80 86 Q104 90 108 116', '#2f3a2c', 4.4)}
+  ${limb('M38 62 Q14 28 2 52', '#3a4a36', 4.4)}${limb('M34 74 Q4 62 2 96', '#3a4a36', 4.4)}${limb('M40 86 Q18 96 14 116', '#3a4a36', 4.4)}${limb('M52 90 Q46 106 50 118', '#3a4a36', 4.4)}
+  <path d="M62 50 Q56 8 90 6 Q124 14 118 58 Q112 96 86 98 Q66 92 62 50 Z" fill="#33403a"/>
+  <path stroke="none" fill="#232d28" d="M100 10 Q124 22 118 58 Q112 96 88 98 Q108 70 100 10 Z"/>
+  <path d="M82 28 Q92 22 100 28 Q104 36 98 42 L98 48 H86 L86 42 Q80 36 82 28 Z" fill="#f1ead8" stroke-width="1.8"/>
+  <circle cx="87" cy="33" r="2.4" fill="${INK}" stroke="none"/><circle cx="95" cy="33" r="2.4" fill="${INK}" stroke="none"/>
+  <path d="M88 44 V48 M91 44 V48 M94 44 V48" fill="none" stroke-width="1.2"/>
+  <path d="M70 62 Q86 70 102 62 M72 76 Q88 84 104 76" fill="none" stroke="#6fae5a" stroke-width="2"/>
+  <path stroke="none" fill="#fff" opacity=".18" d="M70 18 Q78 10 90 9 Q78 16 74 32 Z"/>
+  <path d="M24 74 Q22 40 50 38 Q76 40 74 74 Q72 96 48 96 Q28 96 24 74 Z" fill="#3e5a44"/>
+  <path stroke="none" fill="#2b3f31" d="M62 40 Q76 46 74 74 Q72 94 52 96 Q66 76 62 40 Z"/>
+  <g class="qa-blink"><circle cx="34" cy="62" r="5" fill="#ff4d6d"/><circle cx="48" cy="58" r="4.6" fill="#ff4d6d"/><circle cx="39" cy="50" r="3.2" fill="#ff4d6d"/><circle cx="54" cy="49" r="3" fill="#ff4d6d"/></g>
+  <circle cx="33" cy="60.4" r="1.6" fill="#fff" stroke="none"/><circle cx="47" cy="56.6" r="1.5" fill="#fff" stroke="none"/>
+  <path d="M28 40 L33 24 L40 34 L47 18 L54 34 L62 24 L66 40 Q47 34 28 40 Z" fill="${GOLD}"/>
+  <path stroke="none" fill="#d9a93a" d="M54 34 L62 24 L66 40 Q60 37.4 56 37 Z"/>
+  <circle cx="47" cy="27" r="2.2" fill="#ff4d6d"/>
+  <g class="qa-arm" style="transform-origin:36px 80px">
+    <path d="M26 76 Q16 82 18 98 Q24 90 32 86 Z" fill="#f1ead8"/>
+    <path d="M42 82 Q34 92 38 104 Q44 94 48 88 Z" fill="#f1ead8"/>
+    <path class="qa-glow" d="M18.6 95 Q17 102 19.6 105 Q22 102 20.4 96 Z M37.6 100 Q36 107 38.6 110 Q41 107 39.6 101 Z" fill="#7dffb0" stroke="none"/>
+  </g>`);
+
+// 炎魔 (boss): a horned magma demon, cracked red hide glowing from inside, a mane of flame, bat wings and a burning whip.
+const INFERNAL = svg('0 0 120 120', `
+  <g class="qa-wing r" style="transform-origin:78px 56px">
+    <path d="M78 56 Q96 20 118 12 Q112 26 116 36 Q104 34 102 46 Q94 42 90 54 Q84 50 82 64 Z" fill="#7a1a2c"/>
+    <path d="M82 56 L112 18 M86 58 L102 40 M84 60 L94 50" fill="none" stroke="#4e0f1c" stroke-width="1.6"/>
+  </g>
+  <g class="qa-wing" style="transform-origin:42px 56px">
+    <path d="M44 56 Q26 18 4 10 Q10 24 6 34 Q18 32 20 44 Q28 40 32 52 Q38 48 40 64 Z" fill="#a02338"/>
+    <path d="M42 56 L10 16 M38 58 L20 40 M38 60 L28 48" fill="none" stroke="#5e1020" stroke-width="1.6"/>
+  </g>
+  <path d="M40 100 Q36 116 46 116 H58 Q60 110 54 104 Z M64 100 Q62 116 72 116 H86 Q88 108 80 102 Z" fill="#5a1220"/>
+  <path d="M34 62 Q28 92 40 106 H80 Q94 92 86 62 Q60 50 34 62 Z" fill="#c9304a"/>
+  <path stroke="none" fill="#8e1c33" d="M72 58 Q90 66 86 90 Q84 102 80 106 H70 Q82 84 72 58 Z"/>
+  <path class="qa-glow" d="M46 70 L54 78 L50 90 M64 66 L68 78 L62 88 M54 96 L60 102" fill="none" stroke="#ffb347" stroke-width="2.4"/>
+  <circle class="qa-glow" cx="58" cy="80" r="6" fill="#ffb347" stroke="#ff6a2b" stroke-width="1.6"/>
+  <g class="qa-arm" style="transform-origin:34px 66px">
+    ${limb('M34 66 Q20 70 14 60', '#c9304a', 8.6)}
+    <path d="M6 54 L2 46 M11 50 L10 42 M16 52 L20 44" fill="none" stroke="#2a2340" stroke-width="3"/>
+    <path class="qa-glow qa-tip" d="M12 56 Q-2 40 6 22 Q8 34 14 30 Q10 22 20 10 Q22 30 26 36 Q30 52 12 56 Z" fill="#ff7a2b" stroke="#c9304a" stroke-width="1.6"/>
+    <path stroke="none" fill="#ffe58a" d="M12 52 Q6 42 10 32 Q14 42 18 40 Q20 48 12 52 Z"/>
+  </g>
+  <path class="qa-cape" d="M40 24 Q26 12 36 -2 Q38 12 50 12 Q44 2 58 -4 Q58 12 66 14 Q64 4 78 2 Q74 14 80 24 Z" fill="#ff7a2b" stroke="#c9304a" stroke-width="1.6"/>
+  <path d="M38 40 Q24 40 22 22 Q30 28 38 28 Z" fill="#e8e0cc"/>
+  <path d="M82 40 Q96 40 98 22 Q90 28 82 28 Z" fill="#e8e0cc"/>
+  <path d="M36 44 Q34 20 60 18 Q86 20 84 44 Q84 60 70 64 L50 64 Q36 60 36 44 Z" fill="#d8405a"/>
+  <path stroke="none" fill="#a02338" d="M74 22 Q86 28 84 44 Q84 60 70 64 L64 64 Q76 44 74 22 Z"/>
+  <path d="M42 32 L56 38 M78 32 L64 38" fill="none" stroke-width="3.4"/>
+  <g class="qa-blink"><ellipse cx="49" cy="43" rx="4.6" ry="4" fill="#ffe14a"/><ellipse cx="71" cy="43" rx="4.6" ry="4" fill="#ffe14a"/><ellipse cx="49" cy="43" rx="1.5" ry="3.6" fill="${INK}" stroke="none"/><ellipse cx="71" cy="43" rx="1.5" ry="3.6" fill="${INK}" stroke="none"/></g>
+  <path d="M60 46 L57 52 H63 Z" fill="#7a1a2c" stroke-width="1.4"/>
+  <path d="M46 56 Q60 66 74 56 Q60 60 46 56 Z" fill="#2a0e18"/>
+  <path d="M49 57 L51.4 62 L53.6 58 M67 58 L68.6 62 L71 57" fill="#fff" stroke-width="1.2"/>`);
+
 const HERO_MARKUP = [WARRIOR, MAGE, GUARDIAN, PRIEST];
-const FOE_MARKUP = { slime: SLIME, bat: BAT, goblin: GOBLIN, skeleton: SKELETON, gargoyle: GARGOYLE, wraith: WRAITH, ogre: OGRE, drake: DRAKE, lich: LICH };
+const FOE_MARKUP = { slime: SLIME, bat: BAT, goblin: GOBLIN, skeleton: SKELETON, gargoyle: GARGOYLE, wraith: WRAITH, ogre: OGRE, drake: DRAKE, lich: LICH,
+  mushroom: MUSHROOM, wolf: WOLF, spider: SPIDER, assassin: ASSASSIN, golem: GOLEM, fire: FIRE, knight: KNIGHT, spiderqueen: SPIDERQUEEN, infernal: INFERNAL };
 export const FOE_IDS = Object.keys(FOE_MARKUP);
 
 const parsed = new Map();

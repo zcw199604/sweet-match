@@ -218,7 +218,7 @@ async function openQuest(page) {
   await page.locator('body[data-ready]').waitFor();
   await page.locator('[data-mode="quest"]').click();
   await expect(page.locator('.quest-board .qt')).toHaveCount(36);
-  await expect(page.locator('#score-text')).toContainText('第 1/10 关');
+  await expect(page.locator('#score-text')).toContainText('第 1/50 关');
 }
 // Tap the two tiles of a swap that is known to make a match.
 async function tapSwap(page) {
@@ -258,7 +258,7 @@ test('三消勇者团: every hero and monster has a drawn figure that parses', a
   });
   expect(art.heroes).toEqual(['svg', 'svg', 'svg', 'svg']);
   expect(art.foes).toEqual(art.ids.map(() => 'svg'));
-  expect([...art.ids].sort()).toEqual(['bat', 'drake', 'gargoyle', 'goblin', 'lich', 'ogre', 'skeleton', 'slime', 'wraith']);
+  expect([...art.ids].sort()).toEqual(['assassin', 'bat', 'drake', 'fire', 'gargoyle', 'goblin', 'golem', 'infernal', 'knight', 'lich', 'mushroom', 'ogre', 'skeleton', 'slime', 'spider', 'spiderqueen', 'wolf', 'wraith']);
 });
 
 test('三消勇者团: a swap that lines up three resolves, then the enemy answers', async ({ page }) => {
@@ -331,6 +331,7 @@ test('三消勇者团: losing shows the end card, submits the score, and 再来�
     const { state } = window.__arcade.quest;
     state.score = 321;
     state.enemies[0].hp = state.enemies[0].maxHp = 9999; // a long cascade must not win the wave first
+    state.bonus = true; // a 4-in-a-row would otherwise grant an extra move and the enemy would not act
     state.party.forEach((hero, i) => { hero.hp = i === 0 ? 1 : 0; });
     state.enemies[0].intent = { n: '必杀', k: 'pierce', p: 99 };
   });
@@ -380,8 +381,8 @@ test('三消勇者团: clearing a wave offers rewards and the next stage starts'
   await expect(page.locator('.quest-perk')).toHaveCount(3);
   await page.locator('.quest-perk').first().click();
   await expect(page.locator('.quest-overlay')).toBeHidden();
-  await expect(page.locator('#score-text')).toContainText('第 2/10 关');
-  await expect(page.locator('.qe-name')).toHaveText('洞穴蝠');
+  await expect(page.locator('#score-text')).toContainText('第 2/50 关');
+  await expect(page.locator('.qe-name')).toHaveText(['史莱姆', '洞穴蝠']);
   await expect(page.locator('.quest-route i').nth(1)).toHaveClass(/now/);
   // The party marches to the next wave; the board takes moves again once it arrives.
   await expect(page.locator('.quest-turn')).toHaveText('你的回合', { timeout: 5000 });

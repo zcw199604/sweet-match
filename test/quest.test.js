@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseReward, createQuest, enemyStep, findMatches, finishMove, intentPower, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from '../quest-core.js';
+import { FOE_IDS } from '../quest-art.js';
+import { chooseReward, createQuest, enemyStep, findMatches, finishMove, intentPower, isBoss, stageValue, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from '../quest-core.js';
 
 const W = 0, M = 1, G = 2, P = 3;
 // A board with no match anywhere: along a row the type steps by 1, down a column by 2.
@@ -280,7 +281,7 @@ test('choosing a reward starts the next stage, heals the party and revives the f
   assert.equal(state.perks[pick], 1);
   assert.ok(state.party[1].hp > 0);
   assert.ok(state.party[0].hp > 10);
-  assert.equal(state.enemies[0].name, '洞穴蝠');
+  assert.equal(state.enemies.length, 2);
   assert.equal(chooseReward(state, pick), false);
 });
 
@@ -369,4 +370,56 @@ test('every event of a step names the hero who caused it, and an enemy cast name
   foe.enemies[0].intent = { n: '撞击', k: 'aoe', p: 4 };
   const act = enemyStep(foe);
   assert.equal(act.events.find((event) => event.kind === 'cast').k, 'aoe');
+});
+
+test('every stage has a wave, and bosses appear exactly on the boss stages', () => {
+  const state = fresh(4);
+  for (let stage = 2; stage <= QUEST.STAGES; stage += 1) {
+    state.stage = stage - 1;
+    state.phase = 'build';
+    state.offers = ['vigor'];
+    chooseReward(state, 'vigor');
+    assert.equal(state.stage, stage);
+    assert.ok(state.enemies.length >= 1 && state.enemies.length <= 2, `stage ${stage}`);
+    assert.equal(isBoss(state), QUEST.BOSS_STAGES.includes(stage), `stage ${stage}`);
+  }
+});
+
+test('the 50-stage run never repeats an enemy within a wave, every enemy has art, and rewards never run dry', () => {
+  const state = fresh(4);
+  const seen = new Set();
+  for (let stage = 2; stage <= QUEST.STAGES; stage += 1) {
+    state.stage = stage - 1;
+    state.phase = 'build';
+    state.offers = ['vigor'];
+    assert.ok(chooseReward(state, 'vigor'));
+    const ids = state.enemies.map((enemy) => enemy.id);
+    assert.equal(new Set(ids).size, ids.length, `stage ${stage} repeats an enemy`);
+    for (const id of ids) { assert.ok(FOE_IDS.includes(id), `${id} has no sprite`); seen.add(id); }
+  }
+  assert.ok(seen.size >= 16, `only ${seen.size} kinds of enemy appear`);
+  // A player who always takes the first offer still gets three options at every stage.
+  const run = fresh(7);
+  for (let stage = 1; stage < QUEST.STAGES; stage += 1) {
+    run.enemies.forEach((enemy) => { enemy.hp = 0; });
+    run.phase = 'resolving';
+    assert.equal(finishMove(run).outcome, 'cleared');
+    assert.equal(run.offers.length, 3, `stage ${stage} offers`);
+    chooseReward(run, run.offers[0]);
+  }
+  assert.equal(run.stage, QUEST.STAGES);
+});
+
+test('a flawless run stays under the leaderboard cap', () => {
+  const state = fresh(4);
+  let total = 3000;
+  for (let stage = 1; stage <= QUEST.STAGES; stage += 1) {
+    state.stage = stage - 1;
+    state.phase = 'build';
+    state.offers = ['vigor'];
+    chooseReward(state, 'vigor');
+    const value = stageValue(stage);
+    total += state.enemies.reduce((sum, enemy) => sum + Math.round(enemy.score * value), 0) + Math.round(100 * value) + 240 + 150;
+  }
+  assert.ok(total < 100_000, `max score ${total}`);
 });
