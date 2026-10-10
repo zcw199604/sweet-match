@@ -8,8 +8,9 @@ const el = (tag, className, text) => {
 };
 const colorName = side => side === 'red' ? '红方' : '蓝方';
 
-export function mountJunqi(wrap, { onHud = () => {} } = {}) {
-  let state = createState(), mode = 'ai', selected = -1, alive = true, timer = 0;
+// online：联机时的 Session。状态以服务端推来的 view 为准（暗棋的身份服务端不发），走子只是发给服务端。
+export function mountJunqi(wrap, { onHud = () => {}, online = null } = {}) {
+  let state = online?.view ?? createState(), mode = online ? 'online' : 'ai', selected = -1, alive = true, timer = 0;
   const root = el('div', 'classic-game junqi-game');
   const top = el('div', 'junqi-toolbar');
   const modes = el('div', 'junqi-modes');
@@ -18,6 +19,7 @@ export function mountJunqi(wrap, { onHud = () => {} } = {}) {
   const restartButton = el('button', 'junqi-control', '↻ 新一局');
   modes.append(aiButton, duoButton);
   top.append(modes, restartButton);
+  top.hidden = Boolean(online);
   const players = el('div', 'junqi-players');
   const playerLabels = [el('span', 'junqi-player'), el('span', 'junqi-player')];
   players.append(...playerLabels);
@@ -64,9 +66,9 @@ export function mountJunqi(wrap, { onHud = () => {} } = {}) {
   root.append(top, players, status, board, message, legend, rules);
   wrap.replaceChildren(root);
 
-  function name(seat) { return mode === 'ai' ? seat === 0 ? '你' : '电脑' : `玩家 ${seat + 1}`; }
+  function name(seat) { return online ? seat === online.seat ? '你' : '对手' : mode === 'ai' ? seat === 0 ? '你' : '电脑' : `玩家 ${seat + 1}`; }
   function clearTimer() { clearTimeout(timer); timer = 0; }
-  function blocked() { return !alive || state.status !== 'playing' || (mode === 'ai' && state.turn === 1); }
+  function blocked() { return !alive || state.status !== 'playing' || (mode === 'ai' && state.turn === 1) || Boolean(online && (online.result.over || state.turn !== online.seat)); }
   function render() {
     if (!alive) return;
     aiButton.classList.toggle('active', mode === 'ai');
@@ -79,9 +81,14 @@ export function mountJunqi(wrap, { onHud = () => {} } = {}) {
       playerLabels[seat].className = `junqi-player ${side ?? ''}${state.status === 'playing' && state.turn === seat ? ' current' : ''}`;
     }
     const turnText = state.status === 'won' ? `${name(state.winner)}获胜！` : state.status === 'draw' ? '本局和棋' : `${name(state.turn)}${state.players[state.turn] ? ` · ${colorName(state.players[state.turn])}` : ''}${mode === 'ai' && state.turn === 1 ? '思考中…' : selected >= 0 ? '：选择亮起的目标' : '：翻棋或移动'}`;
-    status.textContent = turnText;
+    let text = turnText;
+    if (online && state.status === 'playing') {
+      const { over, winner } = online.result;
+      text = over ? (winner === online.seat ? '对手已离开 · 你获胜！' : '你已离开本局 · 对手获胜') : state.turn === online.seat ? `轮到你${selected >= 0 ? '：选择亮起的目标' : '：翻棋或移动'}` : '等待对手……';
+    }
+    status.textContent = text;
     message.textContent = state.message;
-    onHud(`军棋翻棋版 · ${turnText} · ${state.moves} 手`);
+    onHud(`军棋翻棋版 · ${text} · ${state.moves} 手`);
     const targets = selected >= 0 ? legalMoves(state, selected) : [];
     const inputBlocked = blocked();
     for (let at = 0; at < 60; at++) {
@@ -106,6 +113,7 @@ export function mountJunqi(wrap, { onHud = () => {} } = {}) {
     }, 550);
   }
   function play(action) {
+    if (online) { online.send(action); selected = -1; render(); return; }
     const result = applyAction(state, action);
     if (result.ok) { state = result.state; selected = -1; }
     else state = { ...state, message: result.message };
@@ -128,12 +136,13 @@ export function mountJunqi(wrap, { onHud = () => {} } = {}) {
     }
   }
   function restart() {
-    if (!alive) return;
+    if (!alive || online) return;
     clearTimer(); state = createState(); selected = -1; render();
   }
   aiButton.addEventListener('click', () => { if (alive && mode !== 'ai') { mode = 'ai'; restart(); } });
   duoButton.addEventListener('click', () => { if (alive && mode !== 'duo') { mode = 'duo'; restart(); } });
   restartButton.addEventListener('click', restart);
+  const off = online?.on('state', (payload) => { state = payload.view; selected = -1; render(); });
   render();
-  return { restart, destroy() { alive = false; clearTimer(); root.remove(); }, get state() { return state; } };
+  return { restart, destroy() { alive = false; off?.(); clearTimer(); root.remove(); }, get state() { return state; } };
 }

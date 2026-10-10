@@ -11,6 +11,12 @@ const el = (tag, className, text) => {
 };
 const safe = (read, fallback = null) => { try { return read(); } catch { return fallback; } };
 const RIVAL = { online: ['online', '对手在线'], offline: ['offline', '对手掉线，等待重连…'], empty: ['gone', '对手已离开'] };
+const CROWD = { online: ['online', '其他玩家都在线'], offline: ['offline', '有人掉线，等待重连…'], empty: ['gone', '有人已离开'] };
+// 除我以外的人里，最糟的状态决定提示：有人走了 > 有人掉线 > 都在线。两人局就是对手本人的状态。
+const rivalState = (seats, seat) => {
+  const others = seats.filter((_, i) => i !== seat);
+  return others.includes('empty') ? 'empty' : others.includes('offline') ? 'offline' : 'online';
+};
 
 // 「本地 / 联机对战」切换条。onSelect('local' | 'online')；返回 { el, select }。
 export function createModeTabs(onSelect, active = 'local') {
@@ -102,6 +108,10 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
   }
 
   // ---- 等对手 ----
+  const waitingText = () => {
+    const seats = session?.seats ?? [];
+    return seats.length > 2 ? `等待其他玩家加入（${seats.filter((x) => x !== 'empty').length}/${seats.length}）……` : '等待对手加入……';
+  };
   function showWaiting() {
     view = 'waiting';
     bar = null;
@@ -117,7 +127,7 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
     const copy = (text, what) => navigator.clipboard?.writeText(text).then(() => { copied.textContent = `${what}已复制`; }, () => { copied.textContent = '复制失败，请长按链接手动复制'; field.select(); });
     box.append(
       el('p', 'online-lead', '把房间码发给朋友，或者发邀请链接：'), code, field,
-      el('div', 'online-actions'), el('p', 'online-waiting', '等待对手加入……'), copied
+      el('div', 'online-actions'), el('p', 'online-waiting', waitingText()), copied
     );
     box.querySelector('.online-actions').append(
       button('复制房间码', 'online-secondary', () => copy(session.code, '房间码')),
@@ -152,7 +162,7 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
   // 对局结束后的「再来一局 / 换边再来」。提议、同意、拒绝都经过服务端，这里只按 session.rematch 画。
   function renderAfter() {
     const box = bar.after, s = session;
-    const { over, reason } = s.result, seat = s.seat, rival = s.seats[1 - seat] ?? 'empty';
+    const { over, reason } = s.result, seat = s.seat, crowd = s.seats.length > 2, rival = rivalState(s.seats, seat);
     const signature = JSON.stringify([over, reason, rival, s.rematch]);
     if (box.dataset.sig === signature) return;
     box.dataset.sig = signature;
@@ -162,20 +172,26 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
     const label = (swap) => (swap ? '换边再来' : '再来一局');
     const row = el('div', 'online-actions');
     const ask = (swap, text, className = 'online-secondary') => button(text, className, () => s.proposeRematch(swap));
-    if (reason === 'forfeit' || rival === 'empty') {
-      box.append(el('p', 'online-after-text', '对手已经离开，不能再来一局了。'));
-    } else if (s.rematch?.seat === seat) {
-      box.append(el('p', 'online-after-text', `已向对手发出邀请（${label(s.rematch.swap)}），等待确认……`));
-      row.append(button('取消邀请', 'online-ghost', () => s.clearRematch()));
+    const noSwap = cfg.race || cfg.noSwap;
+    if (reason === 'forfeit' || reason === 'abandoned' || rival === 'empty') {
+      box.append(el('p', 'online-after-text', crowd ? '有人已经离开，不能再来一局了。' : '对手已经离开，不能再来一局了。'));
+    } else if (s.rematch && (s.rematch.agreed ? s.rematch.agreed.includes(seat) : s.rematch.seat === seat)) {
+      box.append(el('p', 'online-after-text', s.rematch.agreed
+        ? `已同意再来一局（${s.rematch.agreed.length}/${s.seats.length}），等其他玩家确认……`
+        : `已向对手发出邀请（${label(s.rematch.swap)}），等待确认……`));
+      row.append(button(s.rematch.agreed ? '取消' : '取消邀请', 'online-ghost', () => s.clearRematch()));
+    } else if (s.rematch?.agreed) {
+      box.append(el('p', 'online-after-text', `有人想再来一局（${s.rematch.agreed.length}/${s.seats.length} 已同意）`));
+      row.append(ask(false, '同意', 'online-primary'), button('拒绝', 'online-ghost', () => s.clearRematch()));
     } else if (s.rematch) {
       const swap = s.rematch.swap;
       box.append(el('p', 'online-after-text', swap ? '对手想换边再来一局（先后手互换）' : '对手想再来一局'));
       row.append(ask(swap, '同意', 'online-primary'), button('拒绝', 'online-ghost', () => s.clearRematch()));
-      if (!cfg.race) row.append(ask(!swap, swap ? '改为原座位' : '改为换边'));
+      if (!noSwap) row.append(ask(!swap, swap ? '改为原座位' : '改为换边'));
     } else {
-      box.append(el('p', 'online-after-text', rival === 'offline' ? '这一局结束了，对手暂时掉线，可以先发出邀请。' : '这一局结束了。'));
+      box.append(el('p', 'online-after-text', rival === 'offline' ? '这一局结束了，有人暂时掉线，可以先发出邀请。' : '这一局结束了。'));
       row.append(ask(false, '再来一局', 'online-primary'));
-      if (!cfg.race) row.append(ask(true, '换边再来'));   // 竞速游戏两边是对称的，换边没有意义
+      if (!noSwap) row.append(ask(true, '换边再来'));   // 竞速游戏两边是对称的、多人局没有先后手，换边没有意义
     }
     if (row.childElementCount) box.append(row);
   }
@@ -184,14 +200,14 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
     renderAfter();
     const seat = session.seat;
     bar.room.textContent = `房间 ${session.code ?? ''}`;
-    bar.you.textContent = seat === null ? '' : `你是${cfg.seats[seat]}`;
+    bar.you.textContent = seat === null ? '' : `你是${cfg.seatName?.(seat, session.view) ?? cfg.seats[seat]}`;
     if (session.status === 'reconnecting') {
       bar.status.className = 'online-rival offline';
       bar.status.textContent = '连接中断，正在重连…';
       return;
     }
-    const rival = session.seats[1 - seat] ?? 'empty';
-    const [kind, text] = RIVAL[rival] ?? RIVAL.empty;
+    const rival = rivalState(session.seats, seat);
+    const [kind, text] = (session.seats.length > 2 ? CROWD : RIVAL)[rival];
     bar.status.className = `online-rival ${kind}`;
     bar.status.textContent = text;
   }
@@ -223,6 +239,7 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
     if (view === 'play') return updateBar();
     if (session.full) return enterPlay();
     if (view !== 'waiting') showWaiting();
+    else root.querySelector('.online-waiting')?.replaceChildren(waitingText());
   }
   function onStatus(status) {
     if (!alive) return;

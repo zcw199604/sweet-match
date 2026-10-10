@@ -23,8 +23,9 @@ const svg = (name, attributes) => {
   return node;
 };
 
-export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random } = {}) {
-  let alive = true, state = createAeroplane(), mode = 'ai', selected = null, timer = 0;
+// online：联机时的 Session。状态是服务端推来的 view（掷骰在服务端，电脑队也由服务端代打），点击只是把「掷骰 / 走哪架」发出去。
+export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random, online = null } = {}) {
+  let alive = true, state = online?.view ?? createAeroplane(), mode = online ? 'online' : 'ai', selected = null, timer = 0, waiting = false;
   const root = el('section', 'classic-game aeroplane-game');
   const toolbar = el('div', 'classic-tools');
   const label = el('label', 'aero-mode', '玩法 ');
@@ -34,6 +35,7 @@ export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random } 
   label.append(modeSelect);
   const restartButton = el('button', '', '↻ 重开');
   toolbar.append(label, restartButton);
+  toolbar.hidden = Boolean(online);
   const teams = el('div', 'aero-teams');
   const board = el('div', 'aero-board aeroplane-board');
   board.setAttribute('aria-label', '飞行棋棋盘，顺时针飞行');
@@ -75,7 +77,9 @@ export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random } 
   root.append(toolbar, teams, board, controls, choices, status, rules);
   wrap.replaceChildren(root);
 
-  const human = () => mode === 'local' || state.turn === 0;
+  const over = () => Boolean(online?.result.over) && state.phase !== 'won';   // 联机时有人离开，本局提前结束
+  const mine = () => state.turn === state.team && !over() && !waiting;
+  const human = () => online ? mine() : mode === 'local' || state.turn === 0;
   const cancel = () => { clearTimeout(timer); timer = 0; };
   const drawRoute = move => {
     route.replaceChildren();
@@ -131,6 +135,7 @@ export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random } 
       confirm.dataset.action = 'move'; confirm.disabled = !preview;
       confirm.addEventListener('click', () => {
         if (!alive || !human() || selected === null) return;
+        if (online) { online.send({ type: 'move', plane: selected }); waiting = true; return render(); }
         if (moveAeroplane(state, selected)) { selected = null; render(); scheduleAi(); }
       });
       choices.append(confirm);
@@ -138,14 +143,14 @@ export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random } 
     dice.disabled = !alive || state.phase !== 'roll' || !human();
     dice.textContent = state.dice === null ? '⚄' : ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][state.dice - 1];
     dice.setAttribute('aria-label', state.phase === 'roll' && human() ? '掷骰子' : `骰子 ${state.dice || '未掷'} 点`);
-    turnLabel.textContent = state.phase === 'won' ? `${AEROPLANE_TEAMS[state.winner]}获胜！` : `${AEROPLANE_TEAMS[state.turn]}${human() ? '回合' : '思考中'}`;
-    guidance.textContent = state.phase === 'won' ? '四架飞机全部到达终点' : preview ? `${selected + 1} 号 → ${preview.to === 57 ? '终点' : preview.to >= 52 ? `终点道 ${preview.to - 51}` : `公共道 ${aeroplaneCell(state.turn, preview.to) + 1}`}${preview.bonuses.includes('jump') ? ' · 跳 4' : ''}${preview.bonuses.includes('fly') ? ' · 飞 12' : ''}` : state.phase === 'move' ? '选择飞机，亮圈预览终点' : human() ? '点骰子开始飞行' : '稍等，电脑正在飞行';
-    status.textContent = state.message;
+    turnLabel.textContent = state.phase === 'won' ? `${AEROPLANE_TEAMS[state.winner]}获胜！` : over() ? '本局已结束' : online ? `${AEROPLANE_TEAMS[state.turn]}${state.turn === state.team ? ' · 你的回合' : state.teams[state.turn] === null ? ' · 电脑思考中' : ' · 对手回合'}` : `${AEROPLANE_TEAMS[state.turn]}${human() ? '回合' : '思考中'}`;
+    guidance.textContent = state.phase === 'won' ? '四架飞机全部到达终点' : preview ? `${selected + 1} 号 → ${preview.to === 57 ? '终点' : preview.to >= 52 ? `终点道 ${preview.to - 51}` : `公共道 ${aeroplaneCell(state.turn, preview.to) + 1}`}${preview.bonuses.includes('jump') ? ' · 跳 4' : ''}${preview.bonuses.includes('fly') ? ' · 飞 12' : ''}` : state.phase === 'move' ? '选择飞机，亮圈预览终点' : human() ? '点骰子开始飞行' : online ? '等待其他队伍……' : '稍等，电脑正在飞行';
+    status.textContent = over() ? '有人离开了，这一局结束。' : state.message;
     onHud(`飞行棋 · ${turnLabel.textContent} · ${state.moves} 步`);
   };
   const scheduleAi = () => {
     cancel();
-    if (!alive || human() || state.phase === 'won') return;
+    if (online || !alive || human() || state.phase === 'won') return;
     timer = setTimeout(() => {
       timer = 0;
       if (!alive || human() || state.phase === 'won') return;
@@ -160,15 +165,18 @@ export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random } 
     }, state.phase === 'roll' ? 650 : 800);
   };
   const reset = () => {
-    if (!alive) return;
+    if (!alive || online) return;
     cancel(); state = createAeroplane(); selected = null; render();
   };
   dice.addEventListener('click', () => {
     if (!alive || !human()) return;
+    if (online) { online.send({ type: 'roll' }); waiting = true; return render(); }
     if (rollAeroplane(state, random)) { selected = null; render(); scheduleAi(); }
   });
   restartButton.addEventListener('click', reset);
   modeSelect.addEventListener('change', () => { mode = modeSelect.value; reset(); });
+  // 等服务端确认前不再接受第二次点击（连点会白白吃一条「还没轮到你」）；被拒绝时也要放开。
+  const offs = online ? [online.on('state', (payload) => { state = payload.view; selected = null; waiting = false; render(); }), online.on('reject', () => { waiting = false; render(); })] : [];
   render();
-  return { restart: reset, destroy() { alive = false; cancel(); root.remove(); }, get state() { return state; } };
+  return { restart: reset, destroy() { alive = false; offs.forEach((off) => off()); cancel(); root.remove(); }, get state() { return state; } };
 }

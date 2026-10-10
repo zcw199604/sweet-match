@@ -11,8 +11,9 @@ const button = (text, action, handler) => {
   node.addEventListener('click', handler); return node;
 };
 
-export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
-  let alive = true, timer = null, epoch = 0, state = createGame(), selected = new Set();
+// online：联机时的 Session。状态是服务端按座位旋转过的 view（players[0] 永远是自己，别人的手牌只有张数），出牌只是发给服务端。
+export function mountDoudizhu(wrap, { onHud = () => {}, online = null } = {}) {
+  let alive = true, timer = null, epoch = 0, state = online?.view ?? createGame(), selected = new Set();
   const root = el('div', 'classic-game doudizhu-game');
   const head = el('div', 'dd-head'), title = el('b', '', '🃏 糖果牌桌'), bottom = el('div', 'dd-bottom');
   head.append(title, bottom);
@@ -30,6 +31,7 @@ export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
   const actions = el('div', 'classic-tools dd-actions');
   const bidButtons = [0, 1, 2, 3].map((score) => button(score ? `${score} 分` : '不叫', `bid-${score}`, () => {
     if (!alive) return;
+    if (online) return online.send({ type: 'bid', score });
     act(bid(state, 0, score));
   }));
   const hint = button('💡 提示', 'hint', () => {
@@ -38,9 +40,17 @@ export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
     selected = new Set(move?.cards ?? []);
     render(); message.textContent = move ? `推荐${move.shape.label}，点击出牌。` : '没有更大的同型牌，可以点「不要」。';
   });
-  const submit = button('出牌', 'play', () => { if (alive) act(playCards(state, 0, [...selected])); });
+  const submit = button('出牌', 'play', () => {
+    if (!alive) return;
+    if (online) return online.send({ type: 'play', cards: [...selected] });   // 选中的牌留着：被拒绝时可以直接改
+    act(playCards(state, 0, [...selected]));
+  });
   submit.className = 'dd-primary';
-  const skip = button('不要', 'pass', () => { if (alive) act(pass(state, 0)); });
+  const skip = button('不要', 'pass', () => {
+    if (!alive) return;
+    if (online) return online.send({ type: 'pass' });
+    act(pass(state, 0));
+  });
   const clear = button('清空', 'clear', () => { if (!alive) return; selected.clear(); render(); });
   const again = button('再来一局', 'restart', restart);
   actions.append(...bidButtons, hint, clear, skip, submit, again);
@@ -59,7 +69,9 @@ export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
   }
   function render() {
     if (!alive) return;
-    const bidding = state.phase === 'bidding', finished = state.phase === 'finished', myTurn = state.current === 0 && !finished;
+    // 联机时有人中途离开：本局作废（或判对手胜），牌桌上的东西都不能再点了。
+    const bidding = state.phase === 'bidding', finished = state.phase === 'finished', stopped = Boolean(online?.result.over) && !finished;
+    const myTurn = state.current === 0 && !finished && !stopped;
     root.dataset.phase = state.phase;
     bottom.replaceChildren();
     const bottomText = el('span', 'dd-bottom-label', '底牌'); bottom.append(bottomText);
@@ -67,7 +79,7 @@ export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
     seats.forEach((view, i) => {
       const index = i + 1, seat = state.players[index], role = state.landlord === null ? '等待叫分' : state.landlord === index ? '👑 地主' : '🌾 农民';
       view.name.textContent = `${seat.name} · ${role}`;
-      view.meta.textContent = `${seat.cards.length} 张手牌${state.current === index && !finished ? ' · 思考中…' : ''}`;
+      view.meta.textContent = `${seat.count ?? seat.cards.length} 张手牌${state.current === index && !finished && !stopped ? (seat.bot || !online ? ' · 思考中…' : ' · 出牌中…') : ''}`;
       view.last.textContent = seat.last?.text ?? '准备好了';
       view.seat.classList.toggle('active', state.current === index && !finished);
       view.seat.classList.toggle('landlord', state.landlord === index);
@@ -84,7 +96,7 @@ export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
       tableLabel.textContent = bidding ? '叫分最高者成为地主' : `${state.players[state.current].name}领出`;
       tableCards.append(el('span', 'dd-table-empty', bidding ? '17 张手牌 + 3 张底牌' : '单张、顺子、飞机…选好就出！'));
     }
-    message.textContent = state.message;
+    message.textContent = stopped ? '有人离开了，这一局结束。' : state.message;
     myLabel.textContent = `你 · ${state.landlord === null ? '等待叫分' : state.landlord === 0 ? '👑 地主' : '🌾 农民'} · ${state.players[0].cards.length} 张${myTurn ? ' · 轮到你' : ''}`;
     hand.replaceChildren();
     state.players[0].cards.slice().reverse().forEach((id) => {
@@ -105,13 +117,13 @@ export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
     clear.disabled = !myTurn || !selected.size;
     skip.disabled = !myTurn || !state.table;
     submit.disabled = !myTurn || !selected.size;
-    again.hidden = !finished;
+    again.hidden = !finished || Boolean(online);   // 联机的「再来一局」在外壳里
     onHud(finished ? state.message : bidding ? '叫分选地主' : `${state.players[state.current].name}的回合 · ${state.highBid} 分 × ${state.multiplier}`);
   }
   function schedule() {
     if (timer !== null) clearTimeout(timer);
     timer = null;
-    if (!alive || state.current === 0 || state.phase === 'finished') return;
+    if (online || !alive || state.current === 0 || state.phase === 'finished') return;
     const atEpoch = epoch;
     timer = setTimeout(() => {
       timer = null;
@@ -124,14 +136,15 @@ export function mountDoudizhu(wrap, { onHud = () => {} } = {}) {
     selected.clear(); render(); schedule();
   }
   function restart() {
-    if (!alive) return;
+    if (!alive || online) return;
     epoch += 1; if (timer !== null) clearTimeout(timer); timer = null;
     state = createGame(); selected.clear(); render(); schedule();
   }
+  const off = online?.on('state', (payload) => { state = payload.view; selected.clear(); render(); });
   render();
   return {
     restart,
-    destroy() { alive = false; epoch += 1; if (timer !== null) clearTimeout(timer); timer = null; root.remove(); },
+    destroy() { alive = false; off?.(); epoch += 1; if (timer !== null) clearTimeout(timer); timer = null; root.remove(); },
     get state() { return state; }
   };
 }

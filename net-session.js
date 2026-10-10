@@ -69,7 +69,7 @@ export class Session {
     this.status = 'idle';       // idle | live | reconnecting | closed
     this.closeReason = null;    // 'left' | 'lost'
     this.closing = false;
-    this.listeners = { state: new Set(), reject: new Set(), notice: new Set(), status: new Set() };
+    this.listeners = { state: new Set(), reject: new Set(), notice: new Set(), status: new Set(), net: new Set() };
   }
 
   on(type, fn) {
@@ -115,6 +115,11 @@ export class Session {
     this.room.send('action', action);
   }
 
+  // 实时合作游戏（coop 房间）：游戏跑在房主的浏览器里，这里只是把包原样交给服务端转给对方，收到的包从 'net' 事件出来。
+  sendNet(message) {
+    if (this.status === 'live') this.room.send('net', message);
+  }
+
   // 再来一局：对局结束后一方提议、另一方同意才开始；swap=true 表示交换先后手。对方已经提议时再发同样的参数就是同意。
   proposeRematch(swap = false) {
     if (this.status !== 'live') return this.#emit('reject', '连接中断，正在重连……');
@@ -145,6 +150,7 @@ export class Session {
     room.onMessage('state', (payload) => { this.payload = payload; this.#save(); this.#emit('state', payload); });
     room.onMessage('reject', (m) => this.#emit('reject', m?.message ?? '操作被拒绝'));
     room.onMessage('notice', (m) => this.#emit('notice', m?.text ?? ''));
+    room.onMessage('net', (m) => this.#emit('net', m));
     room.onLeave((code) => this.#dropped(code));
     this.#setStatus('live');
     this.#save();

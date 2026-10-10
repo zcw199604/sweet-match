@@ -337,3 +337,192 @@ test('扫雷竞速结束后再来一局：没有「换边」（两边对称）�
   expect([...a.errors, ...b.errors]).toEqual([]);
   await a.context().close(); await b.context().close();
 });
+
+// ---------- 军棋 / 斗地主 / 飞行棋 ----------
+const pickOption = async (page, label, text) => {
+  await page.locator('.online-option', { hasText: label }).locator('select').selectOption({ label: text });
+};
+
+test('军棋：暗棋身份只有翻开后才可见，轮流翻棋/走子，非己方回合不能点，一方离开另一方获胜', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  const code = await createRoom(a, 'junqi');
+  await joinRoom(b, 'junqi', code);
+  for (const page of [a, b]) await expect(page.locator('.junqi-board')).toBeVisible();
+  await expect(a.locator('.online-you')).toHaveText('你是先手');
+  await expect(a.locator('.junqi-toolbar')).toBeHidden();
+  await expect(a.locator('.junqi-cell.face-down')).toHaveCount(50);
+  // 暗棋的身份不在对手的内存里：服务端发来的 view 里没有 kind / side
+  const leaked = await b.evaluate(() => window.__arcade.classic.session.view.board.filter((p) => p && !p.revealed && (p.kind || p.side)).length);
+  expect(leaked).toBe(0);
+
+  await expect(b.locator('.junqi-cell').first()).toBeDisabled();             // 后手：还没轮到
+  await a.locator('.junqi-cell.face-down').first().click();
+  await expect(a.locator('.junqi-cell.face-up')).toHaveCount(1);
+  await expect(b.locator('.junqi-cell.face-up')).toHaveCount(1);             // 对手也看到翻开的棋子
+  await expect(b.locator('.junqi-status')).toContainText('轮到你');
+  await expect(a.locator('.junqi-status')).toContainText('等待对手');
+  await expect(a.locator('.junqi-cell.face-down').first()).toBeDisabled();
+  await b.locator('.junqi-cell.face-down').first().click();
+  await expect(a.locator('.junqi-cell.face-up')).toHaveCount(2);
+  await expect(a.locator('.junqi-status')).toContainText('轮到你');
+
+  await b.locator('.online-bar .online-ghost').click();
+  await expect(a.locator('.junqi-status')).toContainText('对手已离开');
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});
+
+test('斗地主：2 个真人 + 1 个电脑，叫分 → 地主出牌 → 电脑接着打；别人的手牌不在页面里', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  await openGame(a, 'doudizhu');
+  await goOnline(a);
+  await expect(a.locator('.online-option', { hasText: '真人玩家' })).toBeVisible();
+  await a.locator('.online-primary').click();
+  const code = (await a.locator('.online-code').innerText()).trim();
+  await expect(a.locator('.online-waiting')).toBeVisible();
+  await joinRoom(b, 'doudizhu', code);
+  for (const page of [a, b]) await expect(page.locator('.dd-hand .dd-card')).toHaveCount(17);
+  await expect(a.locator('.online-you')).toHaveText('你是玩家 1');
+  await expect(a.locator('.dd-actions [data-action="restart"]')).toBeHidden();
+
+  await expect(a.locator('.dd-my-label')).toContainText('轮到你');
+  await expect(b.locator('[data-action="bid-1"]')).toBeDisabled();           // 还没轮到
+  await a.locator('[data-action="bid-1"]').click();
+  await expect(b.locator('.dd-my-label')).toContainText('轮到你');
+  await b.locator('[data-action="bid-3"]').click();                          // 3 分直接成为地主
+  await expect(b.locator('.dd-hand .dd-card')).toHaveCount(20);
+  await expect(a.locator('.dd-hand .dd-card')).toHaveCount(17);
+  await expect(a.locator('.dd-bottom .dd-card')).toHaveCount(3);             // 底牌公开了
+  const hidden = await a.evaluate(() => window.__arcade.classic.session.view.players.slice(1).map((p) => p.cards.length));
+  expect(hidden).toEqual([0, 0]);                                            // 对手的手牌从来没发给过我
+
+  await b.locator('.dd-hand .dd-card').first().click();                      // 地主领出一张
+  await b.locator('[data-action="play"]').click();
+  await expect(b.locator('.dd-hand .dd-card')).toHaveCount(19);
+  await expect(a.locator('.dd-table-label')).toContainText('单张');
+  // 下家是电脑：它自己出牌或不要，之后轮到玩家 1（A），全程没有人替它点击
+  await expect(a.locator('.dd-my-label')).toContainText('轮到你', { timeout: 10_000 });
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});
+
+test('飞行棋：2 个真人（红·绿）+ 电脑代打黄·蓝；骰子由服务端掷，双方看到同一个点数', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  await openGame(a, 'aeroplane');
+  await goOnline(a);
+  await a.locator('.online-primary').click();                                // 默认 2 人
+  const code = (await a.locator('.online-code').innerText()).trim();
+  await joinRoom(b, 'aeroplane', code);
+  for (const page of [a, b]) await expect(page.locator('.aeroplane-board')).toBeVisible();
+  await expect(a.locator('.online-you')).toHaveText('你是红队');
+  await expect(b.locator('.online-you')).toHaveText('你是绿队');
+  await expect(a.locator('.aero-mode')).toBeHidden();
+  await expect(b.locator('.aero-dice')).toBeDisabled();                      // 红队先行
+
+  const dice = (page) => page.locator('.aero-dice').innerText();
+  // 红队操作到回合结束：掷骰，需要选飞机时选第一架并确认；掷到 6 会继续，所以循环到轮到绿队为止
+  for (let i = 0; i < 80 && (await b.locator('.aero-dice').isDisabled()); i++) {
+    if (await a.locator('.aero-dice').isEnabled()) await a.locator('.aero-dice').click();
+    else if (await a.locator('.aero-choices [data-choose]').count()) {
+      await a.locator('.aero-choices [data-choose]').first().click();
+      await a.locator('[data-action="move"]').click();
+    } else await a.waitForTimeout(100);
+  }
+  await expect(b.locator('.aero-dice')).toBeEnabled({ timeout: 15_000 });   // 黄、蓝由电脑走完，轮到绿队
+  await expect(b.locator('.aero-turn')).toContainText('你的回合');
+  await expect(a.locator('.aero-turn')).toContainText('绿队');
+  await b.locator('.aero-dice').click();
+  await expect.poll(async () => (await dice(a)) === (await dice(b)) && (await dice(b)) !== '⚄').toBe(true);
+  await b.locator('.online-bar .online-ghost').click();                      // 一方离开，另一方获胜（2 人局）
+  await expect(a.locator('.aero-turn')).toContainText('本局已结束');
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});
+
+test('飞行棋 3 人局：等待界面显示 n/3，人齐才开始；座位名跟着队伍走', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B'), c = await player(browser, 'C');
+  await openGame(a, 'aeroplane');
+  await goOnline(a);
+  await pickOption(a, '真人玩家', '3 人（红 · 黄 · 绿）');
+  await a.locator('.online-primary').click();
+  const code = (await a.locator('.online-code').innerText()).trim();
+  await expect(a.locator('.online-waiting')).toContainText('1/3');
+  await joinRoom(b, 'aeroplane', code);
+  await expect(a.locator('.online-waiting')).toContainText('2/3');
+  await expect(b.locator('.online-waiting')).toContainText('2/3');
+  await expect(a.locator('.aeroplane-board')).toHaveCount(0);
+  await joinRoom(c, 'aeroplane', code);
+  for (const page of [a, b, c]) await expect(page.locator('.aeroplane-board')).toBeVisible();
+  await expect(b.locator('.online-you')).toHaveText('你是黄队');
+  await expect(c.locator('.online-you')).toHaveText('你是绿队');
+  await expect(a.locator('.online-rival')).toContainText('其他玩家都在线');
+  await c.locator('.online-bar .online-ghost').click();                      // 三人局有人离开 → 本局作废，不判输赢
+  await expect(a.locator('.aero-turn')).toContainText('本局已结束');
+  await expect(a.locator('.online-after-text')).toContainText('不能再来一局');
+  expect([...a.errors, ...b.errors, ...c.errors]).toEqual([]);
+  for (const page of [a, b, c]) await page.context().close();
+});
+
+// ---------- 泡噗 / 山山兔：在线房间 ----------
+test('泡噗 2 在线房间：房主建房选游戏，客人用房间码加入后自动进入同一局，操作同步给房主', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  await a.goto('/'); await a.locator('body[data-ready]').waitFor();
+  await a.locator('#open-link').click();
+  await a.locator('#online-create').click();
+  await expect(a.locator('#online-copy')).toBeVisible();
+  const code = await a.locator('#online-code').inputValue();
+  expect(code).toMatch(/^[A-HJ-NP-Z2-9]{5}$/);
+  await expect(a.locator('#link-state')).toContainText('房主');
+  await a.locator('#close-link').click();
+  await a.locator('.arcade-card[data-mode="pop2"]').click();
+
+  await b.goto('/'); await b.locator('body[data-ready]').waitFor();
+  await b.locator('#open-link').click();
+  await b.locator('#online-code').fill(code.toLowerCase());
+  await b.locator('#online-join').click();
+  await b.locator('#close-link').click();
+  await expect(b.locator('#game.active .game-canvas')).toBeVisible({ timeout: 10_000 });   // 房主的快照把客人带进了游戏
+  await expect(b.locator('#seat-text')).toContainText('玩家 2');
+  expect(await a.evaluate(() => window.__arcade.state.players.length)).toBe(2);
+
+  const before = await a.evaluate(() => window.__arcade.state.players[1].tx);
+  await b.keyboard.down('a');
+  await b.waitForTimeout(500);
+  await b.keyboard.up('a');
+  await expect.poll(() => a.evaluate(() => window.__arcade.state.players[1].tx)).not.toBe(before);   // 客人的操作到了房主那里
+
+  await a.locator('#game-link').click();
+  await a.locator('#leave-room').click();                                    // 房主断开 → 客人收到通知
+  await expect(b.locator('#link-state')).not.toHaveClass(/online/);
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});
+
+test('山山兔在线房间：邀请链接直接加入；错误房间码有提示', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  await b.goto('/'); await b.locator('body[data-ready]').waitFor();
+  await b.locator('#open-link').click();
+  await b.locator('#online-code').fill('ZZZZZ');
+  await b.locator('#online-join').click();
+  await expect(b.locator('#online-info')).toContainText('房间不存在');
+  await b.locator('#online-code').fill('12');
+  await b.locator('#online-join').click();
+  await expect(b.locator('#online-info')).toContainText('5 位');
+
+  await a.goto('/'); await a.locator('body[data-ready]').waitFor();
+  await a.locator('#open-link').click();
+  await a.locator('#online-create').click();
+  await expect(a.locator('#online-copy')).toBeVisible();
+  const code = await a.locator('#online-code').inputValue();
+  await a.locator('#close-link').click();
+  await a.locator('.arcade-card[data-mode="surge"]').click();
+
+  await b.goto(`/?coop=${code}`);                                            // 邀请链接：不用点任何按钮
+  await b.locator('#close-link').click();
+  await expect(b.locator('#game.active .game-canvas')).toBeVisible({ timeout: 10_000 });
+  expect(b.url()).not.toContain('coop=');
+  await expect(b.locator('#link-state')).toContainText('玩家 2');
+  expect(await b.evaluate(() => window.__arcade.mode)).toBe('surge');
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});

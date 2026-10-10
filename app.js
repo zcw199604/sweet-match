@@ -11,7 +11,7 @@ import { initActivity, trackActivity } from './activity.js';
 import { initRecent, noteOpened, showRecent } from './recent.js';
 import { ONLINE_GAMES, isOnlineGame } from './online-games.js';
 import { createModeTabs, mountOnlineShell } from './online-shell.js';
-import { hasResume, isCode, normalizeCode } from './net-session.js';
+import { Session, friendlyError, hasResume, isCode, loadSdk, normalizeCode, resolveServerUrl } from './net-session.js';
 import {
   ballPainter, ballShades, DEFAULT_THEME, drawThemeArena, drawThemeBackdrop, drawThemeBase, drawThemeCraft,
   drawThemeThruster, isTheme, paintThemeChip, resetThemeCaches, THEMES, themeById
@@ -123,6 +123,8 @@ const keys = new Set();
 const keyMoving = [false, false];
 let lan = { role: 'solo', token: null, code: null, base: '', source: null, events: null };
 let rtc = { peer: null, channel: null };
+// 在线房间（Colyseus 的 coop 中继房间）：和局域网版是同一套「房主出快照、客人发操作」，只是传输换成了这个 Session。
+let onlineSession = null;
 
 function showScreen(id) {
   if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSudoku(); stopClassic(); clearModeTabs(); }
@@ -175,6 +177,7 @@ function closeEvents() {
   lan.events = null;
 }
 function sendNetwork(message) {
+  onlineSession?.sendNet(message);
   if (rtc.channel?.readyState === 'open') rtc.channel.send(JSON.stringify(message));
   if (lan.token && lan.base) postJson('/api/message', { token: lan.token, message }).catch(() => setHint('局域网服务连接已断开，请检查地址。', true));
 }
@@ -233,8 +236,67 @@ async function joinRoom() {
     sendNetwork({ type: 'hello' });
   } catch (error) { setHint(`加入失败：${error.message}`, true); }
 }
+// ---- 在线房间 ----
+const coopServer = () => resolveServerUrl({ search: location.search, stored: (() => { try { return localStorage.getItem('pao-net-server'); } catch { return null; } })(), hostname: location.hostname });
+function setOnlineInfo(text, error = false) {
+  const node = $('#online-info');
+  node.textContent = text;
+  node.style.color = error ? '#bc5d6d' : '';
+}
+function coopPeerHint(session) {
+  const peer = session.seats[1 - session.seat] ?? 'empty';
+  if (lan.role === 'host') return peer === 'online' ? '玩家 2 已加入。' : peer === 'offline' ? '玩家 2 掉线了，等待重连……' : '等待玩家 2 加入……';
+  return peer === 'online' ? '房主在线。' : peer === 'offline' ? '房主掉线了，等待重连……' : '房主已离开。';
+}
+async function coopConnect(role, run, busyText) {
+  if (lan.role !== 'solo') return setOnlineInfo('已经在一个房间里了，请先断开连接。', true);
+  setOnlineInfo(busyText);
+  let session = null;
+  try {
+    session = new Session({ sdk: await loadSdk(), url: coopServer(), game: 'coop' });
+    await run(session);
+  } catch (error) { return setOnlineInfo(friendlyError(error), true); }
+  onlineSession = session;
+  lan = { ...lan, role, source: 'online', code: session.code, token: null, base: '' };
+  session.on('net', (message) => { try { installMessageHandler(message); } catch { /* 对方发来的包不可信，出错就当没收到 */ } });
+  // 房间码在服务端回第一条 state 时才知道；之后每次座位变化（有人加入 / 掉线 / 离开）都会再来一条
+  session.on('state', () => {
+    if (onlineSession !== session || session.seat === null || !session.code) return;
+    const text = `房间 ${session.code} · ${coopPeerHint(session)}`;
+    setLinkState(true); setHint(text);
+    if (role === 'host') { $('#online-code').value = session.code; $('#online-copy').hidden = false; setOnlineInfo(`${text} 把房间码发给朋友，再选择一个游戏。`); }
+  });
+  session.on('status', (status) => {
+    if (onlineSession !== session) return;
+    if (status === 'reconnecting') { setLinkState(false); setHint('连接中断，正在重连……', true); }
+    else if (status === 'live') { setLinkState(true); if (role === 'host') broadcastSnapshot(true); else sendNetwork({ type: 'hello' }); }   // 重连后重新对一次棋盘
+    else if (status === 'closed') disconnect().then(() => setHint(session.closeReason === 'lost' ? '连接中断太久，房间已经断开。' : '房间已关闭。', true));
+  });
+  setLinkState(true);
+  if (role === 'host') setHint('房间创建中……');
+  else {
+    setOnlineInfo(`已加入房间 ${normalizeCode($('#online-code').value)}，等待房主开始游戏。`);
+    sendNetwork({ type: 'hello' });
+  }
+}
+const createOnlineRoom = () => coopConnect('host', (s) => s.create(), '正在创建房间……');
+function joinOnlineRoom(code = $('#online-code').value) {
+  const normalized = normalizeCode(code);
+  if (!isCode(normalized)) return setOnlineInfo('房间码是 5 位字母和数字（没有 I、O、0、1）。', true);
+  $('#online-code').value = normalized;
+  return coopConnect('guest', (s) => s.join(normalized), '正在加入房间……');
+}
+async function leaveOnline() {
+  const session = onlineSession;
+  onlineSession = null;
+  $('#online-copy').hidden = true;
+  await session?.leave().catch(() => {});
+}
 async function disconnect() {
   closeEvents();
+  const wasOnline = Boolean(onlineSession);
+  await leaveOnline();
+  if (wasOnline) setOnlineInfo('已断开连接。');
   if (lan.token && lan.base) await postJson('/api/leave', { token: lan.token }).catch(() => {});
   if (rtc.peer) rtc.peer.close();
   rtc = { peer: null, channel: null };
@@ -1300,10 +1362,16 @@ $('#back-home').addEventListener('click', () => { showScreen('home'); });
 initBoard(); initActivity(); initRecent(startGame);
 $('#open-board').addEventListener('click', () => openBoard());
 $('#game-board').addEventListener('click', () => openBoard(boardId()));
+$('#online-create').addEventListener('click', createOnlineRoom); $('#online-join').addEventListener('click', () => joinOnlineRoom());
+$('#online-code').addEventListener('keydown', (event) => { if (event.key === 'Enter') joinOnlineRoom(); });
+$('#online-copy').addEventListener('click', () => {
+  const link = `${location.origin}/?coop=${onlineSession?.code ?? ''}`;
+  navigator.clipboard?.writeText(link).then(() => setOnlineInfo('邀请链接已复制。'), () => setOnlineInfo(`复制失败，请手动复制：${link}`, true));
+});
 $('#create-room').addEventListener('click', createRoom); $('#join-room').addEventListener('click', joinRoom); $('#leave-room').addEventListener('click', disconnect);
 $('#make-offer').addEventListener('click', makeOffer); $('#make-answer').addEventListener('click', makeAnswer); $('#finish-answer').addEventListener('click', finishAnswer);
 $$('[data-copy]').forEach((node) => node.addEventListener('click', async () => { const target = $(`#${node.dataset.copy}`); await navigator.clipboard?.writeText(target.value); setHint('已复制到剪贴板。'); }));
-$$('.tab').forEach((tab) => tab.addEventListener('click', () => { $$('.tab').forEach((other) => other.classList.toggle('active', other === tab)); $('#server-panel').classList.toggle('active', tab.dataset.tab === 'server'); $('#webrtc-panel').classList.toggle('active', tab.dataset.tab === 'webrtc'); }));
+$$('.tab').forEach((tab) => tab.addEventListener('click', () => { $$('.tab').forEach((other) => other.classList.toggle('active', other === tab)); for (const id of ['online', 'server', 'webrtc']) $(`#${id}-panel`).classList.toggle('active', tab.dataset.tab === id); }));
 $('#lan-server-url').value = new URLSearchParams(location.search).get('lan') || localStorage.getItem('pao-lan-server') || location.origin;
 loadBlastBest(); loadPop3Prefs();
 try { gooseMode = localStorage.getItem('pao-goose-mode') === 'endless' ? 'endless' : 'classic'; } catch { /* private mode */ }
@@ -1324,7 +1392,11 @@ showScreen('home'); cancelAnimationFrame(frameId); frameId = requestAnimationFra
 {
   const params = new URLSearchParams(location.search), game = params.get('game'), room = normalizeCode(params.get('room'));
   const resumed = /^#game\/([a-z0-9]+)$/.exec(bootHash)?.[1];
-  if (isOnlineGame(game) && isCode(room)) {
+  const coop = normalizeCode(params.get('coop'));
+  if (isCode(coop)) {   // /?coop=ABCD2：泡噗 / 山山兔的在线房间邀请 → 打开联机窗口并直接加入
+    history.replaceState(null, '', location.pathname);
+    openLink(); joinOnlineRoom(coop);
+  } else if (isOnlineGame(game) && isCode(room)) {
     pendingInvite = { game, code: room };
     history.replaceState(null, '', location.pathname);
     startGame(game);

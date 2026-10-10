@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Session, SERVER_DEFAULT, friendlyError, hasResume, isCode, normalizeCode, randomKey, resolveServerUrl, shareUrl } from '../net-session.js';
 import { ONLINE_GAMES, isOnlineGame } from '../online-games.js';
+import { adapters } from '../server/adapters/index.js';
 
 // ---- 假的 SDK：记录调用，由测试决定什么时候推消息、什么时候断线 ----
 function fakeSdk({ failReconnect = 0 } = {}) {
@@ -67,9 +68,10 @@ test('randomKey：24 位十六进制，每次不同', () => {
 });
 
 test('ONLINE_GAMES：每个游戏都有座位称呼和挂载入口；选项有默认值', () => {
-  assert.deepEqual(Object.keys(ONLINE_GAMES).sort(), ['draughts', 'g2048', 'gomoku', 'jungle', 'minesweeper', 'reversi', 'xiangqi']);
+  assert.deepEqual(Object.keys(ONLINE_GAMES).sort(), ['aeroplane', 'doudizhu', 'draughts', 'g2048', 'gomoku', 'jungle', 'junqi', 'minesweeper', 'reversi', 'xiangqi']);
+  assert.deepEqual(Object.keys(ONLINE_GAMES).sort(), Object.keys(adapters).sort(), '客户端登记表和服务端适配器要一一对应');
   for (const [id, cfg] of Object.entries(ONLINE_GAMES)) {
-    assert.equal(cfg.seats.length, 2, id);
+    assert.equal(cfg.seats.length, adapters[id].seats, `${id} 的座位称呼数要和服务端最大座位数一致`);
     assert.equal(typeof cfg.load, 'function', id);
     assert.equal(typeof cfg.mount, 'string', id);
     for (const option of cfg.options ?? []) assert.ok(option.choices.some(([value]) => value === option.fallback), `${id}.${option.key} 的默认值要在选项里`);
@@ -77,6 +79,16 @@ test('ONLINE_GAMES：每个游戏都有座位称呼和挂载入口；选项有�
   assert.equal(isOnlineGame('gomoku'), true);
   assert.equal(isOnlineGame('toString'), false, '不能被原型链上的名字蒙混');
   assert.equal(isOnlineGame('pop2'), false);
+});
+
+test('选项的每个取值都会被服务端接受：座位数在登记的称呼数以内，多人局的选项能决定座位数', () => {
+  for (const [id, cfg] of Object.entries(ONLINE_GAMES)) {
+    for (const option of cfg.options ?? []) for (const [value] of option.choices) {
+      const adapter = adapters[id], seats = adapter.seatCount?.({ [option.key]: value }) ?? adapter.seats;
+      assert.ok(seats >= 2 && seats <= cfg.seats.length, `${id}.${option.key}=${value} → ${seats} 座`);
+      assert.doesNotThrow(() => adapter.init({ [option.key]: value, seed: 1 }));
+    }
+  }
 });
 
 test('create：带创建者密钥和选项，注册完 handler 就发 sync，状态推进到 getter', async () => {
@@ -95,6 +107,21 @@ test('create：带创建者密钥和选项，注册完 handler 就发 sync，状
   room.push('state', statePayload({ version: 1, seats: ['online', 'online'] }));
   assert.deepEqual(events, [0, 1]);
   assert.deepEqual([session.seat, session.code, session.full, session.view], [0, 'ABCD2', true, { turn: 1 }]);
+});
+
+test('sendNet / net：实时合作房间的包原样发出、原样收到；重连期间发不出去也不报错', async () => {
+  const { session, log } = make({ wait: () => new Promise(() => {}) });
+  const got = [];
+  session.on('net', (m) => got.push(m));
+  await session.create();
+  const room = log.rooms[0];
+  session.sendNet({ type: 'hello' });
+  assert.deepEqual(room.sent.at(-1), ['net', { type: 'hello' }]);
+  room.push('net', { type: 'snapshot', state: { mode: 'pop2' } });
+  assert.deepEqual(got, [{ type: 'snapshot', state: { mode: 'pop2' } }]);
+  room.drop();
+  session.sendNet({ type: 'hello' });
+  assert.equal(room.sent.filter(([type]) => type === 'net').length, 1, '断线期间没有发出去');
 });
 
 test('join：房间码规整后再发', async () => {

@@ -1,6 +1,7 @@
 import { defineServer, defineRoom, matchMaker, RelayRoom } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { ArcadeRoom } from './arcade-room.js';
+import { CoopRoom } from './coop-room.js';
 import { adapters } from './adapters/index.js';
 
 // 允许的网页来源：逗号分隔，可写完整来源或 https://*.pages.dev 这样的通配。
@@ -26,10 +27,13 @@ export function createServer({ allowedOrigins = (process.env.ALLOWED_ORIGINS || 
     // 框架默认头里的 Allow-Origin 是 *，且先合并；这里必须显式覆盖成 'null'，只返回 {} 会留下 *。
     return { 'Access-Control-Allow-Origin': allowed(origin) && origin ? origin : 'null', Vary: 'Origin' };
   };
+  // 单包上限：框架默认只有 4KB，装不下实时游戏房主发的整盘快照（实测 1～3KB，长局会更大）。64KB 足够，又不至于让人拿来灌流量。
   const transport = new WebSocketTransport({
+    maxPayload: 64 * 1024,
     beforeUpgrade: (request) => (allowed(request.headers.get('origin')) ? undefined : new Response(null, { status: 403 }))
   });
-  const rooms = { relay: defineRoom(RelayRoom) };
+  // coop：泡噗 / 山山兔这类实时游戏的中继房间（游戏跑在房主浏览器里），其余都是按适配器开的权威房间。
+  const rooms = { relay: defineRoom(RelayRoom), coop: defineRoom(CoopRoom).filterBy(['code']) };
   for (const game of Object.keys(adapters)) rooms[game] = defineRoom(ArcadeRoom).filterBy(['code']);
   return defineServer({ transport, rooms, greet: false });
 }
