@@ -65,8 +65,9 @@
 首页最后一张卡片「大富翁」是整页跳转到 `/monopoly/`，里面是 [FatPaper-1874/mine-monopoly](https://github.com/FatPaper-1874/mine-monopoly)（**GPL-3.0**）的客户端，其余十款不是它。本仓库只放了一份补丁和固定的上游提交（`third_party/mine-monopoly/`，说明见那里的 README），不含上游源码；部署时由 workflow 现场构建到 `monopoly/`（已在 `.gitignore`，本地用 `npm run build:monopoly` 生成）。
 
 - **只有本地派对**：免登录，同一台设备上轮流玩，可加 AI；没有联机、榜单，也不计入「最近常玩」。手机要横屏（上游自带引导）。
-- **仓库里没有地图**，进去后点「选择地图」导入你自己的 `.fpmap` / `.mmmap` 文件才能开局。`.mmmap` 是加密格式，要求构建时的 `MAP_ENCRYPT_KEY` 和导出它的地图编辑器一致：默认用上游示例里的占位密钥；自己改过的话，在仓库的 Actions Variables 里设 `MONOPOLY_MAP_ENCRYPT_KEY`（16 位，本地构建时同名环境变量）。这个密钥会写进公开的前端产物，别当秘密用。
-- **许可证**：包含它的站点公开部署时，按 GPL-3.0 需要提供对应源码。只自己玩的话，建议给这个站点加访问限制。
+- **地图**：`monopoly-maps/` 里的 `.fpmap` 会随站点发布，进去点「选择地图」就能选（目前是「非常好地图」的 v0.0.11 正式版和 v0.1.0 测试版，来源和版权说明见该目录的 README）；也可以在弹窗里「导入本地文件」，支持 `.fpmap` / `.mmmap`。`.mmmap` 是加密格式，要求构建时的 `MAP_ENCRYPT_KEY` 和导出它的地图编辑器一致：默认用上游示例里的占位密钥；自己改过的话，在仓库的 Actions Variables 里设 `MONOPOLY_MAP_ENCRYPT_KEY`（16 位，本地构建时同名环境变量）。这个密钥会写进公开的前端产物，别当秘密用。
+- **云端存档**：登录了首页的身份（用户名 + 密码）后，大富翁的存档会同步到服务端，换设备、换浏览器输入同一个密码就能读档（读档前先选好同一张地图）。存档仍先存在本机 IndexedDB（库名 `mine-monopoly-saves`），云端是多出来的一份：没登录、离线或站点没配数据库时就只存本机，不影响玩；上传失败的记在 `localStorage` 的 `mm-save-outbox`，下次再试。每个身份最多保留最新的 20 条；某身份在一台设备上第一次同步时，会把本机已有的存档（最新 20 条）传上去一次。接口是 `GET / POST / DELETE /api/monopoly-saves`（`functions/api/monopoly-saves.js`，规则在 `monopoly-saves-core.js`，测试见 `test/monopoly-saves.test.js`），和榜单共用同一个 D1，第一次请求时自动建表 `monopoly_saves`。注意：`pid`（密码的 SHA-256）就是凭据，知道它就能读写这个身份的存档，而存档里含游戏脚本数据，所以别把密码给不信任的人。局域网版（`npm run lan`）没有这个接口，只存本机。
+- **许可证与版权**：包含它的站点公开部署时，按 GPL-3.0 需要提供对应源码；`monopoly-maps/` 里的地图是上游作者的作品，不属于本仓库，公开发布前请确认有权这么做。只自己玩的话，建议把站点（和仓库）设为访问受限。
 
 ## 最近常玩
 
