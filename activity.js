@@ -48,7 +48,7 @@ function tick() {
   const gained = Math.min(now - current.countedAt, TICK_MS * 2.5);
   current.activeMs += gained;
   current.countedAt = now;
-  notePlayed(BOARDS[current.board]?.game, gained); // 首页「最近常玩」的累计时长，和上报同一套规则，不需要登录
+  notePlayed(BOARDS[current.board]?.game ?? current.board, gained); // 同时支持无榜单的本地小游戏
   if (current.activeMs - current.sentMs >= HEARTBEAT_MS) send(current);
 }
 

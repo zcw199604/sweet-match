@@ -38,7 +38,11 @@ export const GAMES = [
   { id: 'park', title: '挪车接客' },
   { id: 'pour', title: '倒水排序' },
   { id: 'g2048', title: '2048' },
-  { id: 'sudoku', title: '数独' }
+  { id: 'sudoku', title: '数独' },
+  { id: 'minesweeper', title: '扫雷' },
+  { id: 'doudizhu', title: '斗地主' },
+  { id: 'junqi', title: '军棋' },
+  { id: 'xiangqi', title: '象棋' }
 ];
 export const boardsOf = (game) => Object.keys(BOARDS).filter((id) => BOARDS[id].game === game);
 

@@ -1,0 +1,26 @@
+.junqi-game{width:min(100%,430px);margin:auto;display:grid;gap:10px;color:#f6f0ff;touch-action:manipulation;font-family:inherit;padding:4px 0 12px}
+.junqi-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.junqi-modes{display:flex;gap:5px}
+.junqi-game .junqi-control{min-height:40px;padding:8px 11px;border:1px solid #a98cff4d;border-radius:12px;background:#241a42;color:#e0d1ff;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.junqi-control.active{background:linear-gradient(#aa94ff,#7152cb);border-color:#cebaff;color:#fff;box-shadow:inset 0 2px #ffffff40,0 3px 0 #412a84}
+.junqi-control:hover{filter:brightness(1.12)}
+.junqi-players{display:flex;gap:8px;justify-content:space-between}
+.junqi-player{flex:1;text-align:center;font-size:12px;font-weight:800;padding:8px 4px;border-radius:11px;background:#251d3e;border:1px solid #ffffff19}
+.junqi-player.red{color:#ff9db1}.junqi-player.blue{color:#9dcaff}.junqi-player.current{border-color:#ffe29a;box-shadow:0 0 0 1px #ffe29a50}
+.junqi-status{margin:0;text-align:center;font-size:14px;font-weight:800;color:#ffe6a5;min-height:22px}
+.junqi-board{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(12,minmax(0,1fr));height:430px;gap:5px;padding:9px;background:radial-gradient(ellipse at 20% 0,#4a3580,#221936 85%);border:1px solid #aa86eb4d;border-radius:18px;box-shadow:inset 0 2px 0 #ffffff12,0 8px 20px #0004;isolation:isolate}
+.junqi-paths{position:absolute;inset:9px;width:calc(100% - 18px);height:calc(100% - 18px);z-index:-1;pointer-events:none}
+.junqi-road{stroke:#bb9bf070;stroke-width:3}.junqi-rail{stroke:#ffe38ab0;stroke-width:5;stroke-dasharray:8 5}
+.junqi-game .junqi-cell{position:relative;display:grid;place-items:center;min-width:0;min-height:0;padding:0;border:1px solid #ffffff20;border-radius:9px;color:#fff;font:800 clamp(12px,3.6vw,17px) system-ui,sans-serif;cursor:pointer;transition:transform .12s,box-shadow .12s;background:#251b3bbf;text-shadow:0 1px 1px #0005;-webkit-tap-highlight-color:transparent}
+.junqi-cell.face-down{background:linear-gradient(160deg,#ba9cff,#8b63d8 45%,#603f9f);border-color:#e6cfff70;box-shadow:inset 0 2px 0 #ffffff4f,inset 0 -3px 0 #38226166,0 2px 3px #0004;font-size:21px;color:#ffe7ac}
+.junqi-cell.red{background:linear-gradient(150deg,#ffa7ba,#f35d83 48%,#b63359);border-color:#ffc4d278;box-shadow:inset 0 2px 0 #ffffff50,inset 0 -3px 0 #85183766,0 2px 3px #0004}
+.junqi-cell.blue{background:linear-gradient(150deg,#9ed8ff,#4b9fea 48%,#285fb5);border-color:#c6e8ff78;box-shadow:inset 0 2px 0 #ffffff50,inset 0 -3px 0 #143b7e66,0 2px 3px #0004}
+.junqi-cell.empty{color:#aa8bdd99;border-color:#9875c84a;background:#241a3dbf}.junqi-cell.camp{border-radius:50%;border-color:#86e3be88}.junqi-cell.camp.empty{color:#82e2b6;background:#1c4b40bf;font-size:24px}.junqi-cell.headquarters{border-style:double;border-width:3px}.junqi-cell.headquarters.empty{color:#ffe2a2}
+.junqi-cell.selected{outline:3px solid #ffe38a;outline-offset:0;transform:translateY(-2px);z-index:2;box-shadow:0 0 14px #ffda6b80}
+.junqi-cell.target{outline:3px solid #89efb8;outline-offset:-2px;background-color:#255843}.junqi-cell.target::after{content:"";position:absolute;width:9px;height:9px;right:3px;bottom:3px;border-radius:50%;background:#b5ffcf;box-shadow:0 0 6px #5ef5a9}
+.junqi-cell.last:not(.selected){box-shadow:inset 0 0 0 2px #ffe9a08c}.junqi-cell:disabled{cursor:default;opacity:1}.junqi-cell:focus-visible,.junqi-control:focus-visible{outline:3px solid #ffe38a;outline-offset:2px}
+.junqi-message{margin:0;min-height:32px;font-size:12px;line-height:1.6;color:#e7d9ff;padding:8px 10px;background:#1b142f;border-radius:10px}
+.junqi-legend{margin:0;color:#c3b1e0;text-align:center;font-size:10px;line-height:1.5}
+.junqi-rules{border:1px solid #ffffff17;border-radius:12px;padding:10px 12px;background:#211932;font-size:12px;line-height:1.7;color:#d5c8e8}.junqi-rules summary{cursor:pointer;font-weight:800;color:#f1e9ff}.junqi-rules p{margin:8px 0 0}
+@media(max-width:600px){.junqi-game{gap:5px;padding:0 0 4px}.junqi-game .junqi-control{min-height:32px;padding:5px 9px}.junqi-players,.junqi-legend{display:none}.junqi-status{min-height:18px;font-size:12px;line-height:18px}.junqi-board{height:min(430px,calc(100dvh - 275px));min-height:280px;gap:3px;padding:7px;border-radius:13px}.junqi-paths{inset:7px;width:calc(100% - 14px);height:calc(100% - 14px)}.junqi-game .junqi-cell{border-radius:6px;font-size:13px}.junqi-cell.face-down{font-size:17px}.junqi-cell.camp.empty{font-size:20px}.junqi-message{min-height:24px;padding:4px 7px;font-size:11px;line-height:16px}.junqi-rules{padding:4px 9px;font-size:11px;line-height:18px}}
+@media(prefers-reduced-motion:reduce){.junqi-cell{transition:none}}

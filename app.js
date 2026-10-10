@@ -15,6 +15,10 @@ import {
 } from './themes.js';
 
 const MODE_META = {
+  minesweeper: { label: 'ARCADE 11', title: '扫雷', help: '点格子探索，数字表示周围八格的雷数。首次点击及相邻八格安全；手机用「插旗」切换标记，电脑也可右键。旗数等于数字时，点数字快开周围；标错会踩雷。揭开所有安全格即获胜，三档难度可切换。' },
+  doudizhu: { label: 'ARCADE 12', title: '斗地主', help: '单人对两名基础电脑。叫分争当地主，地主拿三张底牌，农民合作；一方先出完即获胜。点手牌选择，再点「出牌」；「提示」选择可出的牌，「不要」跳过跟牌。支持常见组合、炸弹和王炸。' },
+  junqi: { label: 'ARCADE 13', title: '军棋 · 翻棋版', help: '轮流翻开棋子，认领阵营后调兵夺旗。大军衔吃小军衔，同军衔同归于尽；炸弹双方消失，工兵可排地雷。行营保护棋子，铁路上可远行，工兵可以转弯。支持人机与同屏双人，点棋子查看可走位置。' },
+  xiangqi: { label: 'ARCADE 14', title: '象棋', help: '默认执红先行，与基础电脑对弈；也可以切换同屏双人。点棋子，再点高亮位置落子。马不能蹩腿、象不能塞眼或过河、炮吃子要隔一子；不能走到自己的将帅被将军的位置。支持悔棋，将死或困毙获胜。' },
   pop2: { label: 'ARCADE 01', title: '泡噗 2', help: '拖动屏幕驾驶飞船，接住飘来的彩球。三个同色相连就会消除，挂在上面的也一起掉；飞船可以直接穿过星球，但彩球碰到星球就失败。' },
   pop3: { label: 'ARCADE 02', title: '泡噗 3', help: '拖动飞船接住落下的音符，三个同色相连消除。漏掉的音符会让底部的怪鼠上升，消除能把它压回去；跟着光圈点「打拍」累积连击倍率。' },
   surge: { label: 'ARCADE 03', title: '山山兔队长大作战：泡姆狂潮', help: '点传送带上的拼块，再点场地格子放下（也可以直接拖过去）。三个同色相连会变成泡姆沿所在行向右发射，击退敌人。' },
@@ -27,7 +31,13 @@ const MODE_META = {
   goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
 // 抓大鹅, 方块爆破, 三消勇者团, 挪车接客, 倒水排序, 2048 and 数独 are solo games: no seats, no snapshots, no co-op toggle.
-const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'sudoku'];
+const CLASSIC_GAMES = {
+  minesweeper: { load: () => import('./minesweeper.js'), mount: 'mountMinesweeper' },
+  doudizhu: { load: () => import('./doudizhu.js'), mount: 'mountDoudizhu' },
+  junqi: { load: () => import('./junqi.js'), mount: 'mountJunqi' },
+  xiangqi: { load: () => import('./xiangqi.js'), mount: 'mountXiangqi' }
+};
+const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'sudoku', ...Object.keys(CLASSIC_GAMES)];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -74,6 +84,8 @@ let g2048Token = 0;
 let sudoku = null;
 let sudokuToken = 0;
 let sudokuLevel = 'normal';
+let classic = null;
+let classicToken = 0;
 // 泡噗3 无尽模式: the choice is remembered, and so is the best single-player score.
 let pop3Endless = false;
 let pop3Best = 0;
@@ -95,7 +107,7 @@ let lan = { role: 'solo', token: null, code: null, base: '', source: null, event
 let rtc = { peer: null, channel: null };
 
 function showScreen(id) {
-  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSudoku(); }
+  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSudoku(); stopClassic(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
@@ -280,6 +292,10 @@ function buildStage() {
   stopPour();
   stopG2048();
   stopSudoku();
+  stopClassic();
+  $('#game-link').hidden = Boolean(CLASSIC_GAMES[mode]);
+  $('#game-board').hidden = Boolean(CLASSIC_GAMES[mode]);
+  if (CLASSIC_GAMES[mode]) return buildClassicStage(stage, meta);
   if (mode === 'goose') return buildGooseStage(stage, meta);
   if (mode === 'quest') return buildQuestStage(stage, meta);
   if (mode === 'park') return buildParkStage(stage, meta);
@@ -303,7 +319,7 @@ function startGame(nextMode) {
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   noteOpened(mode);
   // The 2D loop idles while state is null, which leaves the frame to goose.js.
-  if (['goose', 'quest', 'park', 'pour', 'g2048', 'sudoku'].includes(mode)) { state = null; buildStage(); showScreen('game'); return; }
+  if (['goose', 'quest', 'park', 'pour', 'g2048', 'sudoku'].includes(mode) || CLASSIC_GAMES[mode]) { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame(); resetBlastView();
@@ -318,6 +334,29 @@ function stopGoose() {
   gooseToken += 1;
   goose?.destroy();
   goose = null;
+}
+function stopClassic() {
+  classicToken++;
+  classic?.destroy();
+  classic = null;
+}
+async function buildClassicStage(stage, meta) {
+  const gameMode = mode, token = classicToken, config = CLASSIC_GAMES[mode];
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 本地游戏</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">重新开始</button></div></div><div class="classic-wrap"></div><p class="game-help">${meta.help}</p>`;
+  const wrap = stage.querySelector('.classic-wrap'), hud = stage.querySelector('#score-text');
+  const restart = stage.querySelector('#restart-game');
+  restart.disabled = true;
+  restart.addEventListener('click', () => classic?.restart());
+  try {
+    const module = await config.load();
+    if (token !== classicToken || mode !== gameMode) return;
+    classic = module[config.mount](wrap, { onHud: text => { if (token === classicToken) hud.textContent = text; } });
+    restart.disabled = false;
+  } catch (error) {
+    if (token !== classicToken) return;
+    hud.textContent = '游戏加载失败，请返回后重试';
+    console.error(error);
+  }
 }
 function stopQuest() {
   questToken += 1;
@@ -1199,7 +1238,7 @@ document.addEventListener('keydown', keyboard); document.addEventListener('keyup
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get sudoku() { return sudoku; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get sudoku() { return sudoku; }, get classic() { return classic; } };
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';

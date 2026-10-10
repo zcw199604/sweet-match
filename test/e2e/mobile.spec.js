@@ -23,9 +23,9 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes eleven arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes fifteen arcade cards', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(11);
+  await expect(page.locator('.arcade-card')).toHaveCount(15);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });

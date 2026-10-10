@@ -92,7 +92,7 @@ const node = (tag, className, text) => {
 function renderTabs() {
   const game = BOARDS[current].game;
   const games = $('#board-games'), modes = $('#board-modes');
-  games.replaceChildren(...GAMES.map(({ id, title }) => {
+  games.replaceChildren(...GAMES.filter(({ id }) => boardsOf(id).length).map(({ id, title }) => {
     const button = node('button', `board-tab${id === game ? ' active' : ''}`, title);
     button.type = 'button';
     button.addEventListener('click', () => showBoard(boardsOf(id)[0]));

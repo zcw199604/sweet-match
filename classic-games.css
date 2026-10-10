@@ -1,0 +1,49 @@
+/* Classic games share the arcade's palette; each board keeps its own layout. */
+.classic-wrap{width:100%;max-width:520px;margin:auto}
+.classic-game{min-width:0;color:#e7e9ff;font-size:13px}
+.classic-tools{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:0 0 12px}
+.classic-tools button,.classic-game select{font:inherit;color:inherit;border:1px solid #ffffff35;border-radius:10px;background:#292745;padding:9px 12px;touch-action:manipulation}
+.classic-game button{touch-action:manipulation}
+.classic-game select option{background:#292745;color:#fff}
+.classic-game button:disabled{cursor:default;opacity:.55}
+.classic-game button:focus-visible,.classic-game select:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+.classic-tools .selected{background:#8e7bff;color:white;box-shadow:0 0 0 2px #c5baff55}
+.classic-status{min-height:28px;margin-top:12px;text-align:center;font-weight:600;line-height:1.6;color:#dfdafc}
+.minesweeper-game{--mine-offset:410px;max-width:min(100%,430px);margin:auto}
+.mine-stats{text-align:center;padding:10px;margin-bottom:10px;background:#ffffff0a;border-radius:12px;color:#ffd543;font-weight:800}
+.mine-board{display:grid;grid-template-columns:repeat(var(--mine-cols),1fr);gap:4px;padding:9px;border-radius:16px;background:linear-gradient(145deg,#35316b,#1a173d);border:1px solid #8e7bff55;box-shadow:0 8px 26px #0004;width:min(100%,calc((100dvh - var(--mine-offset))*.98));margin:auto}
+.mine-board .mine-cell{min-width:0;aspect-ratio:1;padding:0;font-size:clamp(12px,3.4vw,21px);font-weight:800;border-radius:7px;background:linear-gradient(160deg,#9381fb,#6b55c3);border:1px solid #baaaff66;box-shadow:0 3px 0 #191434,inset 0 1px 0 #fff4;opacity:1;transition:background .15s,transform .15s}
+.mine-board .mine-cell:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.15)}
+.mine-board .mine-cell.open{background:#15132d;border-color:#70639344;box-shadow:inset 0 2px 5px #0004}
+.mine-cell.open[data-number="1"]{color:#58d4de}.mine-cell.open[data-number="2"]{color:#44c986}.mine-cell.open[data-number="3"]{color:#ff7799}.mine-cell.open[data-number="4"]{color:#a694ff}.mine-cell.open[data-number="5"]{color:#ffa65c}.mine-cell.open[data-number="6"]{color:#ffd543}
+.mine-board .mine-cell.flagged{background:linear-gradient(160deg,#ffd972,#d6932e);color:#3a2031}
+.mine-board .mine-cell.exploded{background:#ff5d80;color:white}
+.minesweeper-game[data-level=normal] .mine-board{width:min(100%,calc((100dvh - var(--mine-offset))*.82))}
+.minesweeper-game[data-level=hard] .mine-board{width:min(100%,calc((100dvh - var(--mine-offset))*.74));gap:3px}
+.minesweeper .art{background:radial-gradient(circle at 30% 10%,#6376ac,#252c59)}
+.doudizhu .art{background:radial-gradient(circle at 30% 10%,#3d9478,#133b3f)}
+.junqi .art{background:radial-gradient(circle at 30% 10%,#b29646,#4c4927)}
+.xiangqi .art{background:radial-gradient(circle at 30% 10%,#b95d74,#572b4c)}
+.art-mines{position:absolute;inset:20px auto auto 50%;transform:translateX(-50%) rotate(-5deg);width:138px;height:138px;padding:7px;background:#29254c;border-radius:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;box-shadow:0 8px 12px #0005}
+.art-mines i{font:800 24px system-ui;display:grid;place-items:center;border-radius:6px;background:#8e7bff;color:#fff;box-shadow:inset 0 2px #fff4,0 3px #0003}.art-mines i:nth-child(3){background:#ffd543;color:#29254c}.art-mines i:nth-child(5){background:#ff5d80}
+.art-poker{position:absolute;inset:30px 0 0;display:flex;justify-content:center}
+.art-poker i{height:119px;width:72px;background:#fff8e9;color:#25334a;border:3px solid #fff;border-radius:12px;font:800 30px system-ui;padding:7px;margin-left:-22px;box-shadow:0 9px 12px #0004;transform:rotate(-15deg)}
+.art-poker i:nth-child(2){transform:rotate(-5deg);color:#e55275}.art-poker i:nth-child(3){transform:rotate(5deg)}.art-poker i:nth-child(4){transform:rotate(15deg);color:#e55275}
+.art-army{position:absolute;inset:29px 0;display:grid;grid-template-columns:76px 76px;justify-content:center;gap:10px;transform:rotate(-7deg)}
+.art-army i{display:grid;place-items:center;font:800 20px system-ui;background:linear-gradient(#ff889d,#db4468);color:white;border:3px solid #ffafbb;border-radius:10px;box-shadow:0 5px #0004}.art-army i:nth-child(even){background:linear-gradient(#74c7ee,#327aa3);border-color:#a9e1ff}
+.art-chess{position:absolute;inset:30px 0;display:grid;grid-template-columns:62px 62px;justify-content:center;gap:10px;transform:rotate(7deg)}
+.art-chess i{aspect-ratio:1;display:grid;place-items:center;border:4px solid #f3bc77;border-radius:50%;background:linear-gradient(#fff2d5,#eac18a);color:#be375c;font:800 34px serif;box-shadow:0 5px #57243a}.art-chess i:nth-child(odd){color:#34406d}
+.recent-card[data-game=minesweeper]{--c:#8e7bff}.recent-card[data-game=doudizhu]{--c:#44c986}.recent-card[data-game=junqi]{--c:#ffd543}.recent-card[data-game=xiangqi]{--c:#ff5d80}
+@media(max-width:800px){
+  body.playing:is([data-mode=minesweeper],[data-mode=doudizhu],[data-mode=junqi],[data-mode=xiangqi]) .game-nav{height:60px}
+  body.playing:is([data-mode=minesweeper],[data-mode=doudizhu],[data-mode=junqi],[data-mode=xiangqi]) .stage{padding:12px}
+  body.playing:is([data-mode=minesweeper],[data-mode=doudizhu],[data-mode=junqi],[data-mode=xiangqi]) .game-name h1{font-size:20px}
+  .classic-game{font-size:12px}
+  .minesweeper-game{--mine-offset:270px}
+  .classic-game .classic-tools button,.classic-game select{padding:8px 10px}
+  .classic-status{font-size:11px}
+}
+@media(orientation:landscape) and (max-height:600px){
+  body.playing:is([data-mode=minesweeper],[data-mode=doudizhu],[data-mode=junqi],[data-mode=xiangqi]) .stage{display:block}
+  .mine-board{width:min(100%,340px)}
+}

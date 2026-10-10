@@ -1,7 +1,7 @@
 // 游玩记录的共享部分：校验、请求处理、存储，以及隐藏看板用的汇总函数。
 // 浏览器（activity.js、ops.html）和 Cloudflare Pages Function 都从这里取用；测试用内存存储，线上用 D1。
 // 一行 = 一段连续游玩（一个 sid）。时间一律存 UTC 毫秒，东八区只在展示和汇总时换算。
-import { BOARDS, isBoard, isPlayerId, cleanName } from './leaderboard-core.js';
+import { BOARDS, GAMES, isBoard, isPlayerId, cleanName } from './leaderboard-core.js';
 
 export const MAX_SESSION_MS = 12 * 60 * 60 * 1000; // 单段上限：12 小时
 export const QUERY_LIMIT = 10_000;
@@ -24,7 +24,7 @@ export async function handleActivity(request, store, now = Date.now()) {
   try { body = JSON.parse(text); } catch { return json(400, { error: '请求格式不对' }); }
   const { sid, pid, board, active_ms: active, elapsed_ms: elapsed } = body ?? {};
   if (!isSessionId(sid) || !isPlayerId(pid)) return json(400, { error: '标识无效' });
-  if (!isBoard(board)) return json(400, { error: '未知游戏' });
+  if (!isBoard(board) && !GAMES.some(game => game.id === board)) return json(400, { error: '未知游戏' });
   if (!Number.isInteger(active) || !Number.isInteger(elapsed) || active < 0 || elapsed < 0 || elapsed > MAX_SESSION_MS) return json(400, { error: '时长不合理' });
   await store.put({ sid, pid, name: cleanName(body.name), board, start_at: now - elapsed, last_at: now, active_ms: Math.min(active, elapsed) });
   return json(200, { ok: true });
@@ -109,7 +109,7 @@ export const cnTime = (ms) => { const d = new Date(ms + CN_OFFSET); return `${pa
 export const gameOf = (board) => BOARDS[board]?.game ?? board;
 export const boardTitle = (board, games) => {
   const rule = BOARDS[board];
-  if (!rule) return board;
+  if (!rule) return games.find(game => game.id === board)?.title ?? board;
   const title = games.find((game) => game.id === rule.game)?.title ?? rule.game;
   return rule.label ? `${title} · ${rule.label.split(' · ')[0]}` : title;
 };

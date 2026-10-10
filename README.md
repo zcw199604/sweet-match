@@ -15,7 +15,29 @@
 
 山山兔在手机上**横过来玩**会换成宽画布：只保留传送带和棋盘，标题和状态（关卡、分数、防线、击退、能量）挪到旁边的文字里，格子比竖屏大约一半。这只是显示方式，游戏本身和联机同步不变，所以联机时一台横屏、一台竖屏也没问题；平板和电脑不受影响。
 
-泡噗 2、泡噗 3 和山山兔都可以单人玩，也可以切换成同屏双人，或通过下面的局域网方式两台设备各控一个角色。方块爆破、抓大鹅、三消勇者团、挪车接客、倒水排序、2048 和数独是单人游戏，不参与联机。
+泡噗 2、泡噗 3 和山山兔都可以单人玩，也可以切换成同屏双人，或通过下面的局域网方式两台设备各控一个角色。方块爆破、抓大鹅、三消勇者团、挪车接客、倒水排序、2048 和数独是单人游戏，不参与联机。另有扫雷、斗地主、军棋翻棋版和象棋四款本地经典小游戏，军棋与象棋支持同屏双人，这四款不使用局域网房间或全球榜单，游玩时长仍计入「最近常玩」。
+
+新增经典小游戏：
+
+- **扫雷**：简单 9×9 / 10 雷、普通 12×10 / 20 雷、困难 16×12 / 40 雷。首次探索及周围八格安全，手机切换「插旗」标记，电脑支持右键；标旗数量匹配时点击数字快开周围，揭开全部安全格获胜。首点安全不代表每局都能无猜推完。
+- **斗地主**：一名玩家对两名基础电脑，叫分选地主、三张底牌、地主对两名农民；点牌选择，支持提示、不要、炸弹/王炸、顺子、连对、飞机和带牌组合。
+- **军棋 · 翻棋版**：完整 50 子随机盖放，行营起始为空，第一枚翻棋确定阵营；支持基础电脑或同屏双人、军衔吃子、工兵排雷、炸弹、铁路、行营、大本营和夺旗。这是翻棋变体，没有布阵和四国军棋模式。
+- **象棋**：红方先行，与基础电脑对弈，或切换同屏双人；标准走子、合法落点、应将、将死/困毙、和棋与悔棋。
+
+### 经典小游戏的来源与结构
+
+通过 GitHub 插件检索候选，再用 `gh api` 核对许可证和固定提交。原项目界面多为传统棋盘或旧框架，本项目只复用适用规则/数据，四款 DOM/CSS 界面均按街机厅糖果色和暗色棋盘重新制作；无新增 npm 依赖，也不依赖上游在线服务。
+
+| 游戏 | 采用的开源项目 | 许可证 | 复用范围 |
+| --- | --- | --- | --- |
+| 扫雷 | [reed-jones/minesweeper_js](https://github.com/reed-jones/minesweeper_js) | MIT | 相邻八格遍历算法 |
+| 斗地主 | [linzhipeng/doudizhu](https://github.com/linzhipeng/doudizhu) | MIT | 牌编号、牌权、洗牌和发牌 |
+| 军棋 | [samuelyuan/online-junqi](https://github.com/samuelyuan/online-junqi) | MIT | 棋盘点位和战斗优先级 |
+| 象棋 | [lengyanyu258/xiangqi.js](https://github.com/lengyanyu258/xiangqi.js) | BSD-2-Clause | 完整象棋规则引擎，补 ESM 导出 |
+
+固定 SHA、实际修改范围和许可全文分别在 `third_party/minesweeper/`、`third_party/doudizhu/`、`third_party/junqi/`、`third_party/xiangqi/` 的 `SOURCE.md` 与 `LICENSE`。同时评估了 `DavidNHill/JSMinesweeper`（偏求解器）、`chengxg/junqi-client-vue`（工兵扛旗变体与旧后端）、`lengyanyu258/xiangqiboardjs`（只有棋盘界面），以及没有明确许可证的 `laivv/doudizhu`、`flymyd/DouJS`；未复制这些候选的代码或素材。
+
+每款游戏使用 `<游戏名>-core.js` 规则模块和 `<游戏名>.js` 视图；视图由 `app.js` 首次打开时加载，离开时销毁计时器。样式在 `classic-games.css` 与各游戏 CSS；核心规则测试在 `test/{minesweeper,doudizhu,junqi,xiangqi}.test.js`，集成测试在 `test/classic-games.test.js` 与 `test/e2e/classic-games.spec.js`。没有牌局/棋局存档，返回大厅或刷新会开启新局；棋牌电脑均为基础休闲策略。
 
 方块爆破的拼块形状移植自 [dffge552/block-blast](https://github.com/dffge552/block-blast)（MIT License），画面、规则实现和其余部分均为本项目原创。
 
@@ -62,7 +84,7 @@
 
 ## 大富翁（第三方，静态版）
 
-首页最后一张卡片「大富翁」是整页跳转到 `/monopoly/`，里面是 [FatPaper-1874/mine-monopoly](https://github.com/FatPaper-1874/mine-monopoly)（**GPL-3.0**）的客户端，其余十款不是它。本仓库只放了一份补丁和固定的上游提交（`third_party/mine-monopoly/`，说明见那里的 README），不含上游源码；部署时由 workflow 现场构建到 `monopoly/`（已在 `.gitignore`，本地用 `npm run build:monopoly` 生成）。
+首页最后一张卡片「大富翁」是整页跳转到 `/monopoly/`，里面是 [FatPaper-1874/mine-monopoly](https://github.com/FatPaper-1874/mine-monopoly)（**GPL-3.0**）的客户端，其余十四款不是它。本仓库只放了一份补丁和固定的上游提交（`third_party/mine-monopoly/`，说明见那里的 README），不含上游源码；部署时由 workflow 现场构建到 `monopoly/`（已在 `.gitignore`，本地用 `npm run build:monopoly` 生成）。
 
 - **只有本地派对**：免登录，同一台设备上轮流玩，可加 AI；没有联机、榜单，也不计入「最近常玩」。手机要横屏（上游自带引导）。
 - **地图**：`monopoly-maps/` 里的 `.fpmap` 会随站点发布，进去点「选择地图」就能选（目前是「非常好地图」的 v0.0.11 正式版和 v0.1.0 测试版，来源和版权说明见该目录的 README）；也可以在弹窗里「导入本地文件」，支持 `.fpmap` / `.mmmap`。`.mmmap` 是加密格式，要求构建时的 `MAP_ENCRYPT_KEY` 和导出它的地图编辑器一致：默认用上游示例里的占位密钥；自己改过的话，在仓库的 Actions Variables 里设 `MONOPOLY_MAP_ENCRYPT_KEY`（16 位，本地构建时同名环境变量）。这个密钥会写进公开的前端产物，别当秘密用。
@@ -181,7 +203,7 @@ npm run lan
 - **Build output directory**：`/`（项目根目录）
 - **Functions**：无需配置
 
-`app.js`、`art.js`、`themes.js`、`game-core.js`、`blast-shapes.js`、`goose.js`、`goose-core.js`、`goose-art.js`、`quest.js`、`quest-core.js`、`quest-art.js`、`park.js`、`park-core.js`、`pour.js`、`pour-core.js`、`pour-levels.js`、`g2048.js`、`g2048-core.js`、`sudoku.js`、`sudoku-core.js`、`vendor/`、`style.css` 和 `index.html` 会作为静态资源直接发布。Node 局域网服务不能由 Pages 进程托管，需要在局域网电脑或另一台可访问的 Node 主机上运行。
+`app.js`、`art.js`、`themes.js`、`game-core.js`、`blast-shapes.js`、`goose.js`、`goose-core.js`、`goose-art.js`、`quest.js`、`quest-core.js`、`quest-art.js`、`park.js`、`park-core.js`、`pour.js`、`pour-core.js`、`pour-levels.js`、`g2048.js`、`g2048-core.js`、`sudoku.js`、`sudoku-core.js`、`vendor/`、`style.css` 和 `index.html` 会作为静态资源直接发布。新增四款的规则模块、视图模块、CSS，以及 `third_party/` 内被引用的开源模块也随站点直接发布。Node 局域网服务不能由 Pages 进程托管，需要在局域网电脑或另一台可访问的 Node 主机上运行。
 
 ### GitHub Actions 自动部署
 
@@ -202,4 +224,6 @@ npm test
 npm run test:e2e
 ```
 
-核心规则和局域网 API 使用 Node 测试；Playwright 使用本机 Chrome 在桌面、iPhone 13 和 iPad 视口下检查棋盘与按钮是否一屏可见，以及十个游戏各自的拖动、打拍、抓放、拼块落子、点选物品、交换方块、点车挪车、倒水、滑动合并、数独填数操作。抓大鹅的 3D 画面在无头 Chrome 里用软件 WebGL 渲染；Playwright 的静态服务器调大了监听队列，否则三个浏览器并行拉取模块时 Python 的 `http.server` 会重置连接。
+核心规则和局域网 API 使用 Node 测试；Playwright 使用本机 Chrome 在桌面、iPhone 13 和 iPad 视口下检查棋盘与按钮是否一屏可见，以及原有十个游戏各自的拖动、打拍、抓放、拼块落子、点选物品、交换方块、点车挪车、倒水、滑动合并、数独填数操作。抓大鹅的 3D 画面在无头 Chrome 里用软件 WebGL 渲染；Playwright 的静态服务器调大了监听队列，否则三个浏览器并行拉取模块时 Python 的 `http.server` 会重置连接。
+
+新增经典游戏另覆盖桌面、iPhone 和 iPad 的加载/重开/返回、最近常玩、手机扫雷插旗，以及棋牌对局的核心点击路径。
