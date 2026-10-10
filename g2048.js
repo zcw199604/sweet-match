@@ -2,7 +2,7 @@
 // button underneath. g2048-core.js decides what a move does; this module draws glossy candy tiles
 // and plays the events back: tiles slide, the two parents of a merge melt into one that pops, and a
 // new tile grows in. The core state is always up to date; an animation only changes what is shown.
-import { createState, G2048, maxTile, move, restoreState, snapshot, undo } from './g2048-core.js';
+import { createState, DIRS, G2048, maxTile, move, restoreState, snapshot, undo } from './g2048-core.js';
 
 const LW = 360;
 const LH = 540;
@@ -39,7 +39,9 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
 }
 
-export function mountG2048(wrap, { onHud = () => {}, onResult = null } = {}) {
+// 联机竞速（online 是 Session）：两人同一个开局，各玩各的盘面，先合出目标的赢。
+// 盘面、分数、输赢都以服务端为准；本地只负责画和把滑动发出去，没有撤销、不写本机存档、不提交榜单。
+export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = null } = {}) {
   let alive = true;
   let core = null;
   let best = Number(readJson(STORE.best)) || 0;
@@ -58,17 +60,24 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null } = {}) {
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
   const ctx = canvas.getContext('2d');
+  // 对手的小盘面：放在画布外面（画布容器有固定的宽高比）。
+  const rivalBox = el('div', 'race-rival'), rivalLine = el('div', ''), rivalGrid = el('div', 'rival-grid');
+  let rival = null, pendingDir = null, ended = false;
+  if (online) { rivalBox.append(rivalLine, rivalGrid); wrap.after(rivalBox); }
+  const fromView = (player) => ({ tiles: player.tiles.map((t) => ({ ...t })), nextId: player.nextId, score: player.score, moves: player.moves, won: false, over: player.over, undosLeft: 0, history: [] });
 
   const SLIDE = () => (calm() ? 20 : 110);
   const POP = () => (calm() ? 20 : 170);
   const poke = () => { if (!raf && alive) raf = requestAnimationFrame(frame); };
-  const hud = () => onHud(`${core.score} 分 · 最高 ${best} · ${core.moves} 步`);
+  const hud = () => onHud(online ? `你 ${core.score} 分 · 对手 ${rival?.score ?? 0} 分 · 目标 ${online.view.target}` : `${core.score} 分 · 最高 ${best} · ${core.moves} 步`);
   const say = (text) => { toast = { text, until: performance.now() + 1500 }; poke(); };
   const persist = () => {
+    if (online) return;
     if (core.over) writeJson(STORE.save, null);
     else writeJson(STORE.save, snapshot(core));
   };
   const bump = () => {
+    if (online) return;
     if (core.score > best) { best = core.score; writeJson(STORE.best, best); }
   };
 
@@ -84,16 +93,23 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null } = {}) {
   }
   // A run that ends (or is abandoned with points on the board) is submitted once.
   function submit(note) {
-    if (reported || core.score < 1) return;
+    if (online || reported || core.score < 1) return;
     reported = true;
     onResult?.('g2048', core.score).then((text) => { if (text && note?.isConnected) note.textContent = text; });
   }
   function restart() {
+    if (online) return;
     submit(null);
     begin();
   }
 
   function play(dir) {
+    if (online) {
+      if (!alive || !overlay.hidden || core.over || online.result.over || !DIRS.includes(dir)) return false;
+      pendingDir = dir;
+      online.send({ type: 'move', dir });
+      return true;
+    }
     if (!alive || !overlay.hidden || core.over) return false;
     const before = new Map(core.tiles.map((t) => [t.id, t.v]));
     const result = move(core, dir);
@@ -108,6 +124,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null } = {}) {
     return true;
   }
   function takeBack() {
+    if (online) return say('竞速中不能撤销');
     if (!alive || !overlay.hidden) return;
     const result = undo(core);
     if (!result.ok) return say(result.reason === 'none-left' ? '撤销次数用完了' : '还没有可以撤销的一步');
@@ -333,12 +350,12 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null } = {}) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, LW, LH);
     panel(12, 14, 164, 66, '分数', core.score, '#ffd543');
-    panel(184, 14, 164, 66, '最高', Math.max(best, core.score), '#58d4de');
+    panel(184, 14, 164, 66, online ? '对手' : '最高', online ? (rival?.score ?? 0) : Math.max(best, core.score), '#58d4de');
     ctx.fillStyle = '#c9cffc';
     ctx.font = '700 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`滑动合并相同数字，合出 ${G2048.goal}`, LW / 2, 98);
+    ctx.fillText(online ? `先合出 ${online.view.target} 的人获胜` : `滑动合并相同数字，合出 ${G2048.goal}`, LW / 2, 98);
     drawWell();
     drawTiles(now);
     drawButton();
@@ -358,9 +375,64 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null } = {}) {
     if (anim || (toast && toast.until > now)) raf = requestAnimationFrame(frame);
   }
 
-  // Pick up the unfinished game from last time, if there is one.
-  const saved = restoreState(readJson(STORE.save));
-  begin(saved && !saved.over ? saved : createState());
+  // ---- online ----
+  function drawRival() {
+    rivalLine.replaceChildren();
+    rivalLine.append('对手 ', el('b', '', String(rival.score)), ` 分 · 最大方块 ${rival.max} · ${rival.moves} 步${rival.over ? ' · 已无路可走' : ''}`);
+    const cells = Array.from({ length: 16 }, () => ({ v: 0 }));
+    for (const t of rival.tiles) cells[t.r * 4 + t.c] = t;
+    rivalGrid.replaceChildren(...cells.map((t) => {
+      const cell = el('i', '', t.v ? String(t.v) : '');
+      if (t.v) cell.style.background = paint(t.v)[0];
+      return cell;
+    }));
+  }
+  function onlineEnd() {
+    const { over, winner, reason } = online.result;
+    if (!over || ended) return;
+    ended = true;
+    const me = winner === online.seat;
+    const why = reason === 'forfeit' ? (me ? '对手已离开' : '你已离开本局')
+      : reason === 'target' ? `${me ? '你' : '对手'}先合出了 ${online.view.target}`
+      : '双方都无路可走，按分数决胜';
+    card(winner === null ? '平局' : me ? '你赢了！' : '对手获胜', [why, `你 ${core.score} 分 · 对手 ${rival?.score ?? 0} 分`],
+      [{ label: '看看盘面', action: () => { overlay.hidden = true; poke(); }, ghost: true }], me ? 'won' : '');
+  }
+  let round = online?.round ?? 0;
+  function applyServer(payload) {
+    const view = payload.view, mine = view.players[online.seat];
+    if (payload.round !== round) { round = payload.round; ended = false; overlay.hidden = true; pendingDir = null; core = null; }   // 再来一局：丢掉上一局的一切
+    let next = null;
+    if (pendingDir && core && mine.moves === core.moves + 1) {
+      // 在旧盘面的拷贝上空跑一遍同方向的滑动，只为拿到「谁滑去哪、谁合并了」的动画数据；盘面本身用服务端的。
+      const sim = fromView({ ...core, max: 0 });
+      sim.over = false;
+      const result = move(sim, pendingDir, () => 0.5);
+      if (result.ok) next = { t0: performance.now(), before: new Map(core.tiles.map((t) => [t.id, t.v])), slides: result.slides, merges: result.merges, spawnId: result.spawned?.id ?? 0 };
+    }
+    pendingDir = null;
+    const wasStuck = core?.over;
+    core = fromView(mine);
+    anim = next;
+    rival = view.players[1 - online.seat];
+    drawRival();
+    hud();
+    poke();
+    if (core.over && !wasStuck && !online.result.over) say('你的盘面已经无路可走，等对手结束');
+    setTimeout(() => { if (alive) onlineEnd(); }, next ? SLIDE() + POP() + 30 : 0);
+  }
+  const off = online?.on('state', applyServer);
+
+  if (online) {
+    rival = online.view.players[1 - online.seat];
+    drawRival();
+    begin(fromView(online.view.players[online.seat]));
+    onlineEnd();
+  } else {
+    // Pick up the unfinished game from last time, if there is one.
+    const saved = restoreState(readJson(STORE.save));
+    begin(saved && !saved.over ? saved : createState());
+  }
   return {
     get state() { return core; },
     get animating() { return Boolean(anim); },
@@ -375,6 +447,8 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null } = {}) {
     },
     destroy() {
       alive = false;
+      off?.();
+      rivalBox.remove();
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);
       wrap.replaceChildren();

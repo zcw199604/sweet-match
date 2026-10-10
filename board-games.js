@@ -13,11 +13,12 @@ const animals=['','鼠','猫','狗','狼','豹','虎','狮','象'];
 const icons=['','🐭','🐱','🐶','🐺','🐆','🐯','🦁','🐘'];
 function el(tag,cls,text) { const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node; }
 
-function mountBoard(id, wrap, {onHud=()=>{}}={}) {
+function mountBoard(id, wrap, {onHud=()=>{}, online=null}={}) {
   const config=configs[id], core=config.core;
-  let state=core.createState(), mode='ai', alive=true, timer=0, history=[], selected=null, route=[];
+  // online：联机时的 Session。状态以服务端推来的 view 为准，走子只是发给服务端，不在本地推进。
+  let state=online?.view??core.createState(), mode=online?'online':'ai', alive=true, timer=0, history=[], selected=null, route=[];
   const root=el('section',`classic-game strategy-game ${id}-game`);
-  const tools=el('div','classic-tools board-tools');
+  const tools=el('div','classic-tools board-tools');tools.hidden=Boolean(online);
   const label=el('label','','对弈 '), select=el('select'); select.dataset.action='mode';
   select.append(new Option(`人机（${config.sides[0]}）`,'ai'),new Option('同屏双人','local'));label.append(select);
   const undo=el('button','classic-button','↶ 悔棋');undo.dataset.action='undo';
@@ -28,11 +29,13 @@ function mountBoard(id, wrap, {onHud=()=>{}}={}) {
   board.setAttribute('role','group');board.setAttribute('aria-label',`${config.title}，${config.rows}行${config.cols}列`);
   const note=el('p','board-note',config.note);
   const rules=el('details','board-rules');rules.append(el('summary','','怎么玩？'),el('p','',config.rules));
+  if(online?.seat===1&&(id==='draughts'||id==='jungle')) board.classList.add('flipped');   // 后手在上方开局：转过来让自己的棋子在下面（换边后随座位更新，见 orient）
   root.append(tools,players,status,board,note,rules);wrap.replaceChildren(root);
   const cells=Array.from({length:config.rows*config.cols},(_,at)=>{
     const cell=el('button','board-cell');cell.type='button';cell.dataset.cell=at;cell.addEventListener('click',()=>click(at));board.append(cell);return cell;
   });
-  const blocked=()=>!alive||state.status!=='playing'||(mode==='ai'&&state.turn===2);
+  const mine=()=>!online||(!online.result.over&&state.turn===online.seat+1);
+  const blocked=()=>!alive||state.status!=='playing'||(mode==='ai'&&state.turn===2)||!mine();
   const clear=()=>{clearTimeout(timer);timer=0;};
   const sideName=side=>config.sides[side-1];
   function available() {
@@ -48,8 +51,14 @@ function mountBoard(id, wrap, {onHud=()=>{}}={}) {
       moves[0]?.captures.slice(0,route.length).forEach(at=>captured.add(at));
     }
     const count=side=>state.board.filter(p=>p?.side===side).length;
-    seats.forEach((seat,i)=>{seat.textContent=`${mode==='ai'?(i?'电脑':'你'):`玩家 ${i+1}`} · ${sideName(i+1)} · ${count(i+1)} 子`;seat.classList.toggle('current',state.status==='playing'&&state.turn===i+1);});
-    const text=state.status==='won'?`${sideName(state.winner)}获胜！`:state.status==='draw'?'本局和棋':`${sideName(state.turn)}${mode==='ai'&&state.turn===2?' · 电脑思考中…':route.length?' · 继续连吃':selected!==null?' · 选择亮起的落点':' · 请走棋'}`;
+    seats.forEach((seat,i)=>{seat.textContent=`${online?(i===online.seat?'你':'对手'):mode==='ai'?(i?'电脑':'你'):`玩家 ${i+1}`} · ${sideName(i+1)} · ${count(i+1)} 子`;seat.classList.toggle('current',state.status==='playing'&&state.turn===i+1);});
+    let text=state.status==='won'?`${sideName(state.winner)}获胜！`:state.status==='draw'?'本局和棋':`${sideName(state.turn)}${mode==='ai'&&state.turn===2?' · 电脑思考中…':route.length?' · 继续连吃':selected!==null?' · 选择亮起的落点':' · 请走棋'}`;
+    if(online) {
+      const {over,winner}=online.result;
+      if(state.status==='won') text+=winner===online.seat||state.winner===online.seat+1?' · 你赢了！':' · 你输了';
+      else if(over&&state.status==='playing') text=winner===online.seat?'对手已离开 · 你获胜！':'你已离开本局 · 对手获胜';
+      else if(state.status==='playing') text=mine()?(route.length?'轮到你 · 继续连吃':selected!==null?'轮到你 · 选择亮起的落点':'轮到你 · 请走棋'):'等待对手走棋……';
+    }
     status.textContent=(state.passed?`${sideName(state.passed)}无落点，跳过 · `:'')+text;
     onHud(`${config.title} · ${text} · ${state.moves} 手`);undo.disabled=!history.length;
     cells.forEach((cell,at)=>{
@@ -74,6 +83,7 @@ function mountBoard(id, wrap, {onHud=()=>{}}={}) {
     }
   }
   function play(move) {
+    if(online) {online.send(move);selected=null;route=[];render();return;}
     const result=core.applyMove(state,move);
     if(!result.ok)return;
     history.push(state);state=result.state;selected=null;route=[];render();
@@ -94,7 +104,7 @@ function mountBoard(id, wrap, {onHud=()=>{}}={}) {
     }
     route=[];selected=state.board[at]?.side===state.turn&&core.legalMoves(state,at).length?at:null;render();
   }
-  function reset(){if(!alive)return;clear();state=core.createState();history=[];selected=null;route=[];render();}
+  function reset(){if(!alive||online)return;clear();state=core.createState();history=[];selected=null;route=[];render();}
   select.addEventListener('change',()=>{mode=select.value;reset();});restart.addEventListener('click',reset);
   undo.addEventListener('click',()=>{
     if(!alive||!history.length)return;
@@ -102,8 +112,10 @@ function mountBoard(id, wrap, {onHud=()=>{}}={}) {
     if(mode==='ai')while(state.turn!==1&&history.length)state=history.pop();
     selected=null;route=[];render();
   });
+  const orient=()=>{if(online&&(id==='draughts'||id==='jungle')) board.classList.toggle('flipped',online.seat===1);};
+  const off=online?.on('state',payload=>{state=payload.view;selected=null;route=[];orient();render();});
   render();
-  return {restart:reset,destroy(){alive=false;clear();root.remove();},get state(){return state;}};
+  return {restart:reset,destroy(){alive=false;off?.();clear();root.remove();},get state(){return state;}};
 }
 export const mountGomoku=(wrap,options)=>mountBoard('gomoku',wrap,options);
 export const mountReversi=(wrap,options)=>mountBoard('reversi',wrap,options);

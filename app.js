@@ -9,6 +9,9 @@ import {
 import { initBoard, openBoard, reportScore } from './leaderboard.js';
 import { initActivity, trackActivity } from './activity.js';
 import { initRecent, noteOpened, showRecent } from './recent.js';
+import { ONLINE_GAMES, isOnlineGame } from './online-games.js';
+import { createModeTabs, mountOnlineShell } from './online-shell.js';
+import { hasResume, isCode, normalizeCode } from './net-session.js';
 import {
   ballPainter, ballShades, DEFAULT_THEME, drawThemeArena, drawThemeBackdrop, drawThemeBase, drawThemeCraft,
   drawThemeThruster, isTheme, paintThemeChip, resetThemeCaches, THEMES, themeById
@@ -96,6 +99,11 @@ let sudokuToken = 0;
 let sudokuLevel = 'normal';
 let classic = null;
 let classicToken = 0;
+// 邀请链接（?game=…&room=…）带来的待加入房间；对应游戏的舞台建好时取走。
+let pendingInvite = null;
+const takeInvite = (game) => { const invite = pendingInvite?.game === game ? pendingInvite.code : null; if (invite) pendingInvite = null; return invite; };
+const clearModeTabs = () => $$('.mode-tabs').forEach((node) => node.remove());
+const sessionStore = () => { try { return window.sessionStorage; } catch { return null; } };
 // 泡噗3 无尽模式: the choice is remembered, and so is the best single-player score.
 let pop3Endless = false;
 let pop3Best = 0;
@@ -117,7 +125,7 @@ let lan = { role: 'solo', token: null, code: null, base: '', source: null, event
 let rtc = { peer: null, channel: null };
 
 function showScreen(id) {
-  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSudoku(); stopClassic(); }
+  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSudoku(); stopClassic(); clearModeTabs(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
@@ -303,6 +311,7 @@ function buildStage() {
   stopG2048();
   stopSudoku();
   stopClassic();
+  clearModeTabs();
   $('#game-link').hidden = Boolean(CLASSIC_GAMES[mode]);
   $('#game-board').hidden = Boolean(CLASSIC_GAMES[mode]);
   if (CLASSIC_GAMES[mode]) return buildClassicStage(stage, meta);
@@ -351,22 +360,47 @@ function stopClassic() {
   classic = null;
 }
 async function buildClassicStage(stage, meta) {
-  const gameMode = mode, token = classicToken, config = CLASSIC_GAMES[mode];
+  const gameMode = mode, token = classicToken, config = CLASSIC_GAMES[mode], onlineConfig = ONLINE_GAMES[gameMode];
   stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 本地游戏</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">重新开始</button></div></div><div class="classic-wrap"></div><p class="game-help">${meta.help}</p>`;
-  const wrap = stage.querySelector('.classic-wrap'), hud = stage.querySelector('#score-text');
+  const wrap = stage.querySelector('.classic-wrap'), hud = stage.querySelector('#score-text'), seatText = stage.querySelector('#seat-text');
   const restart = stage.querySelector('#restart-game');
-  restart.disabled = true;
   restart.addEventListener('click', () => classic?.restart());
-  try {
-    const module = await config.load();
-    if (token !== classicToken || mode !== gameMode) return;
-    classic = module[config.mount](wrap, { onHud: text => { if (token === classicToken) hud.textContent = text; } });
-    restart.disabled = false;
-  } catch (error) {
-    if (token !== classicToken) return;
-    hud.textContent = '游戏加载失败，请返回后重试';
-    console.error(error);
+  const setHud = (text) => { if (token === classicToken) hud.textContent = text; };
+  let epoch = 0;
+  async function enterLocal() {
+    const mine = ++epoch;
+    classic?.destroy();
+    classic = null;
+    seatText.textContent = `${meta.label} · 本地游戏`;
+    restart.hidden = false;
+    restart.disabled = true;
+    hud.textContent = '正在加载……';
+    try {
+      const module = await config.load();
+      if (token !== classicToken || mine !== epoch || mode !== gameMode) return;
+      classic = module[config.mount](wrap, { onHud: setHud });
+      restart.disabled = false;
+    } catch (error) {
+      if (token !== classicToken) return;
+      hud.textContent = '游戏加载失败，请返回后重试';
+      console.error(error);
+    }
   }
+  function enterOnline(autoJoin = null) {
+    epoch += 1;
+    classic?.destroy();
+    seatText.textContent = `${meta.label} · 联机对战`;
+    restart.hidden = true;
+    classic = mountOnlineShell(wrap, { game: gameMode, autoJoin, onHud: setHud });
+  }
+  if (onlineConfig) {
+    // 点了邀请链接、或者刷新前正在对局 → 直接落在联机页。
+    const invite = takeInvite(gameMode), startOnline = Boolean(invite) || hasResume(sessionStore(), gameMode);
+    const tabs = createModeTabs((tab) => (tab === 'online' ? enterOnline() : enterLocal()), startOnline ? 'online' : 'local');
+    $('.nav-buttons').prepend(tabs.el);
+    if (startOnline) return enterOnline(invite);
+  }
+  return enterLocal();
 }
 function stopQuest() {
   questToken += 1;
@@ -446,8 +480,39 @@ function stopG2048() {
 }
 function buildG2048Stage(stage, meta) {
   stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap g2048-wrap"></div><p class="game-help">${meta.help}</p>`;
-  $('#restart-game').addEventListener('click', () => g2048?.restart());
-  mountG2048View(stage.querySelector('.g2048-wrap'));
+  const restart = $('#restart-game'), localWrap = stage.querySelector('.g2048-wrap'), seatText = $('#seat-text');
+  restart.addEventListener('click', () => g2048?.restart());
+  let onlineHost = null;
+  const setHud = (text) => { $('#score-text').textContent = text; };
+  const enterLocal = () => {
+    g2048Token += 1;
+    g2048?.destroy();
+    g2048 = null;
+    onlineHost?.remove();
+    onlineHost = null;
+    localWrap.hidden = false;
+    restart.hidden = false;
+    seatText.textContent = `${meta.label} · 单人`;
+    mountG2048View(localWrap);
+  };
+  const enterOnline = (autoJoin = null) => {
+    g2048Token += 1;
+    g2048?.destroy();
+    g2048 = null;
+    localWrap.hidden = true;
+    restart.hidden = true;
+    seatText.textContent = `${meta.label} · 联机对战`;
+    onlineHost = document.createElement('div');
+    onlineHost.className = 'classic-wrap';
+    localWrap.after(onlineHost);
+    g2048 = mountOnlineShell(onlineHost, { game: 'g2048', autoJoin, onHud: setHud });
+  };
+  const invite = takeInvite('g2048'), startOnline = Boolean(invite) || hasResume(sessionStore(), 'g2048');
+  const tabs = createModeTabs((tab) => (tab === 'online' ? enterOnline() : enterLocal()), startOnline ? 'online' : 'local');
+  $('.nav-buttons').prepend(tabs.el);
+  $('#game-link').hidden = true;   // 局域网「联机」按钮对 2048 没用，免得和这里的联机对战混淆
+  if (startOnline) enterOnline(invite);
+  else mountG2048View(localWrap);
 }
 async function mountG2048View(wrap) {
   const token = g2048Token;
@@ -1252,4 +1317,16 @@ window.__arcade = { get state() { return state; }, get mode() { return mode; }, 
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';
+const bootHash = location.hash;   // showScreen('home') 会把它改成 #home，先存下来
 showScreen('home'); cancelAnimationFrame(frameId); frameId = requestAnimationFrame(loop);
+// 邀请链接：/?game=xiangqi&room=ABCD2 → 直接进到那个游戏的联机页并加入房间。
+// 刷新页面：地址栏是 #game/xxx 且这个游戏有没打完的联机对局 → 回到那局（座位服务端替你留着 60 秒）。
+{
+  const params = new URLSearchParams(location.search), game = params.get('game'), room = normalizeCode(params.get('room'));
+  const resumed = /^#game\/([a-z0-9]+)$/.exec(bootHash)?.[1];
+  if (isOnlineGame(game) && isCode(room)) {
+    pendingInvite = { game, code: room };
+    history.replaceState(null, '', location.pathname);
+    startGame(game);
+  } else if (isOnlineGame(resumed) && hasResume(sessionStore(), resumed)) startGame(resumed);
+}

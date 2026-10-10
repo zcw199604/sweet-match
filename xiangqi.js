@@ -10,12 +10,13 @@ const el = (tag, className, text) => {
   return node;
 };
 
-export function mountXiangqi(wrap, { onHud = () => {} } = {}) {
+export function mountXiangqi(wrap, { onHud = () => {}, online = null } = {}) {
   let alive = true;
-  let state = createXiangqi();
+  // online：联机 Session。棋盘由服务端推来的 fen 重建，走子只发给服务端，不在本地推进。
+  let state = online ? createXiangqi({ fen: online.view.fen }) : createXiangqi();
   let selected = null;
   let targets = [];
-  let mode = 'ai';
+  let mode = online ? 'online' : 'ai';
   let searchTimer = 0;
   let search = null;
 
@@ -31,8 +32,10 @@ export function mountXiangqi(wrap, { onHud = () => {} } = {}) {
   const restart = el('button', 'classic-button', '↻ 重开');
   restart.dataset.action = 'restart';
   toolbar.append(modeLabel, undo, restart);
+  toolbar.hidden = Boolean(online);
   const status = el('p', 'classic-status xiangqi-status');
   const board = el('div', 'xiangqi-board');
+  if (online?.seat === 1) board.classList.add('flipped');   // 黑方：转过来让自己的棋子在下面
   board.setAttribute('role', 'grid');
   board.setAttribute('aria-label', '中国象棋棋盘');
   const note = el('p', 'xiangqi-note', '点选棋子，再点亮色落点。红方先行。');
@@ -45,8 +48,20 @@ export function mountXiangqi(wrap, { onHud = () => {} } = {}) {
     search = null;
   };
 
+  const myColor = () => (online?.seat === 0 ? 'r' : 'b');
+  const mine = () => !online || (!online.result.over && state.phase === 'playing' && state.turn === myColor());
+  // 联机时的状态行：胜负以服务端为准（弃局、重复局面等客户端凭 fen 看不出来）。
+  const onlineText = () => {
+    const { over, winner } = online.result, name = (seat) => (seat === 0 ? '红方' : '黑方');
+    if (over) {
+      if (online.result.reason === 'forfeit') return winner === online.seat ? '对手已离开 · 你获胜！' : '你已离开本局 · 对手获胜';
+      if (winner === null) return '和棋';
+      return `${name(winner)}获胜 · ${winner === online.seat ? '你赢了！' : '你输了'}`;
+    }
+    return mine() ? `轮到你（${name(online.seat)}）${state.check ? ' · 将军' : ''}` : '等待对手走棋……';
+  };
   const hud = () => {
-    const phase = state.phase === 'over'
+    const phase = online ? onlineText() : state.phase === 'over'
       ? (state.reason === 'checkmate' ? `${state.winner === 'r' ? '红' : '黑'}方将死` : state.reason === 'stalemate' ? `${state.turn === 'r' ? '红' : '黑'}方困毙 · ${state.winner === 'r' ? '红' : '黑'}方获胜` : '和棋')
       : `${state.turn === 'r' ? '红' : '黑'}方${state.check ? ' · 将军' : ''}走棋`;
     status.textContent = phase;
@@ -100,8 +115,9 @@ export function mountXiangqi(wrap, { onHud = () => {} } = {}) {
   };
 
   const clickSquare = square => {
-    if (!alive || state.phase !== 'playing' || (mode === 'ai' && state.turn === 'b')) return;
+    if (!alive || state.phase !== 'playing' || (mode === 'ai' && state.turn === 'b') || !mine()) return;
     if (selected && targets.includes(square)) {
+      if (online) { online.send({ from: selected, to: square }); selected = null; targets = []; render(); return; }
       moveXiangqi(state, selected, square);
       selected = null; targets = [];
       render();
@@ -119,6 +135,7 @@ export function mountXiangqi(wrap, { onHud = () => {} } = {}) {
   };
 
   const reset = () => {
+    if (online) return;
     cancelSearch();
     state = createXiangqi();
     selected = null; targets = [];
@@ -133,12 +150,19 @@ export function mountXiangqi(wrap, { onHud = () => {} } = {}) {
     selected = null; targets = [];
     render();
   });
+  const off = online?.on('state', (payload) => {
+    state = createXiangqi({ fen: payload.view.fen });
+    selected = null; targets = [];
+    board.classList.toggle('flipped', online.seat === 1);   // 换边后座位会变
+    render();
+  });
   render();
 
   return {
     restart: reset,
     destroy() {
       alive = false;
+      off?.();
       cancelSearch();
       root.remove();
     },

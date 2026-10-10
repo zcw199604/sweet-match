@@ -1,0 +1,12 @@
+{
+  "name": "arcade-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node index.js", "test": "node --test --test-timeout=30000 test/*.test.js" },
+  "dependencies": {
+    "@colyseus/core": "^0.18.18",
+    "@colyseus/ws-transport": "^0.18.4"
+  },
+  "devDependencies": { "@colyseus/sdk": "^0.18.5" }
+}

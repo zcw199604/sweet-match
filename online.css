@@ -1,0 +1,69 @@
+/* 联机：本地/联机切换条、大厅、等待、对局条。沿用深色舞台和紫色强调色。 */
+.mode-tabs{display:flex;gap:2px;margin:0;padding:3px;border-radius:11px;background:#20242d12;border:1px solid var(--line)}
+.mode-tab{font:inherit;font-size:12px;font-weight:700;color:var(--muted);border:0;border-radius:8px;background:transparent;padding:6px 11px;white-space:nowrap;touch-action:manipulation}
+.mode-tab.active{background:var(--violet);color:#fff;box-shadow:0 2px 8px #8e7bff55}
+@media(max-width:800px){.mode-tab{padding:6px 8px;font-size:11px}}
+.mode-tab:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+
+.online-shell{width:100%;max-width:520px;margin:auto;color:#e7e9ff;font-size:13px}
+.online-lobby,.online-wait{display:grid;gap:14px;justify-items:center;text-align:center;padding:22px 18px;border-radius:16px;background:linear-gradient(145deg,#2c2960,#1a173d);border:1px solid #ffffff22}
+.online-lobby h3{margin:0;font-size:20px;letter-spacing:-.02em}
+.online-lead{margin:0;max-width:34em;line-height:1.7;color:#c9cffc}
+.online-option{display:flex;align-items:center;gap:8px;color:#dfdafc;font-weight:700}
+.online-lobby select,.online-lobby input,.online-wait input{font:inherit;color:#fff;border:1px solid #ffffff35;border-radius:10px;background:#292745;padding:10px 12px;min-width:0}
+.online-lobby input::placeholder{color:#9ba2d6}
+.online-lobby button,.online-wait button,.online-bar button,.online-after button{font:inherit;touch-action:manipulation;border-radius:10px;border:1px solid #ffffff35;color:#fff;background:#292745;padding:10px 16px;min-height:44px}
+.online-lobby.busy button{opacity:.55;pointer-events:none}
+.online-lobby button:focus-visible,.online-wait button:focus-visible,.online-bar button:focus-visible,.online-after button:focus-visible,.online-lobby select:focus-visible,.online-lobby input:focus-visible,.online-wait input:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+.online-primary{width:min(100%,260px);font-weight:800;font-size:15px;background:#8e7bff!important;border-color:#c5baff!important;box-shadow:0 6px 18px #8e7bff55}
+.online-join{display:flex;gap:8px;width:min(100%,320px)}
+.online-join input{flex:1;text-transform:uppercase;letter-spacing:.2em;text-align:center}
+.online-secondary{background:#3b3777!important}
+.online-ghost{background:transparent!important;color:#c9cffc!important}
+.online-msg{min-height:20px;margin:0;color:#8ee7b5}
+.online-msg.bad{color:#ff9db1}
+.online-code{font:800 clamp(34px,11vw,52px)/1 'DM Mono',ui-monospace,monospace;letter-spacing:.22em;padding-left:.22em;color:var(--yellow);text-shadow:0 4px 0 #0005}
+.online-link{width:min(100%,380px);font-size:12px;text-align:center}
+.online-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.online-waiting{margin:0;color:#c9cffc}
+.online-waiting::after{content:'';display:inline-block;width:0;animation:online-dots 1.4s steps(4) infinite;overflow:hidden;vertical-align:bottom}
+@keyframes online-dots{to{width:1.2em}}
+@media (prefers-reduced-motion:reduce){.online-waiting::after{animation:none}}
+
+.online-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 12px;margin:0 0 12px;padding:8px 12px;border-radius:12px;background:#ffffff0f;font-weight:700}
+.online-room{font-family:'DM Mono',ui-monospace,monospace;letter-spacing:.08em;color:var(--yellow)}
+.online-you{color:#fff}
+.online-rival::before{content:'';display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:#aaa}
+.online-rival.online::before{background:var(--green)}
+.online-rival.offline::before{background:var(--yellow)}
+.online-rival.gone::before{background:#ff6f87}
+.online-note{flex-basis:100%;text-align:center;min-height:0;color:#8ee7b5;font-weight:600}
+.online-note:empty{display:none}
+.online-note.bad{color:#ffb4c2}
+.online-bar .online-ghost{min-height:34px;padding:5px 12px;font-size:12px}
+@media(max-width:480px){.online-bar{font-size:12px;gap:4px 10px;padding:6px 10px}}
+.online-game{min-width:0}
+.online-shell .classic-game{margin:0 auto}
+
+/* 竞速对手面板（2048 / 扫雷）*/
+.race-rival{margin:10px auto 0;padding:10px 12px;border-radius:12px;background:#ffffff0f;color:#dfdafc;text-align:center;font-weight:700}
+.race-rival b{color:var(--yellow)}
+.rival-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;width:min(100%,150px);margin:8px auto 0;padding:5px;border-radius:9px;background:#0d0c24}
+.rival-grid i{aspect-ratio:1;border-radius:4px;background:#1a1844;display:grid;place-items:center;font:800 11px system-ui,sans-serif;font-style:normal;color:#fff}
+.rival-meter{height:8px;margin-top:8px;border-radius:4px;background:#0d0c24;overflow:hidden}
+.rival-meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .25s}
+
+/* 联机时游戏自带的「对弈 / 悔棋 / 重开」工具栏用 hidden 属性藏起来，但 .classic-tools 自带 display:flex 会压过它 */
+.classic-tools[hidden]{display:none}
+
+/* 后手（黑方 / 蓝方）把棋盘转 180°，自己的棋子在下面；格子里的内容再转回来，棋子和文字保持正立 */
+.flipped{transform:rotate(180deg)}
+.flipped>*>*{transform:rotate(180deg)}
+
+/* 对局结束后的「再来一局 / 换边再来」 */
+.online-after{display:grid;gap:8px;justify-items:center;margin:0 0 12px;padding:10px 12px;border-radius:12px;background:linear-gradient(145deg,#2c2960,#1a173d);border:1px solid #ffffff22;text-align:center}
+.online-after[hidden]{display:none}
+.online-after-text{margin:0;font-weight:700;color:#e7e9ff}
+.online-after .online-actions{justify-content:center}
+.online-after .online-primary{width:auto;min-width:110px;font-size:14px}
+.online-after button{min-height:40px;padding:8px 14px}
