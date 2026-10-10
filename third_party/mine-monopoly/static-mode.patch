@@ -77,10 +77,10 @@ index 8396f37..59426c0 100644
  		let showErrorMessage = true;
 diff --git a/apps/client/src/utils/static-mode.ts b/apps/client/src/utils/static-mode.ts
 new file mode 100644
-index 0000000..69d1968
+index 0000000..da45a51
 --- /dev/null
 +++ b/apps/client/src/utils/static-mode.ts
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,61 @@
 +/**
 + * 静态部署模式（VITE_STATIC_MODE=1）：没有后端、没有登录，只保留本地派对。
 + * 联机房间、账号、服务端地图列表都不可用，地图只能从本地文件导入。
@@ -118,28 +118,93 @@ index 0000000..69d1968
 +		link.style.display = routeName === "room-router" ? "block" : "none";
 +	};
 +}
++
++/** 随站点一起发布的内置地图（构建时放进 maps/，清单是 maps/index.json）。 */
++export interface BundledMap {
++	name: string;
++	file: string;
++	size: number;
++}
++
++export async function loadBundledMaps(): Promise<BundledMap[]> {
++	try {
++		const res = await fetch(`${import.meta.env.BASE_URL}maps/index.json`);
++		if (!res.ok) return [];
++		const data = await res.json();
++		return Array.isArray(data.maps) ? data.maps : [];
++	} catch {
++		return [];
++	}
++}
++
++export async function fetchBundledMap(file: string): Promise<Uint8Array> {
++	const res = await fetch(`${import.meta.env.BASE_URL}${file}`);
++	if (!res.ok) throw new Error(`地图文件下载失败（${res.status}）`);
++	return new Uint8Array(await res.arrayBuffer());
++}
 diff --git a/apps/client/src/views/room/components/local-party-room/local-party-room.vue b/apps/client/src/views/room/components/local-party-room/local-party-room.vue
-index 3818590..0b5410f 100644
+index 3818590..3588887 100644
 --- a/apps/client/src/views/room/components/local-party-room/local-party-room.vue
 +++ b/apps/client/src/views/room/components/local-party-room/local-party-room.vue
 @@ -19,6 +19,7 @@ import { computed, ref, watch } from "vue";
  import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
  import RolePreviewer from "../shared/role-previewer.vue";
  import { vStagger } from "@src/directives";
-+import { IS_STATIC } from "@src/utils/static-mode";
++import { IS_STATIC, fetchBundledMap, loadBundledMaps, type BundledMap } from "@src/utils/static-mode";
  
  const MAX_PLAYERS = 6;
  const roomInfoStore = useRoomInfo();
-@@ -111,6 +112,8 @@ function handleChangeRole() {
+@@ -62,6 +63,9 @@ const canStart = computed(() => {
+ const mapList = ref<GameMapInDb[]>([]);
+ const mapSelectorVisible = ref(false);
+ const tempMapSelectedId = ref<string[]>([]);
++const bundledMaps = ref<BundledMap[]>([]);
++const bundledSelected = ref<string[]>([]);
++const bundledDialogVisible = ref(false);
+ const roleSelectorVisible = ref(false);
+ const tempRoleSelectedId = ref<string[]>([]);
+ const roleTargetUserId = ref("");
+@@ -111,6 +115,15 @@ function handleChangeRole() {
  }
  
  async function handleSelectMap() {
-+	// 静态版没有服务端地图列表，选地图就是导入本地文件
-+	if (IS_STATIC) return handleUploadMap();
++	// 静态版没有服务端地图列表：有内置地图就让用户选，没有就直接导入本地文件
++	if (IS_STATIC) {
++		const maps = await loadBundledMaps();
++		if (!maps.length) return handleUploadMap();
++		bundledMaps.value = maps;
++		bundledSelected.value = [maps[0].file];
++		bundledDialogVisible.value = true;
++		return;
++	}
  	try {
  		useLoading().showLoading("地图列表加载中...");
  		const { gameMapList } = await getGameMapList(1, 1000);
-@@ -255,7 +258,7 @@ function handleGameStart() {
+@@ -142,6 +155,23 @@ async function handleChangeMap() {
+ 	await applyMapChange({ from: "server", data: mapId }, "地图加载中...");
+ }
+ 
++async function handleChooseBundledMap() {
++	const item = bundledMaps.value.find((map) => map.file === bundledSelected.value[0]);
++	if (!item) return;
++	bundledDialogVisible.value = false;
++	let data: Uint8Array;
++	useLoading().showLoading("正在下载地图...");
++	try {
++		data = await fetchBundledMap(item.file);
++	} catch (error) {
++		FPMessage({ type: "error", message: error instanceof Error ? error.message : "地图下载失败" });
++		return;
++	} finally {
++		useLoading().hideLoading();
++	}
++	await applyMapChange({ from: "custom", data, fileName: `${item.name}.fpmap` }, "正在加载地图...");
++}
++
+ async function handleUploadMap() {
+ 	if (window.platformAPI?.importLocalMap && window.platformAPI.findLocalMapByHash) {
+ 		const imported = await window.platformAPI.importLocalMap();
+@@ -255,7 +285,7 @@ function handleGameStart() {
  					<div class="map-preview-inroom">
  						<div class="map-cover-container">
  							<MapPreviewer class="map-previewer" v-if="currentMap" :map="currentMap" />
@@ -148,7 +213,7 @@ index 3818590..0b5410f 100644
  						</div>
  						<div class="select-map-button">
  							<FpPopover placement="top">
-@@ -272,7 +275,7 @@ function handleGameStart() {
+@@ -272,7 +302,7 @@ function handleGameStart() {
  						</div>
  					</div>
  
@@ -157,6 +222,89 @@ index 3818590..0b5410f 100644
  
  					<div class="game-setting">
  						<button class="game-setting-button btn-small" v-if="currentMap" @click="gameSettingFormVisible = true">
+@@ -367,6 +397,38 @@ function handleGameStart() {
+ 				</ItemSelector>
+ 			</template>
+ 		</FpDialog>
++		<FpDialog
++			v-if="IS_STATIC"
++			v-model:visible="bundledDialogVisible"
++			title="选择地图"
++			confirm-text="使用这张地图"
++			cancel-text="取消"
++			@submit="handleChooseBundledMap"
++		>
++			<div class="bundled-maps">
++				<button
++					v-for="map in bundledMaps"
++					:key="map.file"
++					type="button"
++					class="bundled-map"
++					:class="{ active: bundledSelected[0] === map.file }"
++					@click="bundledSelected = [map.file]"
++				>
++					<span>{{ map.name }}</span>
++					<small>{{ (map.size / 1048576).toFixed(1) }} MB</small>
++				</button>
++				<button
++					type="button"
++					class="bundled-map import"
++					@click="
++						bundledDialogVisible = false;
++						handleUploadMap();
++					"
++				>
++					导入本地文件…（.fpmap / .mmmap）
++				</button>
++			</div>
++		</FpDialog>
+ 		<FpDialog
+ 			v-model:visible="saveDialogVisible"
+ 			title="读取存档"
+@@ -413,4 +475,43 @@ function handleGameStart() {
+ 
+ <style lang="scss" scoped>
+ @use "../shared/room-lobby.scss";
++
++.bundled-maps {
++	display: flex;
++	flex-direction: column;
++	gap: 0.6rem;
++	min-width: 22rem;
++
++	.bundled-map {
++		display: flex;
++		justify-content: space-between;
++		align-items: center;
++		gap: 1rem;
++		padding: 0.8rem 1rem;
++		border: 0.15rem solid transparent;
++		border-radius: 0.8rem;
++		background: rgba(255, 255, 255, 0.55);
++		color: #4a3b1a;
++		font-size: 1.1rem;
++		cursor: pointer;
++
++		small {
++			font-size: 0.8rem;
++			opacity: 0.7;
++		}
++
++		&.active {
++			border-color: var(--fp-color-primary);
++			background: rgba(255, 255, 255, 0.9);
++		}
++
++		&.import {
++			justify-content: center;
++			background: transparent;
++			border-style: dashed;
++			border-color: rgba(74, 59, 26, 0.35);
++			font-size: 0.95rem;
++		}
++	}
++}
+ </style>
 diff --git a/apps/client/src/views/room_router/room_router.vue b/apps/client/src/views/room_router/room_router.vue
 index e552a55..b75b86d 100644
 --- a/apps/client/src/views/room_router/room_router.vue

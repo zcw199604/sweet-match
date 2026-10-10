@@ -6,7 +6,8 @@
 //
 // 上游是 GPL-3.0，见 third_party/mine-monopoly/README.md。
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -56,6 +57,30 @@ function assertNoEnvLeak(outDir, env = process.env) {
   }
 }
 
+// monopoly-maps/ 里的 .fpmap 随站点发布：输出用内容哈希命名（避开中文文件名），清单写进 maps/index.json，
+// 游戏里点「选择地图」就会列出它们。排序：正式版在前、带「测试」的在后，各自按版本号新的在前（第一张会被默认选中）。
+function bundleMaps() {
+  const src = join(root, 'monopoly-maps');
+  if (!existsSync(src)) return;
+  const version = (name) => (name.match(/v(\d+)\.(\d+)\.(\d+)/)?.slice(1).map(Number) ?? [0, 0, 0]);
+  const files = readdirSync(src).filter((f) => f.endsWith('.fpmap')).sort((a, b) => {
+    if (a.includes('测试') !== b.includes('测试')) return a.includes('测试') ? 1 : -1;
+    const [va, vb] = [version(a), version(b)];
+    for (let i = 0; i < 3; i++) if (va[i] !== vb[i]) return vb[i] - va[i];
+    return a.localeCompare(b);
+  });
+  if (!files.length) return;
+  mkdirSync(join(out, 'maps'), { recursive: true });
+  const maps = files.map((f) => {
+    const data = readFileSync(join(src, f));
+    const file = `maps/${createHash('sha256').update(data).digest('hex').slice(0, 12)}.fpmap`;
+    writeFileSync(join(out, file), data);
+    return { name: f.replace(/\.fpmap$/, ''), file, size: data.length };
+  });
+  writeFileSync(join(out, 'maps/index.json'), JSON.stringify({ maps }, null, 2));
+  console.log(`已内置 ${maps.length} 张地图：${maps.map((m) => m.name).join('、')}`);
+}
+
 try {
   if (!reuse) {
     run('git', ['init', '-q'], work);
@@ -85,6 +110,7 @@ try {
   rmSync(out, { recursive: true, force: true });
   cpSync(join(work, 'apps/client/dist/frontend'), out, { recursive: true });
   assertNoEnvLeak(out);
+  bundleMaps();
   // 地图编辑器才用的 Draco 编码器，游戏里没有引用
   rmSync(join(out, 'draco/draco_encoder.js'), { force: true });
   console.log(`\n大富翁静态版已生成：${out}`);
