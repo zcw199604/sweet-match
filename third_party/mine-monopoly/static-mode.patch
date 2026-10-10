@@ -1,3 +1,227 @@
+diff --git a/apps/client/src/core/save/CloudSyncSaveStorage.ts b/apps/client/src/core/save/CloudSyncSaveStorage.ts
+new file mode 100644
+index 0000000..b6c62bb
+--- /dev/null
++++ b/apps/client/src/core/save/CloudSyncSaveStorage.ts
+@@ -0,0 +1,195 @@
++import type { SaveRecord } from "./types";
++import type { ISaveStorage } from "./IndexedDBSaveStorage";
++
++/**
++ * 静态版的云端存档。本地 IndexedDB 仍是主存储；如果登录了街机站点的身份（同源 localStorage 里的 pao-pw），
++ * 就再同步一份到 /api/monopoly-saves，换设备、换浏览器输入同一个密码就能接着玩。
++ *
++ * - 保存、删除先落本地，云端走「发件箱」：失败的记在 localStorage，下次再试，所以离线、站点没配数据库都不影响玩。
++ * - 读列表时本地和云端按 id 合并；云端独有的存档不缓存回本机。
++ * - 某个身份在这台设备上第一次同步时，把本机已有的存档（最新 20 条）传上去一次。
++ * - 没登录、没有 crypto.subtle（非安全上下文）时就是纯本地。
++ */
++const API = "/api/monopoly-saves";
++const PASSWORD_KEY = "pao-pw";
++const OUTBOX_KEY = "mm-save-outbox";
++const MIGRATED_KEY = "mm-save-migrated";
++const TIMEOUT_MS = 6000;
++const MIGRATE_LIMIT = 20;
++
++interface OutboxItem {
++	pid: string;
++	id: string;
++}
++interface Outbox {
++	up: OutboxItem[];
++	del: OutboxItem[];
++}
++
++function readJson<T>(key: string, fallback: T): T {
++	try {
++		const raw = localStorage.getItem(key);
++		return raw ? (JSON.parse(raw) as T) : fallback;
++	} catch {
++		return fallback;
++	}
++}
++function writeJson(key: string, value: unknown) {
++	try {
++		localStorage.setItem(key, JSON.stringify(value));
++	} catch {
++		// 隐私模式等写不进去：只是少了重试，不影响游戏
++	}
++}
++const readOutbox = (): Outbox => {
++	const box = readJson<Partial<Outbox>>(OUTBOX_KEY, {});
++	return { up: Array.isArray(box.up) ? box.up : [], del: Array.isArray(box.del) ? box.del : [] };
++};
++function updateOutbox(change: (box: Outbox) => void) {
++	const box = readOutbox();
++	change(box);
++	writeJson(OUTBOX_KEY, box);
++}
++
++let identityCache: { password: string; pid: string } | null = null;
++/** pid = SHA-256("pao-arcade:" + 密码)，和街机首页的算法一致；没登录或不支持时返回 null。 */
++async function currentPid(): Promise<string | null> {
++	let password: string | null = null;
++	try {
++		password = localStorage.getItem(PASSWORD_KEY);
++	} catch {
++		return null;
++	}
++	if (!password || !/^[A-Za-z0-9]{8,32}$/.test(password) || !globalThis.crypto?.subtle) return null;
++	if (identityCache?.password !== password) {
++		const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`pao-arcade:${password}`));
++		identityCache = { password, pid: Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("") };
++	}
++	return identityCache.pid;
++}
++
++async function request(method: string, query: string, body?: unknown): Promise<Response | null> {
++	const controller = new AbortController();
++	const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
++	try {
++		return await fetch(`${API}${query}`, {
++			method,
++			headers: body === undefined ? undefined : { "content-type": "application/json" },
++			body: body === undefined ? undefined : JSON.stringify(body),
++			signal: controller.signal,
++		});
++	} catch {
++		return null;
++	} finally {
++		clearTimeout(timer);
++	}
++}
++
++const isRecord = (value: unknown): value is SaveRecord =>
++	!!value && typeof value === "object" && typeof (value as SaveRecord).id === "string" && typeof (value as SaveRecord).snapshot === "object";
++const oldestFirst = (list: SaveRecord[]) => [...list].sort((a, b) => a.saveTime - b.saveTime);
++
++// 几处 SaveManager 各有一个实例，发件箱只能有一个人在冲。
++let flushing: Promise<void> | null = null;
++
++export class CloudSyncSaveStorage implements ISaveStorage {
++	constructor(private readonly local: ISaveStorage) {}
++
++	async save(record: SaveRecord): Promise<void> {
++		await this.local.save(record);
++		const pid = await currentPid();
++		if (!pid) return;
++		updateOutbox((box) => {
++			if (!box.up.some((item) => item.pid === pid && item.id === record.id)) box.up.push({ pid, id: record.id });
++		});
++		void this.flush();
++	}
++
++	async load(id: string): Promise<SaveRecord | null> {
++		const local = await this.local.load(id);
++		if (local) return local;
++		const pid = await currentPid();
++		if (!pid) return null;
++		const res = await request("GET", `?pid=${pid}&id=${encodeURIComponent(id)}`);
++		const data = res?.ok ? await res.json().catch(() => null) : null;
++		return isRecord(data?.save) ? data.save : null;
++	}
++
++	list(): Promise<SaveRecord[]> {
++		return this.local.list();
++	}
++
++	async listByMap(mapId: string, mapVersion: string): Promise<SaveRecord[]> {
++		const local = await this.local.listByMap(mapId, mapVersion);
++		const pid = await currentPid();
++		if (!pid) return oldestFirst(local);
++
++		void this.sync(pid);
++		const query = `?pid=${pid}&mapId=${encodeURIComponent(mapId)}&version=${encodeURIComponent(mapVersion)}`;
++		const res = await request("GET", query);
++		const data = res?.ok ? await res.json().catch(() => null) : null;
++		const remote: SaveRecord[] = Array.isArray(data?.saves) ? data.saves.filter(isRecord) : [];
++
++		const have = new Set(local.map((record) => record.id));
++		// 本机已删、还没来得及通知云端的，不要在列表里再冒出来
++		const deleting = new Set(readOutbox().del.filter((item) => item.pid === pid).map((item) => item.id));
++		// 按时间从旧到新：SaveManager.save 取最后一条当「上一个存档」，界面自己会再按新到旧排。
++		return oldestFirst([...local, ...remote.filter((record) => !have.has(record.id) && !deleting.has(record.id))]);
++	}
++
++	async delete(id: string): Promise<void> {
++		await this.local.delete(id);
++		const pid = await currentPid();
++		if (!pid) return;
++		updateOutbox((box) => {
++			box.up = box.up.filter((item) => item.id !== id);
++			if (!box.del.some((item) => item.pid === pid && item.id === id)) box.del.push({ pid, id });
++		});
++		void this.flush();
++	}
++
++	/** 首次同步时把本机已有的存档排进发件箱，然后开始发。 */
++	private async sync(pid: string): Promise<void> {
++		const migrated = readJson<string[]>(MIGRATED_KEY, []);
++		if (!migrated.includes(pid)) {
++			const newest = (await this.local.list()).sort((a, b) => b.saveTime - a.saveTime).slice(0, MIGRATE_LIMIT);
++			updateOutbox((box) => {
++				for (const record of newest) {
++					if (!box.up.some((item) => item.pid === pid && item.id === record.id)) box.up.push({ pid, id: record.id });
++				}
++			});
++			writeJson(MIGRATED_KEY, [...migrated, pid]);
++		}
++		await this.flush();
++	}
++
++	private flush(): Promise<void> {
++		flushing ??= this.drain().finally(() => {
++			flushing = null;
++		});
++		return flushing;
++	}
++
++	/** 把发件箱里属于当前身份的条目发出去。网络或服务端出错就停下等下次；服务端明确拒绝（400/413）的丢掉，免得永远重试。 */
++	private async drain(): Promise<void> {
++		const pid = await currentPid();
++		if (!pid) return;
++		const settled = (status: number | undefined) => status === undefined ? false : status < 300 || status === 400 || status === 413;
++
++		for (const item of readOutbox().up.filter((entry) => entry.pid === pid)) {
++			const record = await this.local.load(item.id);
++			const status = record ? (await request("POST", "", { pid, save: record }))?.status : 200;
++			if (!settled(status)) return;
++			updateOutbox((box) => {
++				box.up = box.up.filter((entry) => !(entry.pid === pid && entry.id === item.id));
++			});
++		}
++		for (const item of readOutbox().del.filter((entry) => entry.pid === pid)) {
++			const status = (await request("DELETE", `?pid=${pid}&id=${encodeURIComponent(item.id)}`))?.status;
++			if (!settled(status)) return;
++			updateOutbox((box) => {
++				box.del = box.del.filter((entry) => !(entry.pid === pid && entry.id === item.id));
++			});
++		}
++	}
++}
+diff --git a/apps/client/src/core/save/SaveManager.ts b/apps/client/src/core/save/SaveManager.ts
+index 20aa852..d685864 100644
+--- a/apps/client/src/core/save/SaveManager.ts
++++ b/apps/client/src/core/save/SaveManager.ts
+@@ -3,6 +3,8 @@ import { normalizeAndValidateGameMap } from "@src/utils/file/game-map";
+ import { SaveRecord, SaveSnapshot } from "./types";
+ import { IndexedDBSaveStorage, ISaveStorage } from "./IndexedDBSaveStorage";
+ import { randomString } from "@src/utils";
++import { IS_STATIC } from "@src/utils/static-mode";
++import { CloudSyncSaveStorage } from "./CloudSyncSaveStorage";
+ 
+ export interface MapPathSnapshotRecoveryResult {
+ 	snapshot: SaveSnapshot;
+@@ -69,7 +71,8 @@ export class SaveManager {
+ 	private storage: ISaveStorage;
+ 
+ 	constructor(storage?: ISaveStorage) {
+-		this.storage = storage ?? new IndexedDBSaveStorage();
++		// 静态版：本地之外再按街机身份同步到云端（没登录就是纯本地）
++		this.storage = storage ?? (IS_STATIC ? new CloudSyncSaveStorage(new IndexedDBSaveStorage()) : new IndexedDBSaveStorage());
+ 	}
+ 
+ 	/**
 diff --git a/apps/client/src/router/index.ts b/apps/client/src/router/index.ts
 index ecf3826..09e9555 100644
 --- a/apps/client/src/router/index.ts
