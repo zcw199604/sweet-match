@@ -26,12 +26,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
+      # 联机房间服务（server/）有自己的依赖；它的测试会直接 import 仓库根的 *-core.js，所以要在完整检出里跑。
+      - name: Install server dependencies
+        run: npm --prefix server ci
+
       - name: Run core and LAN tests
         run: npm test
+
+      - name: Run online room server tests
+        run: npm --prefix server test
 
   deploy:
     name: Deploy to Cloudflare Pages
