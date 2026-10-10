@@ -8,7 +8,8 @@
     "lan": "node scripts/start-lan.js",
     "test:e2e": "playwright test",
     "vendor": "node scripts/vendor.js",
-    "gen:pour": "node scripts/gen-pour-levels.js"
+    "gen:pour": "node scripts/gen-pour-levels.js",
+    "build:monopoly": "node scripts/build-monopoly.js"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.20.0",
