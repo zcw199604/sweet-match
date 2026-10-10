@@ -14,6 +14,7 @@
 - 路由改用 Hash，Pages 上不需要回退规则；大厅左上角加了「← 街机厅」。
 - 存档：本地 IndexedDB 之外，按街机身份（同源 `localStorage` 的 `pao-pw`）同步到 `/api/monopoly-saves`（`src/core/save/CloudSyncSaveStorage.ts`，服务端见仓库根目录的 `monopoly-saves-core.js`）。保存、删除先落本地，云端走 localStorage 里的发件箱，失败下次重试；没登录或接口不可用时就是纯本地。
 - Web 构建不再生成 `.gz` 副本和体积分析页。
+- 去掉上游的推广内容：登录页的「给作者支持」按钮、微信 / 支付宝收款码弹窗、爱发电链接，以及 GitHub / 问卷 / B 站介绍视频按钮。这些本来就只挂在登录页，静态版跳过登录页后已经点不到，补丁里连同代码和收款码图片一起删掉，只留「更新日志」和版本号。
 
 ## 构建
 

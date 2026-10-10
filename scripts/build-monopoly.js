@@ -113,6 +113,14 @@ try {
   bundleMaps();
   // 地图编辑器才用的 Draco 编码器，游戏里没有引用
   rmSync(join(out, 'draco/draco_encoder.js'), { force: true });
+  // 上游的「给作者支持」收款码：static-mode.patch 已经把入口去掉，这里再兜底删掉图片，
+  // 免得哪次补丁没打全就把作者的微信/支付宝收款码随站点公开出去。
+  const imagesDir = join(out, 'images');
+  if (existsSync(imagesDir)) {
+    for (const file of readdirSync(imagesDir)) {
+      if (file.startsWith('reward-qr')) rmSync(join(imagesDir, file), { force: true });
+    }
+  }
   console.log(`\n大富翁静态版已生成：${out}`);
 } catch (error) {
   rmSync(out, { recursive: true, force: true });
