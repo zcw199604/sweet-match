@@ -33,16 +33,21 @@ const SAFE_ENV = Object.fromEntries(
 const run = (cmd, args, cwd, env = {}, bare = false) =>
   execFileSync(cmd, args, { cwd, stdio: 'inherit', env: bare ? env : { ...SAFE_ENV, ...env } });
 
-// 第二道防线：产物里只要出现本机某个环境变量的值（长度 >= 12），就判定泄露。
+// 第二道防线：真正的保证是 vite 那一步只有裸环境；这里只是兜底，且只盯真正敏感的两类，
+// 否则 CI 里 GITHUB_SERVER_URL=https://github.com 这种恰好出现在依赖代码里的值会误报：
+//   1. 名字像凭据的变量（TOKEN / SECRET / PASSWORD / AUTH / SOCK / KEY ...），值长度 >= 8
+//   2. 本机绝对路径（HOME、PATH、PWD、RUNNER_TEMP ...），值以 / 开头且长度 >= 12
+// MONOPOLY_MAP_ENCRYPT_KEY 本来就是要写进产物的，不算。
 const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
-function assertNoEnvLeak(outDir) {
-  // 终端类变量的值（xterm-256color 之类）本来就会出现在依赖代码里，不算泄露
-  // 另外两个：macOS 会往每个进程里塞 __CF_USER_TEXT_ENCODING；MONOPOLY_MAP_ENCRYPT_KEY 本来就是要写进产物的。
-  const benign = new Set([
-    'TERM', 'COLORTERM', 'TERM_PROGRAM', 'TERM_PROGRAM_VERSION', 'LANG', 'LC_ALL', 'NODE_ENV', 'COLOR',
-    '__CF_USER_TEXT_ENCODING', 'MONOPOLY_MAP_ENCRYPT_KEY'
-  ]);
-  const secrets = Object.entries(process.env).filter(([k, v]) => v && v.length >= 12 && !benign.has(k));
+const SENSITIVE_NAME = /TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|SOCK|PRIVATE|SESSION|KEY/i;
+function leakCandidates(env) {
+  return Object.entries(env).filter(([k, v]) => {
+    if (!v || k === 'MONOPOLY_MAP_ENCRYPT_KEY') return false;
+    return (SENSITIVE_NAME.test(k) && v.length >= 8) || (v.startsWith('/') && v.length >= 12);
+  });
+}
+function assertNoEnvLeak(outDir, env = process.env) {
+  const secrets = leakCandidates(env);
   for (const file of walk(outDir).filter((f) => /\.(js|css|html|json|mjs)$/.test(f))) {
     const text = readFileSync(file, 'utf8');
     for (const [k, v] of secrets) {
