@@ -1180,7 +1180,7 @@ function loop(time) {
   frameId = requestAnimationFrame(loop);
 }
 
-$$('.arcade-card').forEach((card) => card.addEventListener('click', () => startGame(card.dataset.mode)));
+$$('.arcade-card[data-mode]').forEach((card) => card.addEventListener('click', () => startGame(card.dataset.mode)));
 $('#open-link').addEventListener('click', openLink); $('#game-link').addEventListener('click', openLink); $('#close-link').addEventListener('click', closeLink); $('#how-link').addEventListener('click', openLink);
 $('#back-home').addEventListener('click', () => { showScreen('home'); });
 initBoard(); initActivity(); initRecent(startGame);

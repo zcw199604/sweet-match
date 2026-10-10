@@ -1,0 +1,242 @@
+diff --git a/apps/client/src/router/index.ts b/apps/client/src/router/index.ts
+index ecf3826..09e9555 100644
+--- a/apps/client/src/router/index.ts
++++ b/apps/client/src/router/index.ts
+@@ -16,6 +16,7 @@ function componentLoadedInterceptor(loader: () => Promise<any>) {
+ }
+ 
+ import { getPlatformType } from "@src/utils/platform";
++import { IS_STATIC, ensureGuestUser, setupBackLink } from "@src/utils/static-mode";
+ 
+ const routes = [
+ 	{ path: "/", name: "login", component: componentLoadedInterceptor(() => import("@src/views/login/login.vue")) },
+@@ -29,14 +30,18 @@ const routes = [
+ ];
+ 
+ const router = createRouter({
+-	// Electron 必须用 Hash (file:// 协议)，其他平台用 History
+-	history: getPlatformType() === "electron"
++	// Electron 必须用 Hash (file:// 协议)，其他平台用 History；静态部署没有服务端回退，也用 Hash
++	history: getPlatformType() === "electron" || IS_STATIC
+ 		? createWebHashHistory()
+ 		: createWebHistory(import.meta.env.BASE_URL),
+ 	routes,
+ });
+ 
+ router.beforeEach((to, form) => {
++	if (IS_STATIC) {
++		ensureGuestUser();
++		if (to.name === "login") return { name: "room-router" };
++	}
+ 	switch (to.name) {
+ 		case "room-router":
+ 			destoryMonopolyClient();
+@@ -62,4 +67,9 @@ router.beforeEach((to, form) => {
+ 	}
+ });
+ 
++if (IS_STATIC) {
++	const updateBackLink = setupBackLink();
++	router.afterEach((to) => updateBackLink(to.name));
++}
++
+ export default router;
+diff --git a/apps/client/src/utils/api/index.ts b/apps/client/src/utils/api/index.ts
+index 8396f37..59426c0 100644
+--- a/apps/client/src/utils/api/index.ts
++++ b/apps/client/src/utils/api/index.ts
+@@ -4,6 +4,7 @@ import { FPMessage } from "@mine-monopoly/ui";
+ import { clearAuthAndRedirect, getRefreshToken, setToken, setRefreshToken } from "@src/utils/auth";
+ import type { ApiResponse } from "@mine-monopoly/types";
+ import logService, { ErrorCategory, ErrorLevel } from "@src/utils/log";
++import { IS_STATIC } from "@src/utils/static-mode";
+ 
+ // 扩展 axios 配置：允许后台轮询/心跳类请求标记 silent，错误时跳过全局 toast
+ declare module "axios" {
+@@ -148,6 +149,10 @@ document.addEventListener("visibilitychange", () => {
+ // 请求拦截器
+ apiClient.interceptors.request.use(
+ 	(config) => {
++		if (IS_STATIC) {
++			// 没有后端：不发请求，直接失败，调用方自己的 catch 负责提示
++			config.adapter = () => Promise.reject(new AxiosError("静态版没有服务端", "ERR_STATIC_MODE", config));
++		}
+ 		const token = localStorage.getItem("token");
+ 		if (token && config.headers) {
+ 			config.headers["Authorization"] = token;
+@@ -168,6 +173,10 @@ apiClient.interceptors.response.use(
+ 	},
+ 	// 响应拦截器 - 错误
+ 	async (error: AxiosError) => {
++		if (IS_STATIC) {
++			(error as any)[AXIOS_HANDLED_ERROR] = true;
++			return Promise.reject(error);
++		}
+ 		const originalConfig = error.config as InternalAxiosRequestConfig | undefined;
+ 		let message = "";
+ 		let showErrorMessage = true;
+diff --git a/apps/client/src/utils/static-mode.ts b/apps/client/src/utils/static-mode.ts
+new file mode 100644
+index 0000000..69d1968
+--- /dev/null
++++ b/apps/client/src/utils/static-mode.ts
+@@ -0,0 +1,37 @@
++/**
++ * 静态部署模式（VITE_STATIC_MODE=1）：没有后端、没有登录，只保留本地派对。
++ * 联机房间、账号、服务端地图列表都不可用，地图只能从本地文件导入。
++ */
++export const IS_STATIC = import.meta.env.VITE_STATIC_MODE === "1";
++
++const GUEST_COLORS = ["#e4572e", "#2a9d8f", "#3a86ff", "#f4a261", "#8e5cf7", "#e76f9a"];
++
++/** 没有身份时直接生成一个本机游客，省掉登录页。 */
++export function ensureGuestUser(): void {
++	if (localStorage.getItem("user") || localStorage.getItem("token")) return;
++	const bytes = crypto.getRandomValues(new Uint8Array(4));
++	const id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
++	localStorage.setItem(
++		"user",
++		JSON.stringify({
++			userId: `temp-player-${id}`,
++			useraccount: "",
++			username: "玩家1",
++			color: GUEST_COLORS[bytes[0] % GUEST_COLORS.length],
++			avatar: "",
++		}),
++	);
++}
++
++/** 大厅左上角的"回街机厅"小链接，只在大厅显示，进了房间和游戏就隐藏，免得挡住界面。 */
++export function setupBackLink(): (routeName: unknown) => void {
++	const link = document.createElement("a");
++	link.href = "../";
++	link.textContent = "← 街机厅";
++	link.style.cssText =
++		"position:fixed;left:10px;top:8px;z-index:50;padding:6px 12px;border-radius:14px;background:rgba(0,0,0,.35);color:#fff;font:600 13px/1 system-ui,sans-serif;text-decoration:none;display:none";
++	document.body.appendChild(link);
++	return (routeName) => {
++		link.style.display = routeName === "room-router" ? "block" : "none";
++	};
++}
+diff --git a/apps/client/src/views/room/components/local-party-room/local-party-room.vue b/apps/client/src/views/room/components/local-party-room/local-party-room.vue
+index 3818590..0b5410f 100644
+--- a/apps/client/src/views/room/components/local-party-room/local-party-room.vue
++++ b/apps/client/src/views/room/components/local-party-room/local-party-room.vue
+@@ -19,6 +19,7 @@ import { computed, ref, watch } from "vue";
+ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+ import RolePreviewer from "../shared/role-previewer.vue";
+ import { vStagger } from "@src/directives";
++import { IS_STATIC } from "@src/utils/static-mode";
+ 
+ const MAX_PLAYERS = 6;
+ const roomInfoStore = useRoomInfo();
+@@ -111,6 +112,8 @@ function handleChangeRole() {
+ }
+ 
+ async function handleSelectMap() {
++	// 静态版没有服务端地图列表，选地图就是导入本地文件
++	if (IS_STATIC) return handleUploadMap();
+ 	try {
+ 		useLoading().showLoading("地图列表加载中...");
+ 		const { gameMapList } = await getGameMapList(1, 1000);
+@@ -255,7 +258,7 @@ function handleGameStart() {
+ 					<div class="map-preview-inroom">
+ 						<div class="map-cover-container">
+ 							<MapPreviewer class="map-previewer" v-if="currentMap" :map="currentMap" />
+-							<span v-else>上传地图 & 选择官方地图</span>
++							<span v-else>{{ IS_STATIC ? "导入地图文件（.fpmap / .mmmap）" : "上传地图 & 选择官方地图" }}</span>
+ 						</div>
+ 						<div class="select-map-button">
+ 							<FpPopover placement="top">
+@@ -272,7 +275,7 @@ function handleGameStart() {
+ 						</div>
+ 					</div>
+ 
+-					<div class="local-map-tips">可以在“设置”页面导入地图到本地</div>
++					<div class="local-map-tips" v-if="!IS_STATIC">可以在“设置”页面导入地图到本地</div>
+ 
+ 					<div class="game-setting">
+ 						<button class="game-setting-button btn-small" v-if="currentMap" @click="gameSettingFormVisible = true">
+diff --git a/apps/client/src/views/room_router/room_router.vue b/apps/client/src/views/room_router/room_router.vue
+index e552a55..b75b86d 100644
+--- a/apps/client/src/views/room_router/room_router.vue
++++ b/apps/client/src/views/room_router/room_router.vue
+@@ -13,6 +13,7 @@ import { useResourceStore } from "@src/store/game";
+ import FpErrorBoundary from "@src/components/utils/fp-error-boundary/index.vue";
+ import HeroTitle from "@src/components/hero-title";
+ import gsap from "gsap";
++import { IS_STATIC } from "@src/utils/static-mode";
+ 
+ const userInfoStore = useUserInfo();
+ const userListStore = useUserList();
+@@ -23,7 +24,7 @@ type RoomModePanelInstance = {
+ };
+ 
+ const user = computed(() => userInfoStore);
+-const activeMode = ref<"online" | "party">("online");
++const activeMode = ref<"online" | "party">(IS_STATIC ? "party" : "online");
+ const isModeSwitching = ref(false);
+ const roomRouterRef = ref<HTMLElement | null>(null);
+ const onlineRoomPanelRef = ref<RoomModePanelInstance | null>(null);
+@@ -128,11 +129,12 @@ onMounted(async () => {
+ 		if (!userContainer || !joinRoom) return;
+ 
+ 		const modePanels = [onlineRoomPanelRef.value?.panelElement, partyModePanelRef.value?.panelElement].filter(
+-			(panel): panel is HTMLElement => panel !== null,
++			(panel): panel is HTMLElement => !!panel,
+ 		);
+ 		gsap.set(modePanels, { autoAlpha: 0, pointerEvents: "none" });
+-		if (onlineRoomPanelRef.value?.panelElement) {
+-			gsap.set(onlineRoomPanelRef.value.panelElement, { autoAlpha: 1, pointerEvents: "auto" });
++		const initialPanel = IS_STATIC ? partyModePanelRef.value?.panelElement : onlineRoomPanelRef.value?.panelElement;
++		if (initialPanel) {
++			gsap.set(initialPanel, { autoAlpha: 1, pointerEvents: "auto" });
+ 		}
+ 
+ 		// 左右面板并行入场，右侧稍后 0.08 秒跟进，避免出现明显空档。
+@@ -207,13 +209,14 @@ function handleLogout() {
+ 				<div class="user-container">
+ 					<userCard :avatar="user.avatar" :username="user.username" :color="user.color" />
+ 
+-					<div class="side-bar">
++					<div class="side-bar" v-if="!IS_STATIC">
+ 						<button class="quit btn-small" @click="handleLogout">登出</button>
+ 					</div>
+ 				</div>
+ 				<div class="right-container">
+ 					<div class="mode-tabs" role="tablist" aria-label="大厅模式">
+ 						<button
++							v-if="!IS_STATIC"
+ 							id="online-room-tab"
+ 							type="button"
+ 							class="mode-tab"
+@@ -243,6 +246,7 @@ function handleLogout() {
+ 
+ 					<div class="mode-viewport">
+ 						<OnlineRoomPanel
++							v-if="!IS_STATIC"
+ 							ref="onlineRoomPanelRef"
+ 							id="online-room-panel"
+ 							:aria-hidden="activeMode !== 'online'"
+diff --git a/apps/client/vite.config.ts b/apps/client/vite.config.ts
+index 714d427..6fe21b8 100644
+--- a/apps/client/vite.config.ts
++++ b/apps/client/vite.config.ts
+@@ -40,7 +40,7 @@ export default defineConfig(({ command, mode }) => {
+ 			vue(),
+ 			generateMonacoDTS(),
+ 			// Capacitor 不需要 gzip（Android 会把 .gz 当重复资源报错）
+-			!isCapacitor && viteCompression({
++			!isCapacitor && !isWeb && viteCompression({
+ 				threshold: 10240, // 只压缩大于 10KB 的文件
+ 			}),
+ 			envPlugin({
+@@ -57,7 +57,7 @@ export default defineConfig(({ command, mode }) => {
+ 				},
+ 				renderer: process.env.NODE_ENV === "test" ? undefined : {},
+ 			}),
+-			!isCheck && command === "build" && visualizer({
++			!isCheck && !isWeb && command === "build" && visualizer({
+ 				filename: "dist/frontend/stats.html",
+ 				open: false,
+ 				gzipSize: true,
