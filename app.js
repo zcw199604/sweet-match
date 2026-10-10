@@ -15,6 +15,11 @@ import {
 } from './themes.js';
 
 const MODE_META = {
+  gomoku: { label: 'ARCADE 16', title: '五子棋', help: '黑方先行，点击交叉点落子，横、竖或斜线连成五子获胜。自由规则，无禁手；支持基础电脑、同屏双人和悔棋。' },
+  aeroplane: { label: 'ARCADE 17', title: '飞行棋', help: '掷六起飞，点击亮起的飞机移动；同色跳格、航线飞跃，撞到对手送回机场。四架飞机全部到终点获胜。支持基础电脑与同屏四人，具体变体见棋盘下方规则。' },
+  reversi: { label: 'ARCADE 18', title: '黑白棋', help: '黑方先行，在亮点落子，夹住的对方棋子全部翻面。无合法落点自动跳过，双方都不能落子时按子数决胜；支持基础电脑、同屏双人和悔棋。' },
+  draughts: { label: 'ARCADE 19', title: '国际跳棋', help: '10×10 棋盘，白方先行，有吃必吃并选吃子最多的路线；连吃时逐格点亮点，底线升王。支持基础电脑、同屏双人和悔棋，详细规则见棋盘下方。' },
+  jungle: { label: 'ARCADE 20', title: '斗兽棋', help: '大兽吃小兽，鼠吃象、狮虎跳河，陷阱削弱敌兽，进入敌方兽穴获胜。点动物再点亮起的位置；支持基础电脑、同屏双人和悔棋。' },
   minesweeper: { label: 'ARCADE 11', title: '扫雷', help: '点格子探索，数字表示周围八格的雷数。首次点击及相邻八格安全；手机用「插旗」切换标记，电脑也可右键。旗数等于数字时，点数字快开周围；标错会踩雷。揭开所有安全格即获胜，三档难度可切换。' },
   doudizhu: { label: 'ARCADE 12', title: '斗地主', help: '单人对两名基础电脑。叫分争当地主，地主拿三张底牌，农民合作；一方先出完即获胜。点手牌选择，再点「出牌」；「提示」选择可出的牌，「不要」跳过跟牌。支持常见组合、炸弹和王炸。' },
   junqi: { label: 'ARCADE 13', title: '军棋 · 翻棋版', help: '轮流翻开棋子，认领阵营后调兵夺旗。大军衔吃小军衔，同军衔同归于尽；炸弹双方消失，工兵可排地雷。行营保护棋子，铁路上可远行，工兵可以转弯。支持人机与同屏双人，点棋子查看可走位置。' },
@@ -35,7 +40,12 @@ const CLASSIC_GAMES = {
   minesweeper: { load: () => import('./minesweeper.js'), mount: 'mountMinesweeper' },
   doudizhu: { load: () => import('./doudizhu.js'), mount: 'mountDoudizhu' },
   junqi: { load: () => import('./junqi.js'), mount: 'mountJunqi' },
-  xiangqi: { load: () => import('./xiangqi.js'), mount: 'mountXiangqi' }
+  xiangqi: { load: () => import('./xiangqi.js'), mount: 'mountXiangqi' },
+  gomoku: { load: () => import('./board-games.js'), mount: 'mountGomoku' },
+  aeroplane: { load: () => import('./aeroplane.js'), mount: 'mountAeroplane' },
+  reversi: { load: () => import('./board-games.js'), mount: 'mountReversi' },
+  draughts: { load: () => import('./board-games.js'), mount: 'mountDraughts' },
+  jungle: { load: () => import('./board-games.js'), mount: 'mountJungle' }
 };
 const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'sudoku', ...Object.keys(CLASSIC_GAMES)];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];

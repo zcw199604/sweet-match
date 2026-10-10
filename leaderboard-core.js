@@ -42,7 +42,12 @@ export const GAMES = [
   { id: 'minesweeper', title: '扫雷' },
   { id: 'doudizhu', title: '斗地主' },
   { id: 'junqi', title: '军棋' },
-  { id: 'xiangqi', title: '象棋' }
+  { id: 'xiangqi', title: '象棋' },
+  { id: 'gomoku', title: '五子棋' },
+  { id: 'aeroplane', title: '飞行棋' },
+  { id: 'reversi', title: '黑白棋' },
+  { id: 'draughts', title: '国际跳棋' },
+  { id: 'jungle', title: '斗兽棋' }
 ];
 export const boardsOf = (game) => Object.keys(BOARDS).filter((id) => BOARDS[id].game === game);
 

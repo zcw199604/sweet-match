@@ -1,0 +1,38 @@
+.aeroplane-game{max-width:490px;margin:auto}
+.aeroplane-game .classic-tools{margin-bottom:8px}
+.aero-color-0{--aero-color:#ff7396;--aero-dark:#6b294b}.aero-color-1{--aero-color:#ffcf60;--aero-dark:#665023}.aero-color-2{--aero-color:#54d9a0;--aero-dark:#1d594d}.aero-color-3{--aero-color:#6bcfff;--aero-dark:#284a71}
+.aero-teams{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
+.aero-team{padding:7px 2px;text-align:center;border:1px solid #ffffff1a;border-radius:9px;background:#24213f;color:var(--aero-color);font-weight:800;transition:background .2s}
+.aero-team.active{border-color:var(--aero-color);background:var(--aero-dark);box-shadow:0 0 12px color-mix(in srgb,var(--aero-color) 20%,transparent)}
+.aero-board{position:relative;aspect-ratio:1;width:min(100%,calc(100dvh - 330px));min-width:230px;margin:auto;isolation:isolate;border-radius:22px;background:radial-gradient(circle at center,#393365,#1c193b);border:2px solid #8675c666;box-shadow:0 10px 35px #0005,inset 0 0 20px #ffffff06;overflow:hidden}
+.aero-scenery,.aero-pieces,.aero-route{position:absolute;inset:0;width:100%;height:100%}
+.aero-route{z-index:2;pointer-events:none;filter:drop-shadow(0 0 2px #fff6)}
+.aero-pieces{z-index:3;pointer-events:none}
+.aero-tile{position:absolute;width:5.7%;height:5.7%;display:grid;place-items:center;transform:translate(-50%,-50%);border-radius:5px;background:var(--aero-dark);border:1px solid color-mix(in srgb,var(--aero-color) 60%,transparent);color:var(--aero-color);font-size:clamp(8px,2.6vw,15px);font-weight:800;box-shadow:inset 0 1px #fff2}
+.aero-home{background:color-mix(in srgb,var(--aero-color) 55%,var(--aero-dark));color:#17182b;border-color:var(--aero-color)}
+.aero-start{border:2px solid var(--aero-color)}.aero-flight{background:var(--aero-color);color:#232039}
+.aero-airport{position:absolute;width:34%;height:34%;transform:translate(-50%,-50%);border-radius:20%;border:2px solid color-mix(in srgb,var(--aero-color) 40%,transparent);background:radial-gradient(ellipse at 40% 25%,color-mix(in srgb,var(--aero-color) 25%,transparent),var(--aero-dark));box-shadow:inset 0 0 20px #0003}
+.aero-airport-name{position:absolute;bottom:7%;width:100%;text-align:center;color:var(--aero-color);font-size:clamp(9px,3vw,14px);font-weight:800;letter-spacing:3px;opacity:.8}
+.aero-center{position:absolute;transform:translate(-50%,-50%);font-size:clamp(15px,5vw,27px);color:#c6bcff;text-shadow:0 0 10px #baa5ff}
+.aeroplane-game .aero-plane{position:absolute;pointer-events:auto;width:5.8%;height:5.8%;padding:0;transform:translate(-50%,-50%);border-radius:50%;border:1px solid var(--aero-color);background:var(--aero-dark);color:var(--aero-color);box-shadow:0 2px 4px #0008,inset 0 1px #fff6;opacity:1;cursor:pointer;transition:box-shadow .15s}
+.aero-plane svg{width:75%;height:75%;display:block;margin:auto;filter:drop-shadow(0 1px 1px #0006)}
+.aero-plane span{position:absolute;right:-18%;bottom:-8%;background:#1a1837;color:#fff;min-width:11px;font-size:9px;border-radius:50%;line-height:1.3;border:1px solid var(--aero-color)}
+.aero-plane.can-move{box-shadow:0 0 0 2px var(--aero-color),0 0 14px var(--aero-color);z-index:1}
+.aero-plane.selected{background:var(--aero-color);color:var(--aero-dark);box-shadow:0 0 0 3px #fff,0 0 16px var(--aero-color);z-index:2}
+.aero-plane.stacked{width:4.5%;height:4.5%}.aero-plane.arrived{background:var(--aero-color);color:var(--aero-dark)}
+.aero-controls{display:flex;align-items:center;gap:12px;margin:12px auto 0;width:min(100%,420px)}
+.aeroplane-game .aero-dice{width:54px;height:54px;flex-shrink:0;background:linear-gradient(145deg,#ac93ff,#7961d2);border:1px solid #cfbfff;border-radius:13px;color:#fff;font-size:42px;line-height:1;box-shadow:0 3px #443268;cursor:pointer;opacity:1}
+.aeroplane-game .aero-dice:disabled{opacity:.65}
+.aero-next{display:flex;flex-direction:column;gap:5px;min-width:0}.aero-turn{font-size:15px;color:#eee7ff}.aero-guidance{font-size:11px;line-height:1.5;color:#c4b9e1}
+.aero-choices{display:flex;justify-content:center;flex-wrap:wrap;gap:5px;margin-top:8px}
+.aero-choices button{font:inherit;padding:7px 9px;border:1px solid #ffffff30;border-radius:9px;background:#342b57;color:#dfd8ff;cursor:pointer}
+.aero-choices .selected{border-color:#ffe3fa;background:#725282}.aero-choices .aero-confirm{background:#7358c1;border-color:#b397ff}
+.aero-status{margin:8px 0 0;font-size:11px;min-height:20px}.aero-rules{margin-top:8px;font-size:11px;line-height:1.7;color:#b6aacd}.aero-rules summary{cursor:pointer;text-align:center}.aero-rules p{margin:8px 0;padding:0 8px}
+@media(max-width:800px){body.playing[data-mode=aeroplane] .game-nav{height:60px}body.playing[data-mode=aeroplane] .stage{padding:10px}body.playing[data-mode=aeroplane] .game-name h1{font-size:20px}.aero-board{width:min(100%,calc(100dvh - 310px))}.aero-controls{margin-top:9px}.aero-team{padding:5px 2px}.aeroplane-game .classic-tools button,.aeroplane-game select{padding:6px 9px}.aero-plane.can-move{box-shadow:0 0 0 1px var(--aero-color),0 0 8px var(--aero-color)}}
+@media(orientation:landscape) and (max-height:600px){
+ .aeroplane-game{display:grid;grid-template-columns:auto minmax(180px,1fr);gap:6px 14px;max-width:640px}
+ .aero-board{grid-column:1;grid-row:1/7;width:min(300px,calc(100dvh - 145px));min-width:0}
+ .aeroplane-game>:not(.aero-board){grid-column:2;margin:0;align-self:center}
+ .aero-team{font-size:10px;padding:5px 2px}.aero-controls{gap:8px}.aeroplane-game .aero-dice{width:42px;height:42px;font-size:32px}
+ body.playing[data-mode=aeroplane] .stage{display:block}
+}

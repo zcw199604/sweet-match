@@ -4,7 +4,7 @@ import { GAMES, boardsOf } from '../leaderboard-core.js';
 import { handleActivity, memoryStore, boardTitle } from '../activity-core.js';
 import { emptyState, markOpened, recentList, viewOf } from '../recent-core.js';
 
-const games = ['minesweeper', 'doudizhu', 'junqi', 'xiangqi'];
+const games = ['minesweeper', 'doudizhu', 'junqi', 'xiangqi', 'gomoku', 'aeroplane', 'reversi', 'draughts', 'jungle'];
 test('经典小游戏进入最近常玩目录，无需虚构排行榜分数', () => {
   let recent = emptyState();
   games.forEach((id, i) => { assert.ok(GAMES.some(g => g.id === id)); recent = markOpened(recent, id, i + 1); assert.deepEqual(boardsOf(id), []); });
