@@ -46,7 +46,8 @@ test('minesweeper 合作房间：轮流翻同一块雷区；有人离开本局�
   const url = await boot(t);
   const { a, b, seenA, seenB } = await pair(url, 'minesweeper', { level: 'easy', mode: 'coop' });
   assert.equal(seenA.state.view.mode, 'coop');
-  const [first, second] = seenA.state.view.turn === 0 ? [[a, seenA], [b, seenB]] : [[b, seenB], [a, seenA]];
+  const startTurn = seenA.state.view.turn;   // 先手由种子随机决定，两种情况都要能过
+  const [first, second] = startTurn === 0 ? [[a, seenA], [b, seenB]] : [[b, seenB], [a, seenA]];
   const index = seenA.state.view.cells.findIndex((c) => !c.open);
   const rejects = second[1].rejects.length;
   second[0].send('action', { type: 'reveal', index });
@@ -57,7 +58,7 @@ test('minesweeper 合作房间：轮流翻同一块雷区；有人离开本局�
   await until(() => seenA.state.version > version && seenB.state.version > version, { what: '双方看到这一步' });
   assert.equal(seenB.state.view.cells[index].open, seenA.state.view.cells[index].open);
   if (!seenA.state.result.over) {
-    assert.notEqual(seenA.state.view.turn, first === a ? 0 : 1, '换人了');
+    assert.equal(seenA.state.view.turn, 1 - startTurn, '换人了');
     await a.leave(true);
     await until(() => seenB.state.result.over, { what: '本局作废' });
     assert.deepEqual(seenB.state.result, { over: true, winner: null, reason: 'abandoned' });
