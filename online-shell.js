@@ -255,7 +255,7 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
   }
   async function leave(waiting) {
     if (!session) return;
-    if (!waiting && !session.result.over && !window.confirm('现在离开，这一局会判对手获胜。确定要离开吗？')) return;
+    if (!waiting && !session.result.over && !window.confirm(cfg.leaveWarning?.(session.view) || '现在离开，这一局会判对手获胜。确定要离开吗？')) return;
     leaving = true;
     await session.leave();
     leaving = false;

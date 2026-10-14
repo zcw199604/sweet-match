@@ -5,11 +5,16 @@ const node = (tag, cls, text) => {
   if (text !== undefined) n.textContent = text;
   return n;
 };
-// 联机竞速：两人同一块雷区，各扫各的。盘面和对手进度都来自服务端的 view（未翻开的格子里没有雷的信息），
-// 本地只负责画和把点击发出去；难度在创建房间时就定了。
+// 联机：竞速是两人同一块雷区各扫各的；合作是两人轮流点同一块雷区，一起赢一起输。
+// 盘面和进度都来自服务端的 view（未翻开的格子里没有雷的信息），本地只负责画和把点击发出去；难度、玩法在创建房间时就定了。
+const onlinePhase = (view, online) => {
+  if (!online.result.over) return 'playing';
+  if (view.mode === 'coop') return view.reason === 'cleared' ? 'won' : 'lost';   // 有人离开（作废）也停在这里
+  return online.result.winner === online.seat ? 'won' : 'lost';
+};
 const boardFromView = (view, online) => ({
   rows: view.rows, cols: view.cols, mines: view.mines, cells: view.cells, exploded: view.exploded, started: true,
-  phase: !online.result.over ? 'playing' : online.result.winner === online.seat ? 'won' : 'lost'
+  phase: onlinePhase(view, online)
 });
 export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {}) {
   let alive = true, level = online ? online.view.level : 'easy', state, flagMode = false, startAt = 0, elapsed = 0;
@@ -27,14 +32,21 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {})
   const board = node('div', 'mine-board'); board.setAttribute('role', 'group'); board.setAttribute('aria-label', '扫雷棋盘');
   const status = node('div', 'classic-status'); status.setAttribute('aria-live', 'polite');
   const rival = node('div', 'race-rival'), rivalText = node('div', ''), meter = node('div', 'rival-meter'), meterFill = node('i', '');
-  meter.append(meterFill); rival.append(rivalText, meter); rival.hidden = !online;
+  const coop = online?.view.mode === 'coop';
+  meter.append(meterFill); rival.append(rivalText, meter); rival.hidden = !online || coop;
   root.append(tools, stats, board, rival, status); wrap.replaceChildren(root);
   let buttons = [];
   function render() {
     if (!alive) return;
     const seconds = Math.floor(elapsed / 1000), flags = state.cells.filter(c => c.flagged).length;
     const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-    if (online) {
+    const myTurn = coop && online.view.turn === online.seat;
+    board.classList.toggle('waiting', coop && state.phase === 'playing' && !myTurn);
+    if (coop) {
+      const { opened, total } = online.view;
+      stats.textContent = `⚑ 剩余 ${state.mines - flags}　 ·　 已开 ${opened}/${total}`;
+      onHud(`${MINE_LEVELS[level].label} · 合作 · ${opened}/${total}`);
+    } else if (online) {
       const mine = online.view.me, other = online.view.rival;
       stats.textContent = `⚑ 剩余 ${state.mines - flags}　 ·　 我 ${mine.opened}/${mine.total}`;
       rivalText.textContent = `对手进度 ${other.opened}/${other.total}`;
@@ -45,7 +57,16 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {})
       onHud(`${MINE_LEVELS[level].label} · ${flags}/${state.mines} 旗`);
     }
     flag.classList.toggle('selected', flagMode); flag.textContent = `⚑ 插旗：${flagMode ? '开' : '关'}`;
+    const coopStatus = () => {
+      const { by } = online.view;
+      if (online.result.reason === 'abandoned') return '有人离开了，这一局作废。';
+      if (state.phase === 'won') return '✦ 一起扫完了雷区，配合满分！';
+      if (state.phase === 'lost') return by === online.seat ? '哎呀，你踩到雷了……再来一局吧。' : 'TA 踩到雷了……再来一局吧。';
+      if (!myTurn) return '等 TA 翻格子……插旗不占回合，可以先标出地雷提醒 TA';
+      return flagMode ? '插旗模式：点格子标记 / 取消地雷（不占回合）' : '轮到你了 · 翻开一格后换 TA';
+    };
     const onlineStatus = () => {
+      if (coop) return coopStatus();
       const forfeit = online.result.reason === 'forfeit', reason = online.view.reason;
       if (state.phase === 'won') return forfeit ? '对手已离开 · 你获胜！' : reason === 'mine' ? '✦ 对手踩雷了，你获胜！' : '✦ 你先扫完了雷区，获胜！';
       if (state.phase === 'lost') return forfeit ? '你已离开本局 · 对手获胜' : reason === 'mine' ? '碰到地雷了，对手获胜。' : '对手先扫完了，这局你输了。';

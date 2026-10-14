@@ -17,6 +17,7 @@
 .mine-board .mine-cell.open{background:#15132d;border-color:#70639344;box-shadow:inset 0 2px 5px #0004}
 .mine-cell.open[data-number="1"]{color:#58d4de}.mine-cell.open[data-number="2"]{color:#44c986}.mine-cell.open[data-number="3"]{color:#ff7799}.mine-cell.open[data-number="4"]{color:#a694ff}.mine-cell.open[data-number="5"]{color:#ffa65c}.mine-cell.open[data-number="6"]{color:#ffd543}
 .mine-board .mine-cell.flagged{background:linear-gradient(160deg,#ffd972,#d6932e);color:#3a2031}
+.mine-board.waiting{filter:saturate(.55) brightness(.85)}
 .mine-board .mine-cell.exploded{background:#ff5d80;color:white}
 .minesweeper-game[data-level=normal] .mine-board{width:min(100%,calc((100dvh - var(--mine-offset))*.82))}
 .minesweeper-game[data-level=hard] .mine-board{width:min(100%,calc((100dvh - var(--mine-offset))*.74));gap:3px}

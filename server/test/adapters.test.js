@@ -185,3 +185,54 @@ test('minesweeper: 开局展开的范围有上限，竞速不会一开局就扫�
     }
   }
 });
+
+// ---------- 扫雷合作（轮流点同一块） ----------
+test('minesweeper 合作：共用一块雷区，轮流翻格，插旗不占回合，没轮到的人翻不了', () => {
+  const a = adapters.minesweeper, s = a.init({ seed: 6, level: 'easy', mode: 'coop' });
+  assert.equal(s.mode, 'coop');
+  assert.equal(a.init({ seed: 6, level: 'easy', mode: 'boom' }).mode, 'race', '乱传的玩法回落到竞速');
+  const first = s.turn, other = 1 - first;
+  const safe = s.board.cells.findIndex((c) => !c.open && !c.mine);
+  assert.match(a.apply(s, other, { type: 'reveal', index: safe }).message, /轮到/);
+  const closed = s.board.cells.findIndex((c, i) => !c.open && i !== safe);
+  const flagged = a.apply(s, other, { type: 'flag', index: closed });
+  assert.equal(flagged.ok, true);
+  assert.equal(flagged.state.turn, first, '插旗不换人');
+  const r = a.apply(flagged.state, first, { type: 'reveal', index: safe });
+  assert.equal(r.ok, true);
+  assert.equal(r.state.turn, other, '翻开一格后换人');
+  for (const seat of [0, 1]) {
+    const v = a.view(r.state, seat);
+    assert.equal(v.cells[safe].open, true, '两人看到的是同一块盘面');
+    assert.equal(v.cells[closed].flagged, true);
+    assert.equal(v.cells.some((c) => c.mine), false, '没结束前看不到雷');
+    assert.equal(v.turn, other);
+  }
+  assert.equal(JSON.stringify(a.view(r.state, 0)).includes('seed'), false);
+});
+
+test('minesweeper 合作：一起扫完一起赢；谁踩雷都一起输，并记下是谁踩的', () => {
+  const a = adapters.minesweeper;
+  let s = a.init({ seed: 6, level: 'easy', mode: 'coop' });
+  const boom = a.apply(s, s.turn, { type: 'reveal', index: mineIndexes(s.board)[0] });
+  assert.deepEqual(a.result(boom.state), { over: true, winner: null });
+  assert.equal(boom.state.reason, 'mine');
+  assert.equal(boom.state.by, s.turn);
+  assert.equal(a.view(boom.state, 1 - s.turn).cells.filter((c) => c.mine).length, 10, '结束后两人都能看到所有雷');
+  for (let i = 0; i < s.board.cells.length && !a.result(s).over; i++) {
+    const cell = s.board.cells[i];
+    if (cell.mine || cell.open) continue;
+    const r = a.apply(s, s.turn, { type: 'reveal', index: i });
+    assert.equal(r.ok, true);
+    s = r.state;
+  }
+  assert.deepEqual(a.result(s), { over: true, winner: null });
+  assert.equal(s.reason, 'cleared');
+  assert.equal(a.teamGame(s), true);
+  assert.equal(a.teamGame(a.init({ seed: 6 })), false, '竞速有人离开仍判对方赢');
+});
+
+test('minesweeper 合作：先手由种子决定，两人都有机会先手', () => {
+  const turns = new Set([1, 2, 3, 4].map((seed) => adapters.minesweeper.init({ seed, mode: 'coop' }).turn));
+  assert.deepEqual([...turns].sort(), [0, 1]);
+});

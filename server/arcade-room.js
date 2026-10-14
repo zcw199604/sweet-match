@@ -77,7 +77,9 @@ export class ArcadeRoom extends CodeRoom {
 
   result() {
     if (this.forfeited !== null) {
-      if (this.seatCount === 2 && !this.adapter.teamGame) return { over: true, winner: 1 - this.forfeited, reason: 'forfeit' };
+      const { teamGame } = this.adapter;   // 可以是常量，也可以按对局状态决定（扫雷的合作玩法）
+      const team = typeof teamGame === 'function' ? teamGame(this.game) : teamGame;
+      if (this.seatCount === 2 && !team) return { over: true, winner: 1 - this.forfeited, reason: 'forfeit' };
       return { over: true, winner: null, reason: 'abandoned' };
     }
     return this.adapter.result(this.game);

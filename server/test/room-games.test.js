@@ -42,6 +42,28 @@ test('minesweeper 房间：看不到雷；踩雷的一方输', async (t) => {
   void a;
 });
 
+test('minesweeper 合作房间：轮流翻同一块雷区；有人离开本局作废而不是判对方赢', async (t) => {
+  const url = await boot(t);
+  const { a, b, seenA, seenB } = await pair(url, 'minesweeper', { level: 'easy', mode: 'coop' });
+  assert.equal(seenA.state.view.mode, 'coop');
+  const [first, second] = seenA.state.view.turn === 0 ? [[a, seenA], [b, seenB]] : [[b, seenB], [a, seenA]];
+  const index = seenA.state.view.cells.findIndex((c) => !c.open);
+  const rejects = second[1].rejects.length;
+  second[0].send('action', { type: 'reveal', index });
+  await until(() => second[1].rejects.length > rejects, { what: '没轮到的人被拒' });
+  assert.match(second[1].rejects.at(-1), /轮到/);
+  const version = seenA.state.version;
+  first[0].send('action', { type: 'reveal', index });
+  await until(() => seenA.state.version > version && seenB.state.version > version, { what: '双方看到这一步' });
+  assert.equal(seenB.state.view.cells[index].open, seenA.state.view.cells[index].open);
+  if (!seenA.state.result.over) {
+    assert.notEqual(seenA.state.view.turn, first === a ? 0 : 1, '换人了');
+    await a.leave(true);
+    await until(() => seenB.state.result.over, { what: '本局作废' });
+    assert.deepEqual(seenB.state.result, { over: true, winner: null, reason: 'abandoned' });
+  }
+});
+
 test('选项白名单：target/level 乱传会回落到默认值', async (t) => {
   const url = await boot(t);
   assert.equal((await pair(url, 'g2048', { target: 'x' })).seenA.state.view.target, 1024);

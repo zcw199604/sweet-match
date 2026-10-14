@@ -174,7 +174,7 @@ test('扫雷竞速：同一块雷区、起手展开一样；点击由服务端�
   const a = await player(browser, 'A'), b = await player(browser, 'B');
   await openGame(a, 'minesweeper');
   await goOnline(a);
-  await a.locator('.online-option select').selectOption({ label: '简单' });
+  await pickOption(a, '难度', '简单');
   await a.locator('.online-primary').click();
   const code = (await a.locator('.online-code').innerText()).trim();
   await joinRoom(b, 'minesweeper', code);
@@ -310,7 +310,7 @@ test('扫雷竞速结束后再来一局：没有「换边」（两边对称）�
   const a = await player(browser, 'A'), b = await player(browser, 'B');
   await openGame(a, 'minesweeper');
   await goOnline(a);
-  await a.locator('.online-option select').selectOption({ label: '简单' });
+  await pickOption(a, '难度', '简单');
   await a.locator('.online-primary').click();
   const code = (await a.locator('.online-code').innerText()).trim();
   await joinRoom(b, 'minesweeper', code);
@@ -334,6 +334,39 @@ test('扫雷竞速结束后再来一局：没有「换边」（两边对称）�
     await expect(page.locator('.classic-status')).toContainText('抢在对手前');
     expect(await page.locator('.mine-cell', { hasText: '✹' }).count()).toBe(0);
   }
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});
+
+test('扫雷合作：两人轮流点同一块雷区，没轮到的一方盘面变暗、点了被拒，插旗两边同步', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  await openGame(a, 'minesweeper');
+  await goOnline(a);
+  await pickOption(a, '难度', '简单');
+  await pickOption(a, '玩法', '合作（轮流点同一块）');
+  await a.locator('.online-primary').click();
+  const code = (await a.locator('.online-code').innerText()).trim();
+  await joinRoom(b, 'minesweeper', code);
+  for (const page of [a, b]) {
+    await expect(page.locator('.mine-cell')).toHaveCount(81);
+    await expect(page.locator('.race-rival')).toBeHidden();                  // 合作没有对手进度条
+  }
+  await expect.poll(async () => (await a.locator('.mine-board.waiting').count()) + (await b.locator('.mine-board.waiting').count())).toBe(1);
+  const [me, partner] = (await a.locator('.mine-board.waiting').count()) ? [b, a] : [a, b];
+  await expect(me.locator('.classic-status')).toContainText('轮到你了');
+  await expect(partner.locator('.classic-status')).toContainText('等 TA');
+
+  const closed = async () => partner.locator('.mine-cell:not(.open):not(.flagged)').first().getAttribute('data-cell');
+  const cell = await closed();
+  await partner.locator(`.mine-cell[data-cell="${cell}"]`).click();               // 没轮到：被服务端拒绝
+  await expect(partner.locator('.online-note')).toContainText('轮到');
+  await partner.locator(`.mine-cell[data-cell="${cell}"]`).click({ button: 'right' });   // 插旗随时可以
+  await expect(me.locator(`.mine-cell[data-cell="${cell}"]`)).toHaveClass(/flagged/);
+
+  const target = await me.locator('.mine-cell:not(.open):not(.flagged)').first().getAttribute('data-cell');
+  await me.locator(`.mine-cell[data-cell="${target}"]`).click();
+  await expect(partner.locator(`.mine-cell[data-cell="${target}"]`)).toHaveClass(/open/);   // 同一块盘面
+  await expect.poll(async () => (await me.locator('.mine-board.waiting').count()) || (await me.locator('.online-after').isVisible())).toBeTruthy();
   expect([...a.errors, ...b.errors]).toEqual([]);
   await a.context().close(); await b.context().close();
 });
