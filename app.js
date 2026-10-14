@@ -7,7 +7,8 @@ import {
   drawStat, drawThruster, drawWell, glow, panel, resetArtCaches, roundRect, SHADES, withAlpha
 } from './art.js';
 import { initBoard, openBoard, reportScore } from './leaderboard.js';
-import { initActivity, trackActivity } from './activity.js';
+import { initActivity, markActive, trackActivity } from './activity.js';
+import { EMBED_GAMES, embedHost, mountEmbed } from './embed-games.js';
 import { initRecent, noteOpened, showRecent } from './recent.js';
 import { ONLINE_GAMES, isOnlineGame } from './online-games.js';
 import { createModeTabs, mountOnlineShell } from './online-shell.js';
@@ -36,6 +37,8 @@ const MODE_META = {
   pour: { label: 'ARCADE 08', title: '倒水排序', help: '点一个瓶子再点另一个，把它顶上那一段同色的水倒过去：目标瓶要么是空的，要么顶上是同样的颜色，还得有空位。一瓶倒满同一种颜色就会封口收进上方的收集架，全部收集完过关。倒不动时用下面的道具：回退一步、加一个空瓶、打乱重排、提示一步；这些每关次数有限，用得越少星级越高，步数不超过「最少步数」是三星。一共 50 关，越往后颜色越多、空瓶越少；进度会保存在这台设备上。' },
   g2048: { label: 'ARCADE 09', title: '2048', help: '滑动屏幕（或按方向键 / WASD），所有方块一起朝那个方向滑，两个相同数字撞上就合成一个、分数加上新数字。每滑一次，空位里会冒出一个 2 或 4。合出 2048 就算通关，之后还能接着往上合；方块塞满、又没有能合的就结束。每局有 3 次「撤销」（也可以按 Z）；没打完的一局会存在这台设备上，分数在结束或重新开始时提交榜单。' },
   sudoku: { label: 'ARCADE 10', title: '数独', help: '每行、每列、每个 3×3 宫都要填进 1～9，且不能重复。点一格再点下面的数字填入；填错会亮红并扣一次机会，错满 3 次本局失败。打开「笔记」可以在格子里记候选数，填对一个数时同行同列同宫的候选会自动划掉。点「提示」会直接填出一格，但用了提示的局不计入榜单；其余按用时排名。简单、普通、困难各有自己的榜单和各自没做完的题，题目都保证只有唯一解：简单和普通光靠「只剩一个可能」就能推完，困难需要更多技巧。电脑上可以用 1～9、方向键、Backspace、N、Z、H。' },
+  soulforge: { label: 'EXTRA · 第三方', title: 'SOULFORGE 灵魂锻炉', help: '第三方像素冒险游戏，嵌入自作者的站点 soulforge.glasden.top，本站不保存它的进度。存档在这台设备的浏览器里，和直接打开原站玩的存档是分开的两份，可以用游戏里的「导入存档」迁移。电脑上用键盘玩，先点一下游戏画面；手机只能横屏玩，可以点游戏里的「全屏并横屏」。' },
+  achroma: { label: 'EXTRA · 第三方', title: 'Achroma', help: '第三方像素动作游戏，嵌入自作者的站点 game.unsnow.online，本站不保存它的进度。嵌在这里时不能登录（linux.do 登录页不允许被嵌入），要上传成绩、看自己的记录请点「在原站打开」。电脑上用键盘玩，先点一下游戏画面；手机横屏玩更舒服。' },
   goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
 // 抓大鹅, 方块爆破, 三消勇者团, 挪车接客, 倒水排序, 2048 and 数独 are solo games: no seats, no snapshots, no co-op toggle.
@@ -50,7 +53,7 @@ const CLASSIC_GAMES = {
   draughts: { load: () => import('./board-games.js'), mount: 'mountDraughts' },
   jungle: { load: () => import('./board-games.js'), mount: 'mountJungle' }
 };
-const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'sudoku', ...Object.keys(CLASSIC_GAMES)];
+const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'sudoku', ...Object.keys(CLASSIC_GAMES), ...Object.keys(EMBED_GAMES)];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -374,9 +377,10 @@ function buildStage() {
   stopSudoku();
   stopClassic();
   clearModeTabs();
-  $('#game-link').hidden = Boolean(CLASSIC_GAMES[mode]);
-  $('#game-board').hidden = Boolean(CLASSIC_GAMES[mode]);
+  $('#game-link').hidden = Boolean(CLASSIC_GAMES[mode] || EMBED_GAMES[mode]);
+  $('#game-board').hidden = Boolean(CLASSIC_GAMES[mode] || EMBED_GAMES[mode]);
   if (CLASSIC_GAMES[mode]) return buildClassicStage(stage, meta);
+  if (EMBED_GAMES[mode]) return buildEmbedStage(stage, meta);
   if (mode === 'goose') return buildGooseStage(stage, meta);
   if (mode === 'quest') return buildQuestStage(stage, meta);
   if (mode === 'park') return buildParkStage(stage, meta);
@@ -400,7 +404,7 @@ function startGame(nextMode) {
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   noteOpened(mode);
   // The 2D loop idles while state is null, which leaves the frame to goose.js.
-  if (['goose', 'quest', 'park', 'pour', 'g2048', 'sudoku'].includes(mode) || CLASSIC_GAMES[mode]) { state = null; buildStage(); showScreen('game'); return; }
+  if (['goose', 'quest', 'park', 'pour', 'g2048', 'sudoku'].includes(mode) || CLASSIC_GAMES[mode] || EMBED_GAMES[mode]) { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame(); resetBlastView();
@@ -463,6 +467,17 @@ async function buildClassicStage(stage, meta) {
     if (startOnline) return enterOnline(invite);
   }
   return enterLocal();
+}
+// 第三方游戏（iframe）借用 classic 这个句柄，离开游戏页时由 stopClassic 一并卸掉。
+function buildEmbedStage(stage, meta) {
+  const game = mode, url = EMBED_GAMES[game].url;
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · ${embedHost(game)}</span><strong id="score-text">正在载入……</strong></div><div class="stage-actions"><button type="button" id="embed-open">在原站打开 ↗</button><button type="button" id="restart-game">重新载入</button></div></div><div class="embed-wrap"></div><p class="game-help">${meta.help}</p>`;
+  const hud = stage.querySelector('#score-text');
+  $('#embed-open').addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+  $('#restart-game').addEventListener('click', () => {
+    if (window.confirm('重新载入会回到游戏开头，游戏里还没存下的进度会丢失。确定吗？')) classic?.restart();
+  });
+  classic = mountEmbed(stage.querySelector('.embed-wrap'), game, { onHud: (text) => { hud.textContent = text; }, onActive: markActive });
 }
 function stopQuest() {
   questToken += 1;

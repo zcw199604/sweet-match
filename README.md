@@ -94,6 +94,12 @@
 
 ## 大富翁（第三方，静态版）
 
+「灵魂锻炉」（[soulforge.glasden.top](https://soulforge.glasden.top/)）和「Achroma」（[game.unsnow.online/ach](https://game.unsnow.online/ach/)）是**别人的网页游戏**，本仓库不含它们的代码或素材，只在游戏页里用 iframe 嵌入原作者的站点（`embed-games.js`）。iframe 带 `sandbox`（不给 `allow-top-navigation`，嵌入页不能把整个街机厅跳走），允许全屏、横屏锁定、弹窗和下载。几点限制：
+- 存档由浏览器按「本站 + 对方站点」分区保存，和直接打开原站玩的是两份；灵魂锻炉可以用游戏里的「导入存档」迁移。
+- Achroma 的 linux.do 登录页不允许被嵌入，所以在这里不能登录、上传成绩；游戏页始终有「在原站打开」。
+- 对方站点改版、下线或开始禁止嵌入，这两张卡就打不开了，本站没法兜底；不计入全球榜单，「最近常玩」只记游玩时长（焦点在游戏里时计时）。
+- 测试（`test/e2e/embed-games.spec.js`）用桩页面代替外站，不依赖对方在线。
+
 首页最后一张卡片「大富翁」是整页跳转到 `/monopoly/`，里面是 [FatPaper-1874/mine-monopoly](https://github.com/FatPaper-1874/mine-monopoly)（**GPL-3.0**）的客户端，其余十四款不是它。本仓库只放了一份补丁和固定的上游提交（`third_party/mine-monopoly/`，说明见那里的 README），不含上游源码；部署时由 workflow 现场构建到 `monopoly/`（已在 `.gitignore`，本地用 `npm run build:monopoly` 生成）。
 
 - **只有本地派对**：免登录，同一台设备上轮流玩，可加 AI；没有联机、榜单，也不计入「最近常玩」。手机要横屏（上游自带引导）。

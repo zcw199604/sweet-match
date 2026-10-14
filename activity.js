@@ -60,6 +60,9 @@ export function trackActivity(board) {
   current = board ? start(board, now) : null;
 }
 
+// 本页收不到输入、但玩家确实在玩时（嵌入的第三方游戏，焦点在 iframe 里）由调用方报一声。
+export function markActive() { lastInput = Date.now(); }
+
 export function initActivity() {
   const touch = () => { lastInput = Date.now(); };
   for (const type of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) document.addEventListener(type, touch, { passive: true, capture: true });

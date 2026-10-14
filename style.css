@@ -463,6 +463,20 @@ body.playing[data-mode=g2048] .canvas-wrap.g2048-wrap{width:min(100%,max(240px,c
 body.playing[data-mode=sudoku] .canvas-wrap.sudoku-wrap{width:min(100%,max(240px,calc((100vh - 260px) * .6429)));width:min(100%,max(240px,calc((100dvh - 260px) * .6429)))}
 }
 
+/* 第三方网页游戏（embed-games.js）：卡片封面 + 舞台里的 iframe */
+.soulforge .art{background:radial-gradient(125% 125% at 50% 10%,#3a2f63,#171427 60%,#0b0a14)}
+.art-forge{position:absolute;left:50%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px}
+.art-forge .flame{position:absolute;left:38px;top:4px;width:44px;height:62px;border-radius:50% 50% 45% 45%/60% 60% 40% 40%;background:radial-gradient(circle at 50% 70%,#fff4d6 0 18%,#ffc94d 38%,#ff8a6a 70%,#c4553f);box-shadow:0 0 28px #ff8a6a99}
+.art-forge .anvil{position:absolute;left:8px;top:70px;width:104px;height:22px;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#e3e9f7,#8b96c4);box-shadow:0 26px 0 -6px #4a4378,0 8px 14px #0007}
+.achroma .art{background:radial-gradient(120% 120% at 70% 20%,#2a1418,#0b0b0d 62%,#050506)}
+.art-achroma{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:6px;font:900 54px/1 'DM Mono',ui-monospace,monospace;color:#f0efe8;letter-spacing:.02em}
+.art-achroma i{font-style:normal}.art-achroma .red{color:#ff3b4e;text-shadow:0 0 18px #ff3b4e88}
+.embed-wrap{position:relative;width:100%;height:max(420px,calc(100vh - 330px));height:max(420px,calc(100dvh - 330px));border-radius:13px;overflow:hidden;background:#05050a}
+.embed-frame{display:block;width:100%;height:100%;border:0}
+.embed-cover{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#aeb5c4;font-size:13px;background:#05050a}
+.embed-cover[hidden]{display:none}
+@media(max-width:800px){.embed-wrap{height:max(300px,calc(100vh - 250px));height:max(300px,calc(100dvh - 250px))}body.playing:is([data-mode=soulforge],[data-mode=achroma]) .stage-top{flex-wrap:wrap;gap:8px}body.playing:is([data-mode=soulforge],[data-mode=achroma]) #seat-text{display:none}}
+@media(orientation:landscape) and (max-height:600px){body.playing:is([data-mode=soulforge],[data-mode=achroma]) .stage{display:block}.embed-wrap{height:max(220px,calc(100vh - 120px));height:max(220px,calc(100dvh - 120px))}body.playing:is([data-mode=soulforge],[data-mode=achroma]) .stage-top{flex-direction:row;align-items:center}}
 /* 大富翁（第三方，整页跳转到 ./monopoly/） */
 a.arcade-card{display:block;color:inherit;text-decoration:none}
 .monopoly .art{background:radial-gradient(125% 125% at 20% 8%,#f2b93b,#c9731a 58%,#6b3512)}
