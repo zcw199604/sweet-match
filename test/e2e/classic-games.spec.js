@@ -40,6 +40,36 @@ test('扫雷首点安全、手机插旗、难度切换和重开', async ({ page 
   expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize().height);
   await page.locator('#restart-game').click();
   await expect(page.locator('.mine-cell.open')).toHaveCount(0);
+  await expect(page.locator('.mine-noguess')).toHaveText('无猜：关');
+  await page.locator('.mine-noguess').click();
+  await expect(page.locator('.mine-noguess')).toHaveClass(/selected/);
+  await page.locator('.mine-flag').click();                                // 关掉前面打开的插旗模式
+  await page.locator('.mine-cell[data-cell="100"]').click();
+  expect(await page.evaluate(() => window.__arcade.classic.state.noGuess)).toBe(true);
+  await expect(page.locator('.mine-cell.open')).not.toHaveCount(0);
+});
+
+test('扫雷无猜开关跟着账号走：换一台设备登录同一身份也是开着的', async ({ page }) => {
+  const server = {};
+  await page.route('**/api/prefs**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') Object.assign(server, request.postDataJSON().prefs);
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ prefs: server }) });
+  });
+  await page.goto('/'); await page.locator('body[data-ready]').waitFor();
+  await page.locator('.arcade-card[data-mode="minesweeper"]').click();
+  await expect(page.locator('.mine-noguess')).toHaveText('无猜：关');
+  const saved = page.waitForRequest((r) => r.url().includes('/api/prefs') && r.method() === 'POST');
+  await page.locator('.mine-noguess').click();
+  await saved;
+  await expect.poll(() => server.mineNoGuess).toBe(true);
+  // 「另一台设备」：本机设置缓存清空，只剩同一个密码，打开时从服务端拉回来
+  await page.evaluate(() => localStorage.removeItem('pao-prefs'));
+  const pulled = page.waitForResponse((r) => r.url().includes('/api/prefs') && r.request().method() === 'GET');
+  await page.reload(); await page.locator('body[data-ready]').waitFor(); await pulled;
+  await page.locator('.arcade-card[data-mode="minesweeper"]').click();
+  await expect(page.locator('.mine-noguess')).toHaveText('无猜：开');
+  expect(await page.evaluate(() => window.__arcade.classic.state.noGuess)).toBe(true);
 });
 
 test('斗地主叫分、选牌提示、出牌和退出取消电脑回合', async ({ page }) => {

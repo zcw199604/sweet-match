@@ -182,6 +182,7 @@ test('扫雷竞速：同一块雷区、起手展开一样；点击由服务端�
     await expect(page.locator('.mine-board')).toBeVisible();
     await expect(page.locator('.mine-cell')).toHaveCount(81);
     await expect(page.locator('.mine-level')).toBeHidden();                 // 难度由房主在创建时定
+    await expect(page.locator('.mine-noguess')).toBeHidden();                // 联机盘面由服务端生成
     await expect(page.locator('.race-rival')).toContainText('对手进度');
   }
   const opened = (page) => page.locator('.mine-cell.open').count();

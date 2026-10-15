@@ -10,6 +10,7 @@ import { initBoard, openBoard, reportScore } from './leaderboard.js';
 import { initActivity, markActive, trackActivity } from './activity.js';
 import { EMBED_GAMES, embedHost, mountEmbed } from './embed-games.js';
 import { initRecent, noteOpened, showRecent } from './recent.js';
+import { getPref, initPrefs, setPref } from './prefs.js';
 import { ONLINE_GAMES, isOnlineGame } from './online-games.js';
 import { createModeTabs, mountOnlineShell } from './online-shell.js';
 import { Session, friendlyError, hasResume, isCode, loadSdk, normalizeCode, resolveServerUrl } from './net-session.js';
@@ -43,7 +44,8 @@ const MODE_META = {
 };
 // 抓大鹅, 方块爆破, 三消勇者团, 挪车接客, 倒水排序, 2048 and 数独 are solo games: no seats, no snapshots, no co-op toggle.
 const CLASSIC_GAMES = {
-  minesweeper: { load: () => import('./minesweeper.js'), mount: 'mountMinesweeper' },
+  // options：本地开局时额外传给游戏的参数（跟着账号走的设置）
+  minesweeper: { load: () => import('./minesweeper.js'), mount: 'mountMinesweeper', options: () => ({ noGuess: getPref('mineNoGuess'), onNoGuess: (on) => setPref('mineNoGuess', on) }) },
   doudizhu: { load: () => import('./doudizhu.js'), mount: 'mountDoudizhu' },
   junqi: { load: () => import('./junqi.js'), mount: 'mountJunqi' },
   xiangqi: { load: () => import('./xiangqi.js'), mount: 'mountXiangqi' },
@@ -444,7 +446,7 @@ async function buildClassicStage(stage, meta) {
     try {
       const module = await config.load();
       if (token !== classicToken || mine !== epoch || mode !== gameMode) return;
-      classic = module[config.mount](wrap, { onHud: setHud });
+      classic = module[config.mount](wrap, { onHud: setHud, ...config.options?.() });
       restart.disabled = false;
     } catch (error) {
       if (token !== classicToken) return;
@@ -1374,7 +1376,7 @@ function loop(time) {
 $$('.arcade-card[data-mode]').forEach((card) => card.addEventListener('click', () => startGame(card.dataset.mode)));
 $('#open-link').addEventListener('click', openLink); $('#game-link').addEventListener('click', openLink); $('#close-link').addEventListener('click', closeLink); $('#how-link').addEventListener('click', openLink);
 $('#back-home').addEventListener('click', () => { showScreen('home'); });
-initBoard(); initActivity(); initRecent(startGame);
+initBoard(); initActivity(); initRecent(startGame); initPrefs();
 $('#open-board').addEventListener('click', () => openBoard());
 $('#game-board').addEventListener('click', () => openBoard(boardId()));
 $('#online-create').addEventListener('click', createOnlineRoom); $('#online-join').addEventListener('click', () => joinOnlineRoom());

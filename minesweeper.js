@@ -16,8 +16,8 @@ const boardFromView = (view, online) => ({
   rows: view.rows, cols: view.cols, mines: view.mines, cells: view.cells, exploded: view.exploded, started: true,
   phase: onlinePhase(view, online)
 });
-export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {}) {
-  let alive = true, level = online ? online.view.level : 'easy', state, flagMode = false, startAt = 0, elapsed = 0;
+export function mountMinesweeper(wrap, { onHud = () => {}, online = null, noGuess: savedNoGuess = false, onNoGuess = () => {} } = {}) {
+  let alive = true, level = online ? online.view.level : 'easy', state, flagMode = false, noGuess = !online && savedNoGuess, startAt = 0, elapsed = 0;
   const root = node('div', 'classic-game minesweeper-game');
   const tools = node('div', 'classic-tools');
   const difficulty = node('select', 'mine-level');
@@ -26,8 +26,10 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {})
     const o = node('option', '', `${config.label} · ${config.mines} 雷`); o.value = id; difficulty.append(o);
   }
   const flag = node('button', 'mine-flag', '⚑ 插旗：关'); flag.type = 'button';
-  tools.append(difficulty, flag);
-  difficulty.hidden = Boolean(online);
+  // 无猜：只靠推理就能扫完，不会遇到二选一；只管单机，联机盘面由服务端生成。
+  const guessless = node('button', 'mine-noguess', '无猜：关'); guessless.type = 'button';
+  tools.append(difficulty, flag, guessless);
+  difficulty.hidden = guessless.hidden = Boolean(online);
   const stats = node('div', 'mine-stats');
   const board = node('div', 'mine-board'); board.setAttribute('role', 'group'); board.setAttribute('aria-label', '扫雷棋盘');
   const status = node('div', 'classic-status'); status.setAttribute('aria-live', 'polite');
@@ -54,9 +56,10 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {})
       onHud(`${MINE_LEVELS[level].label} · 我 ${mine.opened}/${mine.total} · 对手 ${other.opened}/${other.total}`);
     } else {
       stats.textContent = `⚑ 剩余 ${state.mines - flags}　 ·　 ⏱ ${time}`;
-      onHud(`${MINE_LEVELS[level].label} · ${flags}/${state.mines} 旗`);
+      onHud(`${MINE_LEVELS[level].label}${noGuess ? ' · 无猜' : ''} · ${flags}/${state.mines} 旗`);
     }
     flag.classList.toggle('selected', flagMode); flag.textContent = `⚑ 插旗：${flagMode ? '开' : '关'}`;
+    guessless.classList.toggle('selected', noGuess); guessless.textContent = `无猜：${noGuess ? '开' : '关'}`;
     const coopStatus = () => {
       const { by } = online.view;
       if (online.result.reason === 'abandoned') return '有人离开了，这一局作废。';
@@ -98,7 +101,7 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {})
   }
   function build() {
     if (!alive) return;
-    state = online ? boardFromView(online.view, online) : createMines(level); startAt = 0; elapsed = 0;
+    state = online ? boardFromView(online.view, online) : createMines(level, { noGuess }); startAt = 0; elapsed = 0;
     board.style.setProperty('--mine-cols', state.cols);
     root.dataset.level = level;
     buttons = state.cells.map((_, i) => {
@@ -110,6 +113,7 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null } = {})
   }
   difficulty.addEventListener('change', () => { level = difficulty.value; build(); });
   flag.addEventListener('click', () => { flagMode = !flagMode; render(); });
+  guessless.addEventListener('click', () => { noGuess = !noGuess; onNoGuess(noGuess); build(); });
   const timer = setInterval(() => {
     if (!online && state.started && state.phase === 'playing') { elapsed = performance.now() - startAt; render(); }
   }, 1000);

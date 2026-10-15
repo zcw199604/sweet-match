@@ -55,3 +55,34 @@ test('扫雷：数字快开需足够旗子，错误标记会踩雷', () => {
   core.chord(wrong,n);
   assert.equal(wrong.phase,'lost');
 });
+
+const seeded = seed => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+const handmade = (rows, cols, mineAt) => {
+  const s = { rows, cols, mines: mineAt.length, cells: Array.from({ length: rows * cols }, (_, i) => ({ mine: mineAt.includes(i), adjacent: 0 })) };
+  mineAt.forEach(m => core.neighbours(s, m).forEach(i => { s.cells[i].adjacent++; }));
+  return s;
+};
+
+test('扫雷：无猜判定能区分二选一和可推理局面', () => {
+  // 右侧一列两格只有一颗雷，两个 1 给不出任何区分 → 必须猜
+  assert.equal(core.solvable(handmade(2, 4, [3]), 0), false);
+  // 顶行 1 1 2 1 1：单格规则推不动，要穷举才得出唯一解
+  assert.equal(core.solvable(handmade(3, 5, [1, 3]), 12), true);
+});
+
+test('扫雷：无猜模式默认关闭，开启后困难档每盘都能纯推理扫完', () => {
+  assert.equal(core.createMines('hard').noGuess, false);
+  const verdicts = new Set();
+  for (let seed = 1; seed <= 30; seed++) {
+    const plain = core.createMines('hard');
+    core.reveal(plain, 100, seeded(seed));
+    verdicts.add(core.solvable(plain, 100));
+    const s = core.createMines('hard', { noGuess: true });
+    core.reveal(s, 100, seeded(seed));
+    assert.equal(s.cells.filter(c => c.mine).length, 40);
+    assert.ok([100, ...core.neighbours(s, 100)].every(i => !s.cells[i].mine));
+    assert.equal(core.solvable(s, 100), true);
+  }
+  // 关闭时仍是纯随机：30 盘里既有可推理的，也有必须猜的
+  assert.deepEqual([...verdicts].sort(), [false, true]);
+});
