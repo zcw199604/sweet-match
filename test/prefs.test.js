@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { d1Store, emptyPrefs, handlePrefs, memoryStore, parsePrefs, prefsFor, prefValue, setPrefValue, settlePrefs } from '../prefs-core.js';
+import { cleanPrefs, d1Store, emptyPrefs, hasPref, handlePrefs, memoryStore, parsePrefs, prefsFor, prefValue, setPrefValue, settlePrefs } from '../prefs-core.js';
 
 const PID = (n) => `player-${String(n).padStart(4, '0')}`;
 const post = (store, body) => handlePrefs(new Request('http://x/api/prefs', { method: 'POST', body: JSON.stringify(body) }), store, 1_000_000);
@@ -17,6 +17,18 @@ test('设置: 未设置时用默认值，未登记的键和类型不对的值被
   const parsed = parsePrefs(JSON.stringify({ owner: PID(1), values: { mineNoGuess: 1, other: true }, pending: { mineNoGuess: true } }));
   assert.deepEqual(parsed, { owner: PID(1), values: {}, pending: { mineNoGuess: true } });
   assert.deepEqual(parsePrefs('{坏数据'), emptyPrefs());
+});
+
+test('设置: 数独难度和抓大鹅模式只接受登记过的选项', () => {
+  const state = emptyPrefs(PID(1));
+  assert.equal(prefValue(state, 'sudokuLevel'), 'normal');
+  assert.equal(prefValue(state, 'gooseMode'), 'classic');
+  assert.equal(hasPref(state, 'sudokuLevel'), false);
+  const next = setPrefValue(setPrefValue(state, 'sudokuLevel', 'hard'), 'gooseMode', 'endless');
+  assert.deepEqual(next.values, { sudokuLevel: 'hard', gooseMode: 'endless' });
+  assert.equal(hasPref(next, 'sudokuLevel'), true);
+  assert.equal(setPrefValue(next, 'sudokuLevel', 'expert'), next);
+  assert.deepEqual(cleanPrefs({ sudokuLevel: 'easy', gooseMode: 'zen', mineNoGuess: 'true' }), { sudokuLevel: 'easy' });
 });
 
 test('设置: 缓存属于别的身份时作废，不把上一个人的设置带过去', () => {
@@ -58,6 +70,8 @@ for (const [name, create] of Object.entries(backends)) {
     assert.deepEqual(await (await post(store, { pid: PID(1), prefs: { mineNoGuess: true } })).json(), { prefs: { mineNoGuess: true } });
     assert.deepEqual(await (await get(store, PID(1))).json(), { prefs: { mineNoGuess: true } });
     assert.deepEqual(await (await post(store, { pid: PID(1), prefs: { mineNoGuess: false } })).json(), { prefs: { mineNoGuess: false } });
+    assert.deepEqual(await (await post(store, { pid: PID(1), prefs: { sudokuLevel: 'hard', gooseMode: 'endless' } })).json(),
+      { prefs: { mineNoGuess: false, sudokuLevel: 'hard', gooseMode: 'endless' } });
     assert.deepEqual(await (await get(store, PID(2))).json(), { prefs: {} });
   });
 
@@ -69,6 +83,7 @@ for (const [name, create] of Object.entries(backends)) {
     assert.equal((await post(store, { pid: PID(1), prefs: [] })).status, 400);
     assert.equal((await post(store, { pid: PID(1), prefs: { mineNoGuess: 'on' } })).status, 400);
     assert.equal((await post(store, { pid: PID(1), prefs: { mineNoGuess: true, admin: true } })).status, 400);
+    assert.equal((await post(store, { pid: PID(1), prefs: { sudokuLevel: 'expert' } })).status, 400);
     assert.equal((await post(store, { pid: PID(1), prefs: { pad: 'x'.repeat(2000) } })).status, 413);
     assert.equal((await handlePrefs(new Request('http://x/api/prefs', { method: 'DELETE' }), store)).status, 405);
     assert.deepEqual(await (await get(store, PID(1))).json(), { prefs: {} });

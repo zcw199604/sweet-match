@@ -51,11 +51,7 @@ test('扫雷首点安全、手机插旗、难度切换和重开', async ({ page 
 
 test('扫雷无猜开关跟着账号走：换一台设备登录同一身份也是开着的', async ({ page }) => {
   const server = {};
-  await page.route('**/api/prefs**', async (route) => {
-    const request = route.request();
-    if (request.method() === 'POST') Object.assign(server, request.postDataJSON().prefs);
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ prefs: server }) });
-  });
+  await mockPrefs(page, server);
   await page.goto('/'); await page.locator('body[data-ready]').waitFor();
   await page.locator('.arcade-card[data-mode="minesweeper"]').click();
   await expect(page.locator('.mine-noguess')).toHaveText('无猜：关');
@@ -70,6 +66,52 @@ test('扫雷无猜开关跟着账号走：换一台设备登录同一身份也�
   await page.locator('.arcade-card[data-mode="minesweeper"]').click();
   await expect(page.locator('.mine-noguess')).toHaveText('无猜：开');
   expect(await page.evaluate(() => window.__arcade.classic.state.noGuess)).toBe(true);
+});
+
+// 模拟 /api/prefs：server 就是「服务端」上这个身份的设置
+async function mockPrefs(page, server) {
+  await page.route('**/api/prefs**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') Object.assign(server, request.postDataJSON().prefs);
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ prefs: server }) });
+  });
+}
+// 旧版本留在本机的设置，只在第一次打开页面前写入（reload 不再写）
+const legacyPrefs = (page) => page.addInitScript(() => {
+  if (sessionStorage.getItem('legacy-seeded')) return;
+  sessionStorage.setItem('legacy-seeded', '1');
+  localStorage.setItem('pao-sudoku-level', 'hard'); localStorage.setItem('pao-goose-mode', 'endless');
+});
+
+test('数独难度和抓大鹅模式：旧版本本机设置迁到账号上，换设备也一样', async ({ page }) => {
+  const server = {};
+  await mockPrefs(page, server); await legacyPrefs(page);
+  await page.goto('/'); await page.locator('body[data-ready]').waitFor();
+  await expect.poll(() => [server.sudokuLevel, server.gooseMode]).toEqual(['hard', 'endless']);
+  expect(await page.evaluate(() => [localStorage.getItem('pao-sudoku-level'), localStorage.getItem('pao-goose-mode')])).toEqual([null, null]);
+  // 「另一台设备」：本机缓存清空，只剩同一个密码
+  await page.evaluate(() => localStorage.removeItem('pao-prefs'));
+  const pulled = page.waitForResponse((r) => r.url().includes('/api/prefs') && r.request().method() === 'GET');
+  await page.reload(); await page.locator('body[data-ready]').waitFor(); await pulled;
+  await page.locator('.arcade-card[data-mode="sudoku"]').click();
+  await expect(page.locator('#sudoku-level')).toHaveText('困难 · 切换简单');
+  await page.locator('#sudoku-level').click();
+  await expect.poll(() => server.sudokuLevel).toBe('easy');
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="goose"]').click();
+  await expect(page.locator('#goose-mode')).toHaveText('无尽模式 · 切换经典');
+  await page.locator('#goose-mode').click();
+  await expect.poll(() => server.gooseMode).toBe('classic');
+});
+
+test('数独难度：账号上已有设置时以账号为准，本机旧值不会覆盖', async ({ page }) => {
+  const server = { sudokuLevel: 'easy' };
+  await mockPrefs(page, server); await legacyPrefs(page);
+  await page.goto('/'); await page.locator('body[data-ready]').waitFor();
+  await expect.poll(() => server.gooseMode).toBe('endless');               // 账号上没有的项照常迁过去
+  await page.locator('.arcade-card[data-mode="sudoku"]').click();
+  await expect(page.locator('#sudoku-level')).toHaveText('简单 · 切换普通');
+  expect(server.sudokuLevel).toBe('easy');
 });
 
 test('斗地主叫分、选牌提示、出牌和退出取消电脑回合', async ({ page }) => {

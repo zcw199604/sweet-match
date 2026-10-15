@@ -615,11 +615,12 @@ const SUDOKU_LEVELS = ['easy', 'normal', 'hard'];
 const SUDOKU_LABEL = { easy: '简单', normal: '普通', hard: '困难' };
 const sudokuLevelLabel = () => `${SUDOKU_LABEL[sudokuLevel]} · 切换${SUDOKU_LABEL[SUDOKU_LEVELS[(SUDOKU_LEVELS.indexOf(sudokuLevel) + 1) % 3]]}`;
 function buildSudokuStage(stage, meta) {
+  sudokuLevel = getPref('sudokuLevel'); // 每次进来都按当前身份的设置，换设备 / 换人后也对得上
   stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">换一题</button></div></div><div class="canvas-wrap sudoku-wrap"></div><div class="mobile-controls" id="mobile-controls"><button type="button" class="player-toggle" id="sudoku-level">${sudokuLevelLabel()}</button></div><p class="game-help">${meta.help}</p>`;
   $('#restart-game').addEventListener('click', () => sudoku?.restart());
   $('#sudoku-level').addEventListener('click', (event) => {
     sudokuLevel = SUDOKU_LEVELS[(SUDOKU_LEVELS.indexOf(sudokuLevel) + 1) % 3];
-    try { localStorage.setItem('pao-sudoku-level', sudokuLevel); } catch { /* private mode */ }
+    setPref('sudokuLevel', sudokuLevel);
     event.currentTarget.textContent = sudokuLevelLabel();
     sudoku?.setLevel(sudokuLevel);
     syncActivity();
@@ -640,12 +641,13 @@ async function mountSudokuView(wrap) {
 }
 function gooseModeLabel() { return gooseMode === 'classic' ? '经典模式 · 切换无尽' : '无尽模式 · 切换经典'; }
 function buildGooseStage(stage, meta) {
+  gooseMode = getPref('gooseMode');
   stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap goose-wrap"></div><div class="mobile-controls" id="mobile-controls"><button type="button" id="goose-shake">晃一下</button><button type="button" class="player-toggle" id="goose-mode">${gooseModeLabel()}</button></div><p class="game-help">${meta.help}</p>`;
   $('#restart-game').addEventListener('click', () => goose?.restart(gooseMode));
   $('#goose-shake').addEventListener('click', () => goose?.shake());
   $('#goose-mode').addEventListener('click', (event) => {
     gooseMode = gooseMode === 'classic' ? 'endless' : 'classic';
-    try { localStorage.setItem('pao-goose-mode', gooseMode); } catch { /* private mode */ }
+    setPref('gooseMode', gooseMode);
     event.currentTarget.textContent = gooseModeLabel();
     goose?.restart(gooseMode);
     syncActivity();
@@ -1391,8 +1393,6 @@ $$('[data-copy]').forEach((node) => node.addEventListener('click', async () => {
 $$('.tab').forEach((tab) => tab.addEventListener('click', () => { $$('.tab').forEach((other) => other.classList.toggle('active', other === tab)); for (const id of ['online', 'server', 'webrtc']) $(`#${id}-panel`).classList.toggle('active', tab.dataset.tab === id); }));
 $('#lan-server-url').value = new URLSearchParams(location.search).get('lan') || localStorage.getItem('pao-lan-server') || location.origin;
 loadBlastBest(); loadPop3Prefs();
-try { gooseMode = localStorage.getItem('pao-goose-mode') === 'endless' ? 'endless' : 'classic'; } catch { /* private mode */ }
-try { const saved = localStorage.getItem('pao-sudoku-level'); if (SUDOKU_LEVELS.includes(saved)) sudokuLevel = saved; } catch { /* private mode */ }
 for (const type of ['pointermove', 'pointerup', 'pointercancel']) document.addEventListener(type, type === 'pointermove' ? pointerMove : pointerUp, { passive: false });
 document.addEventListener('keydown', keyboard); document.addEventListener('keyup', keyboard);
 window.addEventListener('blur', () => keys.clear());

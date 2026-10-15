@@ -905,7 +905,7 @@ test('数独: switching level opens that level\'s own puzzle and is remembered',
   await page.locator('#sudoku-level').click();
   await expect(page.locator('#sudoku-level')).toHaveText('困难 · 切换简单');
   expect((await sudokuState(page)).diff).toBe('hard');
-  expect(await page.evaluate(() => localStorage.getItem('pao-sudoku-level'))).toBe('hard');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('pao-prefs')).values.sudokuLevel)).toBe('hard');
   // the unfinished puzzle of a level is waiting when you come back to it
   const hardPuzzle = await page.evaluate(() => window.__arcade.sudoku.state.puzzle);
   await page.locator('#sudoku-level').click();

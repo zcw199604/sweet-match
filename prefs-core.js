@@ -7,16 +7,19 @@
 import { isPlayerId } from './leaderboard-core.js';
 
 // 只接受这里登记过的设置项；新增设置时在这里加一行默认值，类型由默认值决定。
-export const PREFS = { mineNoGuess: false };
+// 取值是固定几种的字符串设置，还要在 PREF_CHOICES 里列出全部可选值。
+export const PREFS = { mineNoGuess: false, sudokuLevel: 'normal', gooseMode: 'classic' };
+export const PREF_CHOICES = { sudokuLevel: ['easy', 'normal', 'hard'], gooseMode: ['classic', 'endless'] };
 const BODY_LIMIT = 1024;
 
-// 存储和请求里的内容都不可信：未登记的键、类型不对的值一律丢掉。
+const validPref = (key, value) => Object.hasOwn(PREFS, key) && typeof value === typeof PREFS[key]
+  && (!Object.hasOwn(PREF_CHOICES, key) || PREF_CHOICES[key].includes(value));
+
+// 存储和请求里的内容都不可信：未登记的键、类型或取值不对的值一律丢掉。
 export function cleanPrefs(map) {
   const clean = {};
   if (!map || typeof map !== 'object') return clean;
-  for (const [key, value] of Object.entries(map)) {
-    if (Object.hasOwn(PREFS, key) && typeof value === typeof PREFS[key]) clean[key] = value;
-  }
+  for (const [key, value] of Object.entries(map)) if (validPref(key, value)) clean[key] = value;
   return clean;
 }
 
@@ -30,6 +33,7 @@ export function parsePrefs(raw) {
 // 缓存不属于当前身份（换了人 / 退出登录）就作废，免得把上一个人的设置带过去。
 export const prefsFor = (state, pid) => (state.owner === pid ? state : emptyPrefs(pid));
 export const prefValue = (state, key) => ({ ...PREFS, ...state.values })[key];
+export const hasPref = (state, key) => Object.hasOwn(state.values, key);
 export function setPrefValue(state, key, value) {
   const one = cleanPrefs({ [key]: value });
   if (!Object.hasOwn(one, key)) return state;
