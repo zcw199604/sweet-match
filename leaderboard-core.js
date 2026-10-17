@@ -23,6 +23,8 @@ export const BOARDS = {
   pour: { game: 'pour', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 20_000 },
   // 4×4 的 2048 理论最高分约 393 万，四百万封顶。
   g2048: { game: 'g2048', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 4_000_000 },
+  // 合成大西瓜：一局是落水果加合成，每次合成最多 66 分加最多 10 分连击，上限按「一局里不可能打到」来定，二十万封顶。
+  suika: { game: 'suika', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 200_000 },
   // 数独按用时（0.1 秒存成整数）：只有没用提示的局才上榜。填满几十个空格再快也不会少于十几秒；三小时封顶。
   'sudoku-easy': { game: 'sudoku', label: '简单', order: 'asc', unit: '秒', scale: 10, min: 100, max: 108_000 },
   'sudoku-normal': { game: 'sudoku', label: '普通', order: 'asc', unit: '秒', scale: 10, min: 150, max: 108_000 },
@@ -38,6 +40,7 @@ export const GAMES = [
   { id: 'park', title: '挪车接客' },
   { id: 'pour', title: '倒水排序' },
   { id: 'g2048', title: '2048' },
+  { id: 'suika', title: '合成大西瓜' },
   { id: 'sudoku', title: '数独' },
   { id: 'minesweeper', title: '扫雷' },
   { id: 'doudizhu', title: '斗地主' },

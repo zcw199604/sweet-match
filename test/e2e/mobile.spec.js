@@ -23,15 +23,15 @@ async function open(page, mode) {
   await expect(page.locator('.game-canvas')).toBeVisible();
 }
 
-test('home page fits narrow screens and exposes fifteen arcade cards', async ({ page }) => {
+test('home page fits narrow screens and exposes every arcade card', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(22);
+  await expect(page.locator('.arcade-card')).toHaveCount(23);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
 
-test('each game shows its whole board and controls without scrolling', async ({ page }) => {
-  for (const mode of ['pop2', 'pop3', 'surge', 'blast', 'park', 'pour', 'g2048', 'sudoku']) {
+async function expectWholeBoards(page, modes) {
+  for (const mode of modes) {
     await open(page, mode);
     // Opening a game smooth-scrolls the page back to the top; on a phone the boards sit close
     // to the top edge, so measure once the scroll has landed.
@@ -47,6 +47,14 @@ test('each game shows its whole board and controls without scrolling', async ({ 
     expect(fit.size).toBeGreaterThan(250);
     await page.locator('#back-home').click();
   }
+}
+
+test('each game shows its whole board and controls without scrolling', async ({ page }) => {
+  await expectWholeBoards(page, ['pop2', 'pop3', 'surge', 'blast', 'park', 'pour', 'g2048', 'sudoku']);
+});
+
+test('合成大西瓜 shows its whole board and controls without scrolling', async ({ page }) => {
+  await expectWholeBoards(page, ['suika']);
 });
 
 test('泡噗2: dragging anywhere steers the ship without scrolling the page', async ({ page }) => {
@@ -818,6 +826,57 @@ test('2048: making 2048 offers to go on, and the board keeps playing', async ({ 
   await expect(page.locator('.g2048-overlay')).toBeHidden();
   await swipe(page, 0, 90);
   await expect.poll(() => page.evaluate(() => window.__arcade.g2048.state.moves)).toBe(2);
+});
+
+// 合成大西瓜 is one canvas; `load` sets a hand-made pile, `advance` runs the physics ahead, and the state is on window.__arcade.suika.
+async function openSuika(page, fruits, extra = {}) {
+  await open(page, 'suika');
+  await page.waitForFunction(() => window.__arcade.suika);
+  await page.evaluate(([f, e]) => window.__arcade.suika.load(f, e), [fruits, extra]);
+}
+const suikaState = (page) => page.evaluate(() => { const s = window.__arcade.suika.state; return { score: s.score, drops: s.drops, over: s.over, levels: s.fruits.map((f) => f.level).sort((a, b) => a - b), current: s.current }; });
+
+test('合成大西瓜: letting go drops the held fruit where it was aimed, and two of a kind merge', async ({ page }) => {
+  await openSuika(page, [{ x: 150, y: 497, level: 1 }]);
+  await page.evaluate(() => { window.__arcade.suika.state.current = 1; });
+  const box = await page.locator('.game-canvas').boundingBox();
+  await page.mouse.move(box.x + box.width * (150 / 360), box.y + box.height * 0.2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * (155 / 360), box.y + box.height * 0.2, { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(() => suikaState(page).then((s) => s.drops)).toBe(1);
+  await page.evaluate(() => window.__arcade.suika.advance(4));
+  const state = await suikaState(page);
+  expect(state.levels).toEqual([2]); // the two strawberries became one grape
+  expect(state.score).toBe(6);
+  await expect(page.locator('#score-text')).toContainText('6 分');
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="suika"]').click();
+  await page.waitForFunction(() => window.__arcade.suika);
+  expect((await suikaState(page)).levels).toEqual([2]); // the pile is kept when you leave
+});
+
+test('合成大西瓜: a box that fills up ends the game, posts its score, and 再来一局 starts over', async ({ page }) => {
+  const posts = await stubScores(page);
+  const tower = Array.from({ length: 12 }, (_, i) => ({ x: 180, y: 490 - i * 60, level: i % 2 ? 5 : 3 }));
+  await openSuika(page, tower, { score: 123 });
+  await page.evaluate(() => window.__arcade.suika.advance(6));
+  await expect(page.locator('.suika-card strong')).toHaveText('装满啦！');
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toMatchObject({ board: 'suika', value: 123 });
+  await expect(page.locator('.suika-note')).toContainText('全球第');
+  await page.locator('.suika-again').click();
+  await expect.poll(() => suikaState(page).then((s) => s.score)).toBe(0);
+  expect((await suikaState(page)).levels).toEqual([]);
+});
+
+test('合成大西瓜: making a watermelon offers to go on, and the game keeps playing', async ({ page }) => {
+  await openSuika(page, [{ x: 150, y: 435, level: 9 }, { x: 205, y: 435, level: 9 }]);
+  await page.evaluate(() => window.__arcade.suika.advance(2));
+  await expect(page.locator('.suika-card strong')).toHaveText('合出大西瓜！');
+  await page.locator('.suika-again').first().click(); // 继续挑战
+  await expect(page.locator('.suika-overlay')).toBeHidden();
+  expect((await suikaState(page)).levels).toEqual([10]);
 });
 
 // 数独: a puzzle that is the answer with one cell blanked, so a whole game is a couple of taps.

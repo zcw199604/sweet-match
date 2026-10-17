@@ -20,7 +20,7 @@ test('手机横屏保留棋盘与操作区', async ({ page }) => {
 test('五款棋盘加载、重开、返回和最近常玩，棋盘适应视口', async ({ page }) => {
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/'); await page.locator('body[data-ready]').waitFor();
-  await expect(page.locator('.arcade-card')).toHaveCount(22);
+  await expect(page.locator('.arcade-card')).toHaveCount(23);
   for (const id of games) {
     await page.locator(`.arcade-card[data-mode="${id}"]`).click();
     await expect(page.locator(`.${id}-game`)).toBeVisible();

@@ -166,6 +166,12 @@ test('2048 and 数独 boards: 数独 ranks by time (lower is better) in three le
   assert.ok(Object.values(BOARDS).every((board) => GAMES.some((game) => game.id === board.game)));
 });
 
+test('合成大西瓜 has one score board, higher is better', () => {
+  assert.deepEqual(boardsOf('suika'), ['suika']);
+  assert.equal(BOARDS.suika.order, 'desc');
+  assert.ok(GAMES.some((game) => game.id === 'suika'));
+});
+
 test('数独 and 2048 reject values outside their range', async () => {
   const store = memoryStore();
   const bad = async (board, value) => (await post(store, { board, pid: PID(1), name: 'A', value })).status;
