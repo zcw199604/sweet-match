@@ -38,6 +38,7 @@ const MODE_META = {
   pour: { label: 'ARCADE 08', title: '倒水排序', help: '点一个瓶子再点另一个，把它顶上那一段同色的水倒过去：目标瓶要么是空的，要么顶上是同样的颜色，还得有空位。一瓶倒满同一种颜色就会封口收进上方的收集架，全部收集完过关。倒不动时用下面的道具：回退一步、加一个空瓶、打乱重排、提示一步；这些每关次数有限，用得越少星级越高，步数不超过「最少步数」是三星。一共 50 关，越往后颜色越多、空瓶越少；进度会保存在这台设备上。' },
   g2048: { label: 'ARCADE 09', title: '2048', help: '滑动屏幕（或按方向键 / WASD），所有方块一起朝那个方向滑，两个相同数字撞上就合成一个、分数加上新数字。每滑一次，空位里会冒出一个 2 或 4。合出 2048 就算通关，之后还能接着往上合；方块塞满、又没有能合的就结束。每局有 3 次「撤销」（也可以按 Z）；没打完的一局会存在这台设备上，分数在结束或重新开始时提交榜单。' },
   suika: { label: 'ARCADE 15', title: '合成大西瓜', help: '按住画面左右拖动瞄准（电脑上鼠标移动、点击落下，或用 ←→ 和空格），松手把水果丢进玻璃缸。两个一样的水果碰在一起会合成大一级的水果，从樱桃一路合到西瓜；两个西瓜碰到一起会一起消失。合成越大分越高，几次合成接连发生还有连击加分。水果堆过红色虚线并停留两秒就结束，所以别让它们堆得太高，也别忘了看右上角的「下一个」。没打完的一局会存在这台设备上。' },
+  tetris: { label: 'ARCADE 21', title: '俄罗斯方块', help: '左右键（或 A / D）移动，↑（或 W / X）顺时针旋转，Z 逆时针旋转，↓ 软降，空格直接落到底，C 或 Shift 把当前方块暂存起来（每块限一次），P 或 Esc 暂停；手机用画面下面的六个按钮，点左边的「暂存」框也能暂存。方块按 7 个一包随机发，旋转遇到墙或方块会按标准规则踢开；落地后还能滑动一会儿才锁定。一次消 1～4 行得分递增，T-Spin、连续消除（连击）、背靠背的四消或 T-Spin 都有额外分，清空整个场地还有大奖励。简单、普通、困难各有自己的速度、升级节奏、预览数量和榜单：困难从第 8 级开始、不显示落点虚影、只预览一块。没打完的一局会存在这台设备上，每档各存一份。' },
   sudoku: { label: 'ARCADE 10', title: '数独', help: '每行、每列、每个 3×3 宫都要填进 1～9，且不能重复。点一格再点下面的数字填入；填错会亮红并扣一次机会，错满 3 次本局失败。打开「笔记」可以在格子里记候选数，填对一个数时同行同列同宫的候选会自动划掉。点「提示」会直接填出一格，但用了提示的局不计入榜单；其余按用时排名。简单、普通、困难各有自己的榜单和各自没做完的题，题目都保证只有唯一解：简单和普通光靠「只剩一个可能」就能推完，困难需要更多技巧。电脑上可以用 1～9、方向键、Backspace、N、Z、H。' },
   soulforge: { label: 'EXTRA · 第三方', title: 'SOULFORGE 灵魂锻炉', help: '第三方像素冒险游戏，嵌入自作者的站点 soulforge.glasden.top，本站不保存它的进度。存档在这台设备的浏览器里，和直接打开原站玩的存档是分开的两份，可以用游戏里的「导入存档」迁移。电脑上用键盘玩，先点一下游戏画面；手机只能横屏玩，可以点游戏里的「全屏并横屏」。' },
   achroma: { label: 'EXTRA · 第三方', title: 'Achroma', help: '第三方像素动作游戏，嵌入自作者的站点 game.unsnow.online，本站不保存它的进度。嵌在这里时不能登录（linux.do 登录页不允许被嵌入），要上传成绩、看自己的记录请点「在原站打开」。电脑上用键盘玩，先点一下游戏画面；手机横屏玩更舒服。' },
@@ -56,7 +57,7 @@ const CLASSIC_GAMES = {
   draughts: { load: () => import('./board-games.js'), mount: 'mountDraughts' },
   jungle: { load: () => import('./board-games.js'), mount: 'mountJungle' }
 };
-const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'sudoku', ...Object.keys(CLASSIC_GAMES), ...Object.keys(EMBED_GAMES)];
+const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'sudoku', ...Object.keys(CLASSIC_GAMES), ...Object.keys(EMBED_GAMES)];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -97,11 +98,14 @@ let parkToken = 0;
 // 倒水排序 is one canvas (pour.js, loaded on first use); app.js only frames it.
 let pour = null;
 let pourToken = 0;
-// 2048, 合成大西瓜 and 数独 are one canvas each (g2048.js / suika.js / sudoku.js, loaded on first use); app.js only frames them.
+// 2048, 合成大西瓜, 俄罗斯方块 and 数独 are one canvas each (g2048.js / suika.js / tetris.js / sudoku.js, loaded on first use); app.js only frames them.
 let g2048 = null;
 let g2048Token = 0;
 let suika = null;
 let suikaToken = 0;
+let tetris = null;
+let tetrisToken = 0;
+let tetrisLevel = 'normal';
 let sudoku = null;
 let sudokuToken = 0;
 let sudokuLevel = 'normal';
@@ -135,7 +139,7 @@ let rtc = { peer: null, channel: null };
 let onlineSession = null;
 
 function showScreen(id) {
-  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSuika(); stopSudoku(); stopClassic(); clearModeTabs(); }
+  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSuika(); stopTetris(); stopSudoku(); stopClassic(); clearModeTabs(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
@@ -380,6 +384,7 @@ function buildStage() {
   stopPour();
   stopG2048();
   stopSuika();
+  stopTetris();
   stopSudoku();
   stopClassic();
   clearModeTabs();
@@ -393,6 +398,7 @@ function buildStage() {
   if (mode === 'pour') return buildPourStage(stage, meta);
   if (mode === 'g2048') return buildG2048Stage(stage, meta);
   if (mode === 'suika') return buildSuikaStage(stage, meta);
+  if (mode === 'tetris') return buildTetrisStage(stage, meta);
   if (mode === 'sudoku') return buildSudokuStage(stage, meta);
   // Only 泡噗2 is reskinned, so only that board gets the picker.
   const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
@@ -411,7 +417,7 @@ function startGame(nextMode) {
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   noteOpened(mode);
   // The 2D loop idles while state is null, which leaves the frame to goose.js.
-  if (['goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'sudoku'].includes(mode) || CLASSIC_GAMES[mode] || EMBED_GAMES[mode]) { state = null; buildStage(); showScreen('game'); return; }
+  if (['goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'sudoku'].includes(mode) || CLASSIC_GAMES[mode] || EMBED_GAMES[mode]) { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame(); resetBlastView();
@@ -630,6 +636,40 @@ async function mountSuikaView(wrap) {
     suika = mountSuika(wrap, { onHud: (text) => { $('#score-text').textContent = text; }, onResult: reportScore });
   } catch (error) {
     if (token !== suikaToken) return;
+    console.error(error);
+    wrap.innerHTML = '<p class="quest-loading">游戏加载失败，请刷新页面重试。</p>';
+  }
+}
+function stopTetris() {
+  tetrisToken += 1;
+  tetris?.destroy();
+  tetris = null;
+}
+const TETRIS_LEVELS = ['easy', 'normal', 'hard'];
+const TETRIS_LABEL = { easy: '简单', normal: '普通', hard: '困难' };
+const tetrisLevelLabel = () => `${TETRIS_LABEL[tetrisLevel]} · 切换${TETRIS_LABEL[TETRIS_LEVELS[(TETRIS_LEVELS.indexOf(tetrisLevel) + 1) % 3]]}`;
+function buildTetrisStage(stage, meta) {
+  tetrisLevel = getPref('tetrisLevel'); // 每次进来都按当前身份的设置，换设备 / 换人后也对得上
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="tetris-level">${tetrisLevelLabel()}</button><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap tetris-wrap"></div><p class="game-help">${meta.help}</p>`;
+  $('#restart-game').addEventListener('click', () => tetris?.restart());
+  $('#tetris-level').addEventListener('click', (event) => {
+    tetrisLevel = TETRIS_LEVELS[(TETRIS_LEVELS.indexOf(tetrisLevel) + 1) % 3];
+    setPref('tetrisLevel', tetrisLevel);
+    event.currentTarget.textContent = tetrisLevelLabel();
+    tetris?.setLevel(tetrisLevel);
+    syncActivity();
+  });
+  mountTetrisView(stage.querySelector('.tetris-wrap'));
+}
+async function mountTetrisView(wrap) {
+  const token = tetrisToken;
+  try {
+    const { mountTetris } = await import('./tetris.js');
+    // The player left (or rebuilt the stage) while the module was loading.
+    if (token !== tetrisToken) return;
+    tetris = mountTetris(wrap, { diff: tetrisLevel, onHud: (text) => { $('#score-text').textContent = text; }, onResult: reportScore });
+  } catch (error) {
+    if (token !== tetrisToken) return;
     console.error(error);
     wrap.innerHTML = '<p class="quest-loading">游戏加载失败，请刷新页面重试。</p>';
   }
@@ -951,6 +991,7 @@ function boardId() {
   if (mode === 'quest') return 'quest';
   if (mode === 'park') return 'park';
   if (mode === 'sudoku') return `sudoku-${sudokuLevel}`;
+  if (mode === 'tetris') return `tetris-${tetrisLevel}`;
   if (mode === 'goose') return gooseMode === 'endless' ? 'goose-endless' : 'goose-classic';
   if (mode === 'pop3') return (state ? state.endless : pop3Endless) ? 'pop3-endless' : 'pop3-classic';
   return mode;
@@ -1426,7 +1467,7 @@ document.addEventListener('keydown', keyboard); document.addEventListener('keyup
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get suika() { return suika; }, get sudoku() { return sudoku; }, get classic() { return classic; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get suika() { return suika; }, get tetris() { return tetris; }, get sudoku() { return sudoku; }, get classic() { return classic; } };
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';

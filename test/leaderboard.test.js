@@ -172,6 +172,13 @@ test('合成大西瓜 has one score board, higher is better', () => {
   assert.ok(GAMES.some((game) => game.id === 'suika'));
 });
 
+test('俄罗斯方块 has one score board per difficulty, higher is better', () => {
+  assert.deepEqual(boardsOf('tetris'), ['tetris-easy', 'tetris-normal', 'tetris-hard']);
+  assert.ok(boardsOf('tetris').every((id) => BOARDS[id].order === 'desc' && BOARDS[id].scale === 1));
+  assert.deepEqual(boardsOf('tetris').map((id) => BOARDS[id].label), ['简单', '普通', '困难']);
+  assert.ok(GAMES.some((game) => game.id === 'tetris'));
+});
+
 test('数独 and 2048 reject values outside their range', async () => {
   const store = memoryStore();
   const bad = async (board, value) => (await post(store, { board, pid: PID(1), name: 'A', value })).status;

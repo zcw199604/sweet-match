@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
 test('四款经典游戏能加载、重开、返回，并进入最近常玩', async ({ page }) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/'); await page.locator('body[data-ready]').waitFor();
-  await expect(page.locator('.arcade-card')).toHaveCount(23);
+  await expect(page.locator('.arcade-card')).toHaveCount(24);
   for (const id of ['minesweeper', 'doudizhu', 'junqi', 'xiangqi']) {
     await page.locator(`.arcade-card[data-mode="${id}"]`).click();
     await expect(page.locator(`.${id}-game`)).toBeVisible();

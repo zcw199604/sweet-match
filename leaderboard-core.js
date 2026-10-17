@@ -25,6 +25,10 @@ export const BOARDS = {
   g2048: { game: 'g2048', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 4_000_000 },
   // 合成大西瓜：一局是落水果加合成，每次合成最多 66 分加最多 10 分连击，上限按「一局里不可能打到」来定，二十万封顶。
   suika: { game: 'suika', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 200_000 },
+  // 俄罗斯方块按得分，三档难度各一份榜。分数没有天然上限，一千万封顶只用来挡住明显的乱填。
+  'tetris-easy': { game: 'tetris', label: '简单', order: 'desc', unit: '分', scale: 1, min: 1, max: 10_000_000 },
+  'tetris-normal': { game: 'tetris', label: '普通', order: 'desc', unit: '分', scale: 1, min: 1, max: 10_000_000 },
+  'tetris-hard': { game: 'tetris', label: '困难', order: 'desc', unit: '分', scale: 1, min: 1, max: 10_000_000 },
   // 数独按用时（0.1 秒存成整数）：只有没用提示的局才上榜。填满几十个空格再快也不会少于十几秒；三小时封顶。
   'sudoku-easy': { game: 'sudoku', label: '简单', order: 'asc', unit: '秒', scale: 10, min: 100, max: 108_000 },
   'sudoku-normal': { game: 'sudoku', label: '普通', order: 'asc', unit: '秒', scale: 10, min: 150, max: 108_000 },
@@ -41,6 +45,7 @@ export const GAMES = [
   { id: 'pour', title: '倒水排序' },
   { id: 'g2048', title: '2048' },
   { id: 'suika', title: '合成大西瓜' },
+  { id: 'tetris', title: '俄罗斯方块' },
   { id: 'sudoku', title: '数独' },
   { id: 'minesweeper', title: '扫雷' },
   { id: 'doudizhu', title: '斗地主' },

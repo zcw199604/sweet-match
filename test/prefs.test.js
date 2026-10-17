@@ -89,3 +89,12 @@ for (const [name, create] of Object.entries(backends)) {
     assert.deepEqual(await (await get(store, PID(1))).json(), { prefs: {} });
   });
 }
+
+test('俄罗斯方块的难度是一项设置：只认简单 / 普通 / 困难，默认普通', () => {
+  assert.equal(prefValue(emptyPrefs(PID(1)), 'tetrisLevel'), 'normal');
+  assert.deepEqual(cleanPrefs({ tetrisLevel: 'hard', sudokuLevel: 'easy' }), { tetrisLevel: 'hard', sudokuLevel: 'easy' });
+  assert.deepEqual(cleanPrefs({ tetrisLevel: 'insane' }), {});
+  const state = setPrefValue(emptyPrefs(PID(1)), 'tetrisLevel', 'easy');
+  assert.deepEqual(state.pending, { tetrisLevel: 'easy' });
+  assert.equal(setPrefValue(state, 'tetrisLevel', 'expert'), state);
+});

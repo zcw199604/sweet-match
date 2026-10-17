@@ -25,7 +25,7 @@ async function open(page, mode) {
 
 test('home page fits narrow screens and exposes every arcade card', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(23);
+  await expect(page.locator('.arcade-card')).toHaveCount(24);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
@@ -55,6 +55,10 @@ test('each game shows its whole board and controls without scrolling', async ({ 
 
 test('合成大西瓜 shows its whole board and controls without scrolling', async ({ page }) => {
   await expectWholeBoards(page, ['suika']);
+});
+
+test('俄罗斯方块 shows its whole board and controls without scrolling', async ({ page }) => {
+  await expectWholeBoards(page, ['tetris']);
 });
 
 test('泡噗2: dragging anywhere steers the ship without scrolling the page', async ({ page }) => {
@@ -877,6 +881,105 @@ test('合成大西瓜: making a watermelon offers to go on, and the game keeps p
   await page.locator('.suika-again').first().click(); // 继续挑战
   await expect(page.locator('.suika-overlay')).toBeHidden();
   expect((await suikaState(page)).levels).toEqual([10]);
+});
+
+// 俄罗斯方块 is one canvas; `load` sets a hand-made game (a tetris-core snapshot), the state is on window.__arcade.tetris.
+const tetrisWell = (rows) => { const board = Array.from({ length: 22 }, () => '.'.repeat(10)); rows.forEach((r, i) => { board[22 - rows.length + i] = r.padEnd(10, '.'); }); return board; };
+async function openTetris(page, game) {
+  await open(page, 'tetris');
+  await page.waitForFunction(() => window.__arcade.tetris);
+  if (game) await page.evaluate((g) => window.__arcade.tetris.load(g), game);
+  // Opening a game smooth-scrolls the page to the top; tests that click on the canvas measure it once that has landed.
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+}
+const tetrisState = (page) => page.evaluate(() => { const s = window.__arcade.tetris.state; return { score: s.score, lines: s.lines, level: s.level, diff: s.diff, over: s.over, hold: s.hold, x: s.piece?.x, rot: s.piece?.rot, type: s.piece?.type, pieces: s.pieces }; });
+
+test('俄罗斯方块: keys move, turn, hold and drop the piece, and a full row clears', async ({ page }) => {
+  await openTetris(page, { diff: 'normal', board: tetrisWell(['IIIIIII...']), piece: { type: 'I', rot: 0, x: 3, y: 0 }, queue: 'TOSZJLI' });
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(async () => (await tetrisState(page)).x).toBe(2);
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(async () => (await tetrisState(page)).rot).toBe(1);
+  await page.keyboard.press('c');
+  await expect.poll(async () => (await tetrisState(page)).hold).toBe('I');
+  expect((await tetrisState(page)).type).toBe('T');
+  await page.keyboard.press('c'); // already held this turn
+  expect((await tetrisState(page)).type).toBe('T');
+  await page.keyboard.press('Space');
+  await expect.poll(async () => (await tetrisState(page)).pieces).toBe(2);
+  await page.keyboard.press('c'); // swap back for the I
+  await expect.poll(async () => (await tetrisState(page)).type).toBe('I');
+  await page.keyboard.press('ArrowRight'); // x 3 → 4: cells 4..7 are not on the row of 7 blocks... lay it flat on the stack
+  await page.keyboard.press('Space');
+  await expect.poll(async () => (await tetrisState(page)).pieces).toBe(3);
+  await expect(page.locator('#score-text')).toContainText('分 · 第 1 级');
+});
+
+test('俄罗斯方块: the on-screen buttons work, and a held direction keeps sliding', async ({ page }) => {
+  await openTetris(page, { diff: 'normal', board: tetrisWell([]), piece: { type: 'O', rot: 0, x: 3, y: 0 }, queue: 'TOSZJLI' });
+  const box = await page.locator('.game-canvas').boundingBox();
+  const btn = (k) => [box.x + box.width * ((4 + k * 60 + 26) / 360), box.y + box.height * (537 / 600)];
+  const [lx, ly] = btn(0);
+  await page.mouse.move(lx, ly);
+  await page.mouse.down();
+  await expect.poll(async () => (await tetrisState(page)).x).toBe(-1); // held long enough to hit the wall (the O's box starts at -1)
+  await page.mouse.up();
+  const [hx, hy] = btn(5);
+  await page.mouse.click(hx, hy); // hard drop
+  await expect.poll(async () => (await tetrisState(page)).pieces).toBe(1);
+  const [rx, ry] = btn(3);
+  const before = (await tetrisState(page)).rot;
+  await page.mouse.click(rx, ry);
+  await expect.poll(async () => (await tetrisState(page)).rot).not.toBe(before);
+});
+
+test('俄罗斯方块: pause stops the clock, resume carries on, and the game is kept when you leave', async ({ page }) => {
+  await openTetris(page, { diff: 'normal', board: tetrisWell(['I.........']), piece: { type: 'T', rot: 0, x: 3, y: 0 }, queue: 'TOSZJLI', score: 500, lines: 3 });
+  await page.keyboard.press('p');
+  await expect(page.locator('.tetris-card strong')).toHaveText('已暂停');
+  const y = await page.evaluate(() => window.__arcade.tetris.state.piece.y);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__arcade.tetris.state.piece.y)).toBe(y);
+  await page.keyboard.press('p');
+  await expect(page.locator('.tetris-overlay')).toBeHidden();
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="tetris"]').click();
+  await page.waitForFunction(() => window.__arcade.tetris);
+  await expect(page.locator('.tetris-card strong')).toHaveText('继续上次的游戏');
+  expect((await tetrisState(page)).score).toBe(500);
+  await page.locator('.tetris-again').first().click();
+  await expect(page.locator('.tetris-overlay')).toBeHidden();
+});
+
+test('俄罗斯方块: each difficulty has its own pace, its own unfinished game, and is remembered', async ({ page }) => {
+  await openTetris(page);
+  await expect(page.locator('#tetris-level')).toHaveText('普通 · 切换困难');
+  expect(await tetrisState(page)).toMatchObject({ diff: 'normal', level: 1 });
+  await page.evaluate(() => window.__arcade.tetris.load({ diff: 'normal', board: Array.from({ length: 22 }, () => '.'.repeat(10)), piece: { type: 'T', rot: 0, x: 3, y: 0 }, queue: 'TOSZJLI', score: 777, lines: 4 }));
+  await page.locator('#tetris-level').click();
+  await expect(page.locator('#tetris-level')).toHaveText('困难 · 切换简单');
+  expect(await tetrisState(page)).toMatchObject({ diff: 'hard', level: 8, score: 0 });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('pao-prefs')).values.tetrisLevel)).toBe('hard');
+  await page.locator('#tetris-level').click();
+  await expect(page.locator('#tetris-level')).toHaveText('简单 · 切换普通');
+  await page.locator('#tetris-level').click();
+  await expect(page.locator('.tetris-card strong')).toHaveText('继续上次的游戏'); // normal again: the game with 777 points was kept
+  expect(await tetrisState(page)).toMatchObject({ diff: 'normal', score: 777, lines: 4 });
+});
+
+test('俄罗斯方块: a topped-out well ends the game and posts the score to that difficulty\'s board', async ({ page }) => {
+  const posts = await stubScores(page);
+  const board = tetrisWell([]);
+  for (const r of [0, 1, 2, 3]) board[r] = '...II.....';
+  await openTetris(page, { diff: 'normal', board, piece: { type: 'O', rot: 0, x: -1, y: 0 }, queue: 'OOOOOOO', score: 321, lines: 2 });
+  await page.keyboard.press('Space');
+  await expect(page.locator('.tetris-card strong')).toHaveText('游戏结束');
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toMatchObject({ board: 'tetris-normal' });
+  expect(posts[0].value).toBeGreaterThanOrEqual(321);
+  await expect(page.locator('.tetris-note')).toContainText('全球第');
+  await page.locator('.tetris-again').click();
+  await expect.poll(async () => (await tetrisState(page)).score).toBe(0);
 });
 
 // 数独: a puzzle that is the answer with one cell blanked, so a whole game is a couple of taps.

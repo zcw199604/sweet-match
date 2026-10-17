@@ -418,7 +418,7 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .recent-list{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .recent-card{--c:var(--violet);position:relative;display:grid;gap:4px;text-align:left;border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;background:#fff;padding:14px 16px;transition:.2s}
 .recent-card:hover{transform:translateY(-3px);box-shadow:0 14px 34px #26333418}
-.recent-card[data-game=pop2]{--c:var(--pink)}.recent-card[data-game=pop3]{--c:var(--violet)}.recent-card[data-game=surge]{--c:var(--yellow)}.recent-card[data-game=blast]{--c:var(--cyan)}.recent-card[data-game=goose]{--c:var(--green)}.recent-card[data-game=quest]{--c:#ff9a3c}.recent-card[data-game=park]{--c:#4a8dff}.recent-card[data-game=pour]{--c:#2ec4b6}.recent-card[data-game=g2048]{--c:#1fb8c4}.recent-card[data-game=sudoku]{--c:#e0559a}.recent-card[data-game=suika]{--c:#3fbf5a}
+.recent-card[data-game=pop2]{--c:var(--pink)}.recent-card[data-game=pop3]{--c:var(--violet)}.recent-card[data-game=surge]{--c:var(--yellow)}.recent-card[data-game=blast]{--c:var(--cyan)}.recent-card[data-game=goose]{--c:var(--green)}.recent-card[data-game=quest]{--c:#ff9a3c}.recent-card[data-game=park]{--c:#4a8dff}.recent-card[data-game=pour]{--c:#2ec4b6}.recent-card[data-game=g2048]{--c:#1fb8c4}.recent-card[data-game=sudoku]{--c:#e0559a}.recent-card[data-game=suika]{--c:#3fbf5a}.recent-card[data-game=tetris]{--c:#3d8bff}
 .recent-title{font-size:16px;letter-spacing:-.04em;padding-right:84px}
 .recent-ago{font:10px 'DM Mono';color:var(--muted)}
 .recent-time{position:absolute;top:12px;right:14px;font:700 11px 'DM Mono';color:var(--ink);background:#f1efe8;border-radius:999px;padding:3px 9px}
@@ -433,6 +433,11 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .art-fruit.f0{left:50%;top:50%;width:88px;height:88px;margin:-34px 0 0 -44px;background:radial-gradient(circle at 35% 30%,#92e6a4,#3fbf5a 45%,#1a7a34)}
 .art-fruit.f1{left:50%;top:50%;width:58px;height:58px;margin:-52px 0 0 -104px;background:radial-gradient(circle at 35% 30%,#ffdc8c,#ffb02e 45%,#c27a08)}
 .art-fruit.f2{left:50%;top:50%;width:42px;height:42px;margin:-40px 0 0 46px;background:radial-gradient(circle at 35% 30%,#ff8aa0,#e0204c 45%,#8f0f2b)}
+.tetris .art{background:radial-gradient(125% 125% at 20% 8%,#3d5bd0,#26338a 58%,#12174a)}
+.art-tet{position:absolute;left:50%;top:50%;width:132px;height:110px;margin:-55px 0 0 -66px;display:grid;grid-template-columns:repeat(6,22px);grid-template-rows:repeat(5,22px);padding:0;border-radius:6px}
+.art-tet i{width:22px;height:22px;border-radius:5px;box-shadow:inset 0 0 0 1.5px #ffffff59,inset 0 5px 4px #fff5,inset 0 -5px 4px #0004,0 2px 4px #0005}
+.art-tet i.t0{grid-area:3/2;background:#9b6bff}.art-tet i.t1{grid-area:4/1;background:#9b6bff}.art-tet i.t2{grid-area:4/2;background:#9b6bff}.art-tet i.t3{grid-area:4/3;background:#9b6bff}
+.art-tet i.t4{grid-area:2/5;background:#2fcfd6}.art-tet i.t5{grid-area:3/5;background:#2fcfd6}.art-tet i.t6{grid-area:4/5;background:#2fcfd6}.art-tet i.t7{grid-area:5/5;background:#2fcfd6}
 .g2048 .art{background:radial-gradient(125% 125% at 20% 8%,#1f8a98,#14566a 58%,#0a2a3d)}
 .art-well{position:absolute;left:50%;top:50%;width:138px;height:138px;margin:-69px 0 0 -69px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;border-radius:20px;background:linear-gradient(180deg,#1a1840,#0d0c24);border:2px solid #58d4de99;box-shadow:0 0 22px #58d4de55,0 10px 18px #0006}
 .art-well i{display:grid;place-items:center;border-radius:12px;color:#fff;font:800 24px Manrope,system-ui,sans-serif;font-style:normal;text-shadow:0 2px 0 #0004;box-shadow:0 4px 0 #0000004d,inset 0 2px 0 #ffffff66,inset 0 -3px 0 #00000033}
@@ -454,22 +459,25 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .art-sudoku i:nth-child(9){background:linear-gradient(180deg,#ffb0dc,#ff77c0 35%,#b83d86)}
 .canvas-wrap.g2048-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6667)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6667)));aspect-ratio:360/540}
 .canvas-wrap.suika-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6429)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6429)));aspect-ratio:360/560}
+.canvas-wrap.tetris-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6)));aspect-ratio:360/600}
 .canvas-wrap.sudoku-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 340px) * .6429)));width:min(100%,420px,max(240px,calc((100dvh - 340px) * .6429)));aspect-ratio:360/560}
 .g2048-wrap .game-canvas{height:100%;touch-action:none;background:radial-gradient(120% 90% at 50% 0%,#3a2f8a,#1f1a58 55%,#100e30);cursor:grab}
 .suika-wrap .game-canvas{height:100%;touch-action:none;background:radial-gradient(120% 90% at 50% 0%,#1d6a7a,#134458 55%,#0a2234);cursor:crosshair}
+.tetris-wrap .game-canvas{height:100%;touch-action:none;background:radial-gradient(120% 90% at 50% 0%,#2f3f9c,#1b2262 55%,#0d1034);cursor:pointer}
 .sudoku-wrap .game-canvas{height:100%;touch-action:manipulation;background:radial-gradient(120% 90% at 50% 0%,#4a2a86,#2a1a62 55%,#120e32);cursor:pointer}
-.g2048-overlay,.sudoku-overlay,.suika-overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:calc(var(--u) * 5);background:#0b0f1ce6;border-radius:13px}
-.g2048-overlay[hidden],.sudoku-overlay[hidden],.suika-overlay[hidden]{display:none}
-.g2048-card,.sudoku-card,.suika-card{display:grid;gap:calc(var(--u) * 3);width:100%;padding:calc(var(--u) * 7) calc(var(--u) * 5);border-radius:calc(var(--u) * 5);background:#1d2438;border:1px solid #ffffff2e;text-align:center;font-size:calc(var(--u) * 3.8)}
-.g2048-card strong,.sudoku-card strong,.suika-card strong{font-size:calc(var(--u) * 7.6);letter-spacing:-.02em}
-.g2048-card p,.sudoku-card p,.suika-card p{margin:0;color:#c3c9d6;line-height:1.55}
-.g2048-overlay.won .g2048-card,.sudoku-overlay.won .sudoku-card,.suika-overlay.won .suika-card{border-color:var(--yellow)}
-.g2048-note:empty,.sudoku-note:empty,.suika-note:empty{display:none}
-.g2048-again,.sudoku-again,.suika-again{justify-self:center;padding:calc(var(--u) * 3) calc(var(--u) * 10);border:1px solid var(--pink);border-radius:calc(var(--u) * 3);background:var(--pink);color:#fff;font:inherit;font-weight:800;cursor:pointer}
-.g2048-again.ghost,.sudoku-again.ghost,.suika-again.ghost{background:transparent;border-color:#ffffff59;color:#d5daf0}
+.g2048-overlay,.sudoku-overlay,.suika-overlay,.tetris-overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:calc(var(--u) * 5);background:#0b0f1ce6;border-radius:13px}
+.g2048-overlay[hidden],.sudoku-overlay[hidden],.suika-overlay[hidden],.tetris-overlay[hidden]{display:none}
+.g2048-card,.sudoku-card,.suika-card,.tetris-card{display:grid;gap:calc(var(--u) * 3);width:100%;padding:calc(var(--u) * 7) calc(var(--u) * 5);border-radius:calc(var(--u) * 5);background:#1d2438;border:1px solid #ffffff2e;text-align:center;font-size:calc(var(--u) * 3.8)}
+.g2048-card strong,.sudoku-card strong,.suika-card strong,.tetris-card strong{font-size:calc(var(--u) * 7.6);letter-spacing:-.02em}
+.g2048-card p,.sudoku-card p,.suika-card p,.tetris-card p{margin:0;color:#c3c9d6;line-height:1.55}
+.g2048-overlay.won .g2048-card,.sudoku-overlay.won .sudoku-card,.suika-overlay.won .suika-card,.tetris-overlay.won .tetris-card{border-color:var(--yellow)}
+.g2048-note:empty,.sudoku-note:empty,.suika-note:empty,.tetris-note:empty{display:none}
+.g2048-again,.sudoku-again,.suika-again,.tetris-again{justify-self:center;padding:calc(var(--u) * 3) calc(var(--u) * 10);border:1px solid var(--pink);border-radius:calc(var(--u) * 3);background:var(--pink);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.g2048-again.ghost,.sudoku-again.ghost,.suika-again.ghost,.tetris-again.ghost{background:transparent;border-color:#ffffff59;color:#d5daf0}
 @media(max-width:800px) and (orientation:portrait){
 body.playing[data-mode=g2048] .canvas-wrap.g2048-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .6667)));width:min(100%,max(240px,calc((100dvh - 190px) * .6667)))}
 body.playing[data-mode=suika] .canvas-wrap.suika-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .6429)));width:min(100%,max(240px,calc((100dvh - 190px) * .6429)))}
+body.playing[data-mode=tetris] .canvas-wrap.tetris-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .6)));width:min(100%,max(240px,calc((100dvh - 190px) * .6)))}
 body.playing[data-mode=sudoku] .canvas-wrap.sudoku-wrap{width:min(100%,max(240px,calc((100vh - 260px) * .6429)));width:min(100%,max(240px,calc((100dvh - 260px) * .6429)))}
 }
 

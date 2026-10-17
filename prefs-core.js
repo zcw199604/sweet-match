@@ -8,8 +8,8 @@ import { isPlayerId } from './leaderboard-core.js';
 
 // 只接受这里登记过的设置项；新增设置时在这里加一行默认值，类型由默认值决定。
 // 取值是固定几种的字符串设置，还要在 PREF_CHOICES 里列出全部可选值。
-export const PREFS = { mineNoGuess: false, sudokuLevel: 'normal', gooseMode: 'classic' };
-export const PREF_CHOICES = { sudokuLevel: ['easy', 'normal', 'hard'], gooseMode: ['classic', 'endless'] };
+export const PREFS = { mineNoGuess: false, sudokuLevel: 'normal', gooseMode: 'classic', tetrisLevel: 'normal' };
+export const PREF_CHOICES = { sudokuLevel: ['easy', 'normal', 'hard'], gooseMode: ['classic', 'endless'], tetrisLevel: ['easy', 'normal', 'hard'] };
 const BODY_LIMIT = 1024;
 
 const validPref = (key, value) => Object.hasOwn(PREFS, key) && typeof value === typeof PREFS[key]
