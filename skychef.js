@@ -5,12 +5,12 @@
 // module places them in perspective, turns taps into queued actions, and plays the events back as floating
 // coins, moods and toasts. Between flights the intro card opens the upgrade shop; the wallet and the upgrades
 // belong to the run, so 重新开始 empties both.
-import { buy, callAt, createStage, discard, DISHES, levelOf, nextCost, rowOf, SEATS_PER_ROW, SKY, slotPhase, stageConfig, STAGES, STATION_ORDER, STATIONS, tapSeat, tapStation, tick, UPGRADES } from './skychef-core.js';
-import { drawBubble, drawBulkhead, drawCabinet, drawCoin, drawDish, drawDispenser, drawPill, drawSeat, drawSlotBase, drawStewardess, lookFor, THEMES } from './skychef-art.js';
+import { addFuel, burnFuel, buy, callAt, createStage, discard, DISHES, flightIn, FUEL, fuelAt, levelOf, nextFuelIn, nextCost, rowOf, SEATS_PER_ROW, SKY, slotPhase, stageConfig, STAGES, STATION_ORDER, STATIONS, tapSeat, tapStation, tick, UPGRADES } from './skychef-core.js';
+import { drawBubble, drawBulkhead, drawCabinet, drawCoin, drawDish, drawDispenser, drawNeed, drawPill, drawSeat, drawSlotBase, drawStewardess, lookFor, THEMES } from './skychef-art.js';
 
 const LW = 360;
 const LH = 600;
-const STORE = { best: 'pao-skychef-best', save: 'pao-skychef-save' };
+const STORE = { best: 'pao-skychef-best', save: 'pao-skychef-save', fuel: 'pao-skychef-fuel' };
 const readJson = (key) => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
 const writeJson = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ } };
 const calm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
@@ -56,6 +56,7 @@ function cartSlots(n) {
 // Cooker slots inside a station box: two big ones, or three smaller once upgraded.
 const cookerSlots = (n) => (n >= 3 ? { left: 21, step: 34, r: 15 } : { left: 30, step: 50, r: 17 });
 const seconds = (t) => `${Number(t.toFixed(1))}`;
+const clock = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const unlockRoute = (id) => [0, 0, 1, 2, 3, 4][STATION_ORDER.indexOf(id)] + 1;
 const ACCENT = { juice: '#ff9f2e', coffee: '#9c6a46', toast: '#e9b65a', cake: '#ff7fae', noodle: '#3fa6ff', meal: '#e0663c' };
 
@@ -65,6 +66,8 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
   let runScore = 0;
   let wallet = 0; // coins to spend: everything earned this run, cleared or not, less what the shop took
   let owned = {}; // upgrade id -> level bought this run
+  // The fuel tank belongs to the device, not the run: 重新开始 does not fill it.
+  let tank = fuelAt(readJson(STORE.fuel), Date.now());
   let best = Number(readJson(STORE.best)) || 0;
   let raf = 0;
   let last = 0;
@@ -93,6 +96,21 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     if (text !== lastHud) { lastHud = text; onHud(text); }
   };
   const save = (stage) => writeJson(STORE.save, { stage, score: runScore, wallet, owned });
+  const saveTank = () => writeJson(STORE.fuel, tank);
+  const fuelText = (now) => `燃油 ${tank.fuel}/${FUEL.max}${tank.fuel >= FUEL.max ? ' · 已加满' : ` · ${clock(nextFuelIn(tank, now))} 后 +1`}`;
+  // Keeps the fuel line and the take-off button of whatever card is up in step with the clock.
+  function refreshFuel() {
+    const now = Date.now();
+    tank = fuelAt(tank, now);
+    const line = overlay.querySelector('.skychef-fuel');
+    if (line) line.textContent = fuelText(now);
+    const go = overlay.querySelector('.skychef-go');
+    if (go) {
+      const wait = flightIn(tank, now);
+      go.disabled = wait > 0;
+      go.textContent = wait > 0 ? `燃油不够 · 还要 ${clock(wait)}` : `起飞 ✈ · 耗油 ${FUEL.cost}`;
+    }
+  }
 
   function begin(stage) {
     core = createStage(stage, owned);
@@ -124,8 +142,8 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     for (const line of lines) box.append(el('p', '', line));
     const note = el('p', 'skychef-note');
     box.append(note);
-    for (const { label, action, ghost } of buttons) {
-      const button = el('button', `skychef-again${ghost ? ' ghost' : ''}`, label);
+    for (const { label, action, ghost, extra } of buttons) {
+      const button = el('button', `skychef-again${ghost ? ' ghost' : ''}${extra ? ` ${extra}` : ''}`, label);
       button.addEventListener('click', action);
       box.append(button);
     }
@@ -140,7 +158,9 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       const st = STATIONS[dish], kit = core.kit.stations[dish];
       lines.push(st.cook === 0 ? `新菜：${DISHES[dish].name}，${st.name}点一下就能装上餐车` : `新菜：${DISHES[dish].name}，${st.name}要做 ${seconds(kit.cook)} 秒${kit.burn ? `，做好后 ${seconds(kit.burn)} 秒不拿就会糊` : ''}`);
     }
-    card(`第 ${core.stage} 关`, lines, [{ label: '起飞 ✈', action: start }, { label: `升级厨房 · 钱包 ${wallet}`, action: shop, ghost: true }]);
+    const note = card(`第 ${core.stage} 关`, lines, [{ label: '起飞 ✈', action: start, extra: 'skychef-go' }, { label: `升级厨房 · 钱包 ${wallet}`, action: shop, ghost: true }]);
+    note.before(el('p', 'skychef-fuel'));
+    refreshFuel();
   }
   // The shop: every upgrade with its level, what the next level does and what it costs. Buying rebuilds the
   // stage (it has not started yet) so the flight runs on the new numbers.
@@ -150,6 +170,25 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     const box = el('div', 'skychef-card skychef-shop');
     box.append(el('strong', '', '升级厨房'), el('p', 'skychef-purse', `钱包 ${wallet} 金币 · 升级只在这一轮有效`));
     const list = el('div', 'skychef-list');
+    // fuel bought with coins, as often as the wallet and the tank allow
+    const now = Date.now();
+    tank = fuelAt(tank, now);
+    const fuelRow = el('div', 'skychef-item');
+    const fuelInfo = el('div', 'skychef-item-text');
+    fuelInfo.append(el('b', '', `加油 +${FUEL.buy}`), el('span', '', tank.fuel >= FUEL.max ? `燃油 ${tank.fuel}/${FUEL.max} · 已加满` : `燃油 ${tank.fuel}/${FUEL.max}`));
+    const fill = el('button', 'skychef-buy', `${FUEL.price} 金币`);
+    fill.dataset.upgrade = 'fuel';
+    fill.disabled = wallet < FUEL.price || tank.fuel >= FUEL.max;
+    fill.addEventListener('click', () => {
+      if (wallet < FUEL.price) return;
+      wallet -= FUEL.price;
+      tank = addFuel(tank, Date.now(), FUEL.buy);
+      saveTank();
+      save(core.stage);
+      shop();
+    });
+    fuelRow.append(fuelInfo, fill);
+    list.append(fuelRow);
     for (const u of UPGRADES) {
       const level = levelOf(owned, u.id), cost = nextCost(owned, u.id);
       const locked = Boolean(u.need) && !core.config.dishes.includes(u.need);
@@ -178,10 +217,15 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     overlay.hidden = false;
   }
   function start() {
-    if (core.done) return;
+    if (core.done || playing) return false;
+    const r = burnFuel(tank, Date.now());
+    tank = r.tank;
+    if (!r.ok) { refreshFuel(); return false; }
+    saveTank();
     overlay.hidden = true;
     playing = true;
     poke();
+    return true;
   }
   function landed(result) {
     playing = false;
@@ -189,6 +233,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     const starLine = `${'★'.repeat(result.stars)}${'☆'.repeat(3 - result.stars)}  ${result.coins} 金币（目标 ${core.goals[0]}）`;
     const tally = `送达 ${result.served} 份 · 等不及的 ${result.missed} 位`;
     wallet += result.coins; // the coins are earned either way; only a cleared stage counts toward the score
+    if (result.stars === 3) { tank = addFuel(tank, Date.now(), FUEL.stars3); saveTank(); }
     if (!result.passed) {
       save(stage);
       card('金币不够', [starLine, tally, `赚到的 ${result.coins} 金币进了钱包，可以先升级再飞。这趟航班的订单不会变。`], [{ label: '重试本关', action: () => begin(stage) }]);
@@ -200,7 +245,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     if (lastStage) writeJson(STORE.save, { stage: 1, score: 0, wallet: 0, owned: {} });
     else save(stage + 1);
     hud();
-    const note = card(lastStage ? '全部航线飞完！' : '平稳落地', [starLine, tally, `总分 ${runScore} · 本机最佳 ${best}`], lastStage
+    const note = card(lastStage ? '全部航线飞完！' : '平稳落地', [starLine, tally, `总分 ${runScore} · 本机最佳 ${best}`, ...(result.stars === 3 ? [`三星奖励 +${FUEL.stars3} 燃油`] : [])], lastStage
       ? [{ label: '再飞一轮', action: restart }]
       : [{ label: '下一关', action: () => begin(stage + 1) }, { label: '重玩本关', action: () => { runScore -= result.coins; wallet -= result.coins; begin(stage); }, ghost: true }], 'won');
     onResult?.('skychef', runScore).then((text) => { if (text && note.isConnected) note.textContent = text; });
@@ -417,8 +462,8 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     const calls = [...core.calls].sort((a, b) => rowOf(b.seat) - rowOf(a.seat)); // far ones first, near ones on top
     for (const call of calls) {
       const { y, s } = depthAt(rows, rowOf(call.seat));
-      const k = Math.max(0.78, s);
-      const rect = drawBubble(ctx, seatX(call.seat % SEATS_PER_ROW, s), y - 102 * s, k, call, drawDish, now);
+      const k = Math.max(0.92, s * 1.08);
+      const rect = drawBubble(ctx, seatX(call.seat % SEATS_PER_ROW, s), y - 100 * s, k, call, drawDish, now, { cart: core.cart, left: 3, right: LW - 3 });
       bubbleHits.push({ seat: call.seat, ...rect });
     }
   }
@@ -433,7 +478,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       if (action.kind === 'serve') {
         const { y: fy, s } = depthAt(rows, rowOf(action.seat));
         x = seatX(action.seat % SEATS_PER_ROW, s) - 20 * s + n * 13; y = fy - 30 * s;
-      } else { const b = STATION_BOX.find((box) => box.id === action.id); x = b.x + b.w - 26 - n * 15; y = b.y + 11; }
+      } else { const b = STATION_BOX.find((box) => box.id === action.id); x = b.x + 12 + n * 15; y = b.y + b.h - 10; }
       ctx.beginPath(); ctx.arc(x, y, 7.5, 0, Math.PI * 2);
       ctx.fillStyle = '#ff4f7b'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
@@ -467,6 +512,11 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     }
     ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff'; ctx.font = '800 10px system-ui, sans-serif';
     ctx.fillText(`待办 ${core.queue.length}/${SKY.queue}`, LW - 10, CART.y + CART.h / 2);
+    // what the waiting passengers still need of each dish, beyond what the cart and the cookers already hold
+    const need = new Map();
+    for (const call of core.calls) for (const dish of call.left) need.set(dish, (need.get(dish) ?? 0) + 1);
+    for (const dish of core.cart) need.set(dish, (need.get(dish) ?? 0) - 1);
+    for (const [id, slots] of Object.entries(core.cookers)) for (const slot of slots) if (slot && slotPhase(id, slot) !== 'burnt') need.set(id, (need.get(id) ?? 0) - 1);
     // stations
     for (const b of STATION_BOX) {
       const open = core.config.dishes.includes(b.id);
@@ -489,6 +539,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       }
       ctx.fillStyle = '#9fb0cf'; ctx.font = '800 9px system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(`${STATION_ORDER.indexOf(b.id) + 1}`, b.x + b.w - 9, b.y + 12);
+      if ((need.get(b.id) ?? 0) > 0) drawNeed(ctx, b.x + b.w - 16, b.y + 11.5, need.get(b.id));
       if (st.cook === 0) { drawDispenser(ctx, b.id, b.x + b.w / 2, b.y + 42, drawDish); continue; }
       const { left, step, r } = cookerSlots(core.cookers[b.id].length);
       core.cookers[b.id].forEach((slot, i) => {
@@ -561,6 +612,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     if (busy && alive) raf = requestAnimationFrame(frame);
   }
 
+  const fuelTimer = setInterval(() => { if (alive && !overlay.hidden) refreshFuel(); }, 1000);
   // Pick up the run where it was left: the stage to fly next and the score so far.
   const saved = readJson(STORE.save);
   if (saved && Number.isInteger(saved.stage) && saved.stage >= 1 && saved.stage <= STAGES) {
@@ -576,6 +628,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     get runScore() { return runScore; },
     get wallet() { return wallet; },
     get owned() { return { ...owned }; },
+    get fuel() { return fuelAt(tank, Date.now()).fuel; },
     shop,
     restart,
     start,
@@ -594,6 +647,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     destroy() {
       alive = false;
       cancelAnimationFrame(raf);
+      clearInterval(fuelTimer);
       window.removeEventListener('keydown', onKey);
       wrap.replaceChildren();
     }

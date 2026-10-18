@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buy, callAt, createStage, discard, DISHES, GOALS, kitFor, levelOf, nextCost, orderValue, outcome, planOrders, ROUTES, SKY, slotPhase, stageConfig, STAGES, STATIONS, tapSeat, tapStation, tick, UPGRADES } from '../skychef-core.js';
+import { addFuel, burnFuel, buy, callAt, flightIn, FUEL, fuelAt, nextFuelIn, createStage, discard, DISHES, GOALS, kitFor, levelOf, nextCost, orderValue, outcome, planOrders, ROUTES, SKY, slotPhase, stageConfig, STAGES, STATIONS, tapSeat, tapStation, tick, UPGRADES } from '../skychef-core.js';
 import { play } from './skychef-bot.js';
 
 // Run the clock in small steps (tick swallows at most SKY.maxDt at a time) and collect the events.
@@ -266,4 +266,27 @@ test('pressure climbs over the stages, with calls that come in pairs, and each r
     assert.equal(stageConfig(st).burst, 0, `stage ${st} opens a route`);
     assert.ok(gaps(st).every((g) => g > 1), `stage ${st}`);
   }
+});
+
+test('fuel: a flight burns ten, the tank refills a unit a minute even while closed, and never past full', () => {
+  const t0 = 1_000_000;
+  assert.deepEqual(fuelAt(null, t0), { fuel: FUEL.max, at: t0 }); // a new player starts full
+  const first = burnFuel(fuelAt(null, t0), t0);
+  assert.deepEqual(first, { ok: true, tank: { fuel: FUEL.max - FUEL.cost, at: t0 } });
+  const minute = FUEL.every * 1000;
+  assert.equal(fuelAt(first.tank, t0 + minute - 1).fuel, FUEL.max - FUEL.cost);
+  assert.deepEqual(fuelAt(first.tank, t0 + minute * 2.5), { fuel: FUEL.max - FUEL.cost + 2, at: t0 + minute * 2 });
+  assert.equal(nextFuelIn(fuelAt(first.tank, t0 + minute * 2.5), t0 + minute * 2.5), minute / 2);
+  assert.deepEqual(fuelAt(first.tank, t0 + minute * 999), { fuel: FUEL.max, at: t0 + minute * 999 });
+  // running dry
+  const low = { fuel: 7, at: t0 };
+  assert.deepEqual(burnFuel(low, t0), { ok: false, tank: low });
+  assert.equal(flightIn(low, t0), 3 * minute);
+  assert.equal(flightIn(low, t0 + minute * 3), 0);
+  assert.equal(burnFuel(low, t0 + minute * 3).ok, true);
+  // topping up stops at full; a broken or future-dated save is handled
+  assert.deepEqual(addFuel(low, t0, 100), { fuel: FUEL.max, at: t0 });
+  assert.deepEqual(addFuel(low, t0, FUEL.buy), { fuel: 17, at: t0 });
+  assert.deepEqual(fuelAt({ fuel: 'x' }, t0), { fuel: FUEL.max, at: t0 });
+  assert.deepEqual(fuelAt({ fuel: 3, at: t0 + 5000 }, t0), { fuel: 3, at: t0 });
 });

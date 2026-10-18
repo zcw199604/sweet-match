@@ -1051,6 +1051,9 @@ test('空中大厨: landing with enough coins posts the run, and the next visit 
   await expect.poll(() => posts.length).toBe(1);
   expect(posts[0]).toMatchObject({ board: 'skychef', value: coins });
   await expect(page.locator('.skychef-note')).toContainText('全球第');
+  // stage 1 is a three-star flight for the test player: the take-off burned 10 and the stars paid 5 back
+  await expect(page.locator('.skychef-card')).toContainText('三星奖励 +5 燃油');
+  expect(await page.evaluate(() => window.__arcade.skychef.fuel)).toBe(45);
   await page.locator('#back-home').click();
   await page.locator('.arcade-card[data-mode="skychef"]').click();
   await expect(page.locator('.skychef-card strong')).toHaveText('第 2 关');
@@ -1067,6 +1070,32 @@ test('空中大厨: a flight where nobody is served fails, and 重试本关 flie
   await expect(page.locator('.skychef-card strong')).toHaveText('第 1 关');
   expect(await page.evaluate(() => JSON.stringify(window.__arcade.skychef.state.orders))).toBe(orders);
   expect((await skyState(page)).coins).toBe(0);
+});
+
+test('空中大厨: take-off burns fuel; with too little the button waits, and coins can buy more', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('pao-skychef-save', JSON.stringify({ stage: 1, score: 300 }));
+    localStorage.setItem('pao-skychef-fuel', JSON.stringify({ fuel: 4, at: Date.now() }));
+  });
+  await openSkychef(page);
+  await expect(page.locator('.skychef-fuel')).toContainText('燃油 4/50');
+  await expect(page.locator('.skychef-go')).toBeDisabled();
+  await expect(page.locator('.skychef-go')).toContainText('燃油不够 · 还要 5:'); // six units: the one filling now and five whole minutes
+  await page.locator('.skychef-again.ghost').click();
+  await page.locator('.skychef-buy[data-upgrade="fuel"]').click();
+  await expect(page.locator('.skychef-purse')).toContainText('钱包 150 金币');
+  await page.locator('.skychef-again', { hasText: '返回' }).click();
+  await expect(page.locator('.skychef-fuel')).toContainText('燃油 14/50');
+  await expect(page.locator('.skychef-go')).toHaveText('起飞 ✈ · 耗油 10');
+  await page.locator('.skychef-go').click();
+  await expect(page.locator('.skychef-overlay')).toBeHidden();
+  expect(await page.evaluate(() => window.__arcade.skychef.fuel)).toBe(4);
+  // the tank is kept on the device: leaving and coming back does not refill it
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="skychef"]').click();
+  await expect(page.locator('.skychef-go')).toBeDisabled();
 });
 
 test('空中大厨: coins from a flight buy upgrades before the next one, they stick, and 重新开始 empties the wallet', async ({ page }) => {

@@ -468,6 +468,8 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .canvas-wrap.suika-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6429)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6429)));aspect-ratio:360/560}
 .canvas-wrap.skychef-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6)));aspect-ratio:360/600}
 .skychef-card.skychef-shop{gap:calc(var(--u) * 2.4);padding:calc(var(--u) * 5) calc(var(--u) * 4);max-height:100%}
+.skychef-fuel{color:#ffb35c!important;font-weight:800}
+.skychef-again:disabled{opacity:.55;cursor:default}
 .skychef-purse{color:var(--yellow)!important;font-weight:800}
 .skychef-list{display:grid;gap:calc(var(--u) * 1.6);max-height:calc(var(--u) * 108);overflow-y:auto;overscroll-behavior:contain;text-align:left;padding-right:calc(var(--u) * 1)}
 .skychef-item{display:grid;grid-template-columns:1fr auto;align-items:center;gap:calc(var(--u) * 2);padding:calc(var(--u) * 2) calc(var(--u) * 3);border-radius:calc(var(--u) * 3);background:#ffffff10}

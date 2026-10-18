@@ -385,30 +385,42 @@ export function drawStewardess(ctx, x, y, s, cart, walking, now, drawItem) {
 }
 
 // ---- an order bubble: pale blue card, the patience bar on top, the dishes inside ----
-export function drawBubble(ctx, cx, bottom, k, call, drawItem, now) {
+// Dishes the cart already carries get a green dot, so it is plain on a phone what can be handed over now.
+// The card stays between `left` and `right`; its pointer still points at the passenger.
+export function drawBubble(ctx, cx, bottom, k, call, drawItem, now, { cart = [], left: minX = -Infinity, right: maxX = Infinity } = {}) {
   const n = call.items.length;
-  const w = (n * 24 + 12) * k, h = 32 * k;
-  const x = cx - w / 2, y = bottom - h - 6 * k;
+  const w = (n * 31 + 10) * k, h = 40 * k;
+  const x = Math.max(minX, Math.min(maxX - w, cx - w / 2)), y = bottom - h - 6 * k;
   const share = Math.max(0, Math.min(1, call.patience / call.max));
   ctx.save();
   ctx.shadowColor = '#00000040'; ctx.shadowBlur = 6 * k; ctx.shadowOffsetY = 2 * k;
-  rr(ctx, x, y, w, h, 7 * k);
-  ctx.fillStyle = '#d7efff'; ctx.fill();
+  const px = Math.max(x + 9 * k, Math.min(x + w - 9 * k, cx));
+  ctx.beginPath(); ctx.moveTo(px - 7 * k, y + h - 1); ctx.lineTo(px, bottom); ctx.lineTo(px + 7 * k, y + h - 1); ctx.closePath();
+  ctx.fillStyle = '#1f3c74'; ctx.fill();
+  rr(ctx, x, y, w, h, 8 * k);
+  ctx.fillStyle = '#1f3c74'; ctx.fill();
   ctx.shadowColor = 'transparent';
-  ctx.lineWidth = 2 * k; ctx.strokeStyle = '#ffffff'; ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx - 6 * k, y + h - 1); ctx.lineTo(cx, bottom); ctx.lineTo(cx + 6 * k, y + h - 1); ctx.closePath();
-  ctx.fillStyle = '#d7efff'; ctx.fill();
-  // what is still owed is drawn bright, what was handed over is faded with a tick
-  const left = [...call.left];
+  rr(ctx, x + 2 * k, y + 2 * k, w - 4 * k, h - 4 * k, 6.5 * k);
+  ctx.fillStyle = '#e3f4ff'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(px - 5 * k, y + h - 3 * k); ctx.lineTo(px, bottom - 3 * k); ctx.lineTo(px + 5 * k, y + h - 3 * k); ctx.closePath();
+  ctx.fill();
+  // what is still owed is drawn bright (with a green dot when the cart has it), what was handed over is faded with a tick
+  const left = [...call.left], onCart = [...cart];
   call.items.forEach((dish, i) => {
     const at = left.indexOf(dish), owed = at >= 0;
     if (owed) left.splice(at, 1);
-    const ix = x + (12 + i * 24) * k;
-    drawItem(ctx, dish, ix, y + h / 2, 21 * k, { alpha: owed ? 1 : 0.3 });
-    if (!owed) { ctx.fillStyle = '#21a85a'; ctx.font = `900 ${13 * k}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✓', ix, y + h / 2); }
+    const ix = x + (5 + 15.5 + i * 31) * k, iy = y + h / 2;
+    drawItem(ctx, dish, ix, iy, 29 * k, { alpha: owed ? 1 : 0.28 });
+    if (!owed) { ctx.fillStyle = '#21a85a'; ctx.font = `900 ${18 * k}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✓', ix, iy); return; }
+    const has = onCart.indexOf(dish);
+    if (has < 0) return;
+    onCart.splice(has, 1);
+    ctx.beginPath(); ctx.arc(ix + 11 * k, iy - 11 * k, 5 * k, 0, Math.PI * 2);
+    ctx.fillStyle = '#2fcf6a'; ctx.fill();
+    ctx.lineWidth = 1.5 * k; ctx.strokeStyle = '#ffffff'; ctx.stroke();
   });
   // patience: red underneath, green for what is left; it blinks when nearly gone
-  const by = y - 8 * k, bh = 5 * k;
+  const by = y - 9 * k, bh = 6 * k;
   rr(ctx, x + 2 * k, by, w - 4 * k, bh, bh / 2);
   ctx.fillStyle = '#e8323c'; ctx.fill();
   if (share > 0) {
@@ -418,6 +430,16 @@ export function drawBubble(ctx, cx, bottom, k, call, drawItem, now) {
   ctx.lineWidth = 1; ctx.strokeStyle = '#1c2a4a88'; rr(ctx, x + 2 * k, by, w - 4 * k, bh, bh / 2); ctx.stroke();
   ctx.restore();
   return { x, y: by, w, h: bottom - by };
+}
+// How many more of a dish the waiting passengers need, as a badge on its station's name plate.
+export function drawNeed(ctx, rightX, cy, count) {
+  const text = `缺 ${count}`;
+  ctx.font = '900 10px system-ui, sans-serif';
+  const w = ctx.measureText(text).width + 10;
+  rr(ctx, rightX - w, cy - 7, w, 14, 7);
+  ctx.fillStyle = '#ff4f5e'; ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, rightX - w / 2, cy + 0.5);
 }
 
 // ---- galley stations: a steel cabinet with a dark name plate and the appliance in front ----

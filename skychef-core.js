@@ -141,6 +141,37 @@ export function buy(owned, wallet, id, menu = STATION_ORDER) {
   return { ok: true, owned: { ...owned, [id]: levelOf(owned, id) + 1 }, wallet: wallet - cost, cost };
 }
 
+// Fuel: every flight burns some, and the tank refills on its own over time, also while the game is closed.
+// A tank is { fuel, at }: `at` (ms) is when the unit now filling started; a full tank is not filling.
+export const FUEL = { max: 50, cost: 10, every: 60, buy: 10, price: 150, stars3: 5 };
+const tankOf = (fuel, at) => ({ fuel, at });
+export function fuelAt(tank, now) {
+  const fuel = Math.floor(Number(tank?.fuel));
+  const at = Number(tank?.at);
+  if (!Number.isFinite(fuel) || !Number.isFinite(at)) return tankOf(FUEL.max, now);
+  if (fuel >= FUEL.max) return tankOf(FUEL.max, now);
+  if (now < at) return tankOf(Math.max(0, fuel), now); // the clock went back: start the unit over
+  const gained = Math.floor((now - at) / (FUEL.every * 1000));
+  const next = Math.max(0, fuel) + gained;
+  return next >= FUEL.max ? tankOf(FUEL.max, now) : tankOf(next, at + gained * FUEL.every * 1000);
+}
+// Milliseconds until the next unit, and until there is enough for a flight (0 when there already is).
+export const nextFuelIn = (tank, now) => (tank.fuel >= FUEL.max ? 0 : Math.max(0, tank.at + FUEL.every * 1000 - now));
+export function flightIn(tank, now) {
+  const t = fuelAt(tank, now);
+  return t.fuel >= FUEL.cost ? 0 : nextFuelIn(t, now) + (FUEL.cost - t.fuel - 1) * FUEL.every * 1000;
+}
+export function burnFuel(tank, now, amount = FUEL.cost) {
+  const t = fuelAt(tank, now);
+  if (t.fuel < amount) return { ok: false, tank: t };
+  return { ok: true, tank: tankOf(t.fuel - amount, t.fuel >= FUEL.max ? now : t.at) }; // a full tank starts filling now
+}
+export function addFuel(tank, now, amount) {
+  const t = fuelAt(tank, now);
+  const fuel = Math.min(FUEL.max, t.fuel + amount);
+  return tankOf(fuel, fuel >= FUEL.max ? now : t.at);
+}
+
 export function createStage(stage, owned = {}) {
   const config = stageConfig(stage);
   const kit = kitFor(owned);
