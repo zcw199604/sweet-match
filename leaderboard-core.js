@@ -26,6 +26,8 @@ export const BOARDS = {
   // 合成大西瓜：一局是落水果加合成，每次合成最多 66 分加最多 10 分连击，上限按「一局里不可能打到」来定，二十万封顶。
   suika: { game: 'suika', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 200_000 },
   // 俄罗斯方块按得分，三档难度各一份榜。分数没有天然上限，一千万封顶只用来挡住明显的乱填。
+  // 空中大厨按一轮 30 关累计的金币，每过一关提交一次。满星一轮大约一万出头，十万封顶挡乱填。
+  skychef: { game: 'skychef', label: '', order: 'desc', unit: '金币', scale: 1, min: 1, max: 100_000 },
   'tetris-easy': { game: 'tetris', label: '简单', order: 'desc', unit: '分', scale: 1, min: 1, max: 10_000_000 },
   'tetris-normal': { game: 'tetris', label: '普通', order: 'desc', unit: '分', scale: 1, min: 1, max: 10_000_000 },
   'tetris-hard': { game: 'tetris', label: '困难', order: 'desc', unit: '分', scale: 1, min: 1, max: 10_000_000 },
@@ -46,6 +48,7 @@ export const GAMES = [
   { id: 'g2048', title: '2048' },
   { id: 'suika', title: '合成大西瓜' },
   { id: 'tetris', title: '俄罗斯方块' },
+  { id: 'skychef', title: '空中大厨' },
   { id: 'sudoku', title: '数独' },
   { id: 'minesweeper', title: '扫雷' },
   { id: 'doudizhu', title: '斗地主' },

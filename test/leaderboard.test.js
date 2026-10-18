@@ -172,6 +172,13 @@ test('合成大西瓜 has one score board, higher is better', () => {
   assert.ok(GAMES.some((game) => game.id === 'suika'));
 });
 
+test('空中大厨 has one coin board, higher is better', () => {
+  assert.deepEqual(boardsOf('skychef'), ['skychef']);
+  assert.equal(BOARDS.skychef.order, 'desc');
+  assert.equal(BOARDS.skychef.unit, '金币');
+  assert.ok(GAMES.some((game) => game.id === 'skychef'));
+});
+
 test('俄罗斯方块 has one score board per difficulty, higher is better', () => {
   assert.deepEqual(boardsOf('tetris'), ['tetris-easy', 'tetris-normal', 'tetris-hard']);
   assert.ok(boardsOf('tetris').every((id) => BOARDS[id].order === 'desc' && BOARDS[id].scale === 1));
