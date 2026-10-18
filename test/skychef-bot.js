@@ -1,7 +1,7 @@
 // A greedy player for 空中大厨, used by the tests to check every stage can be cleared and to tune the numbers.
 // It only taps when the chef has nothing left to do, at most once every `react` seconds, so it plays like a
 // careful human rather than a perfect planner.
-import { SKY, STATIONS, callAt, slotPhase, tapSeat, tapStation, tick } from '../skychef-core.js';
+import { STATIONS, callAt, slotPhase, tapSeat, tapStation, tick } from '../skychef-core.js';
 
 const count = (list) => list.reduce((map, dish) => map.set(dish, (map.get(dish) ?? 0) + 1), new Map());
 
@@ -20,7 +20,7 @@ export function decide(s) {
     if (spare.get(dish)) spare.set(dish, spare.get(dish) - 1);
     else need.push(dish);
   }
-  const room = s.cart.length < SKY.cart;
+  const room = s.cart.length < s.kit.cart;
   const stationTap = () => {
     for (const [id, slots] of Object.entries(s.cookers)) if (slots.some((slot) => slotPhase(id, slot) === 'burnt')) return { station: id };
     if (room) for (const dish of need) if (s.cookers[dish]?.some((slot) => slotPhase(dish, slot) === 'ready')) return { station: dish };

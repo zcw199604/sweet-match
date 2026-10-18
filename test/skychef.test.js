@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { callAt, createStage, discard, DISHES, GOALS, orderValue, outcome, planOrders, ROUTES, SKY, slotPhase, stageConfig, STAGES, STATIONS, tapSeat, tapStation, tick } from '../skychef-core.js';
+import { buy, callAt, createStage, discard, DISHES, GOALS, kitFor, levelOf, nextCost, orderValue, outcome, planOrders, ROUTES, SKY, slotPhase, stageConfig, STAGES, STATIONS, tapSeat, tapStation, tick, UPGRADES } from '../skychef-core.js';
 import { play } from './skychef-bot.js';
 
 // Run the clock in small steps (tick swallows at most SKY.maxDt at a time) and collect the events.
@@ -192,4 +192,78 @@ test('a careful player clears every stage, and the last route is hard for a slow
   assert.equal(outcome(early).stars, 3);
   const late = play(createStage(30), { react: 1 });
   assert.ok(outcome(late).stars <= 1, `slow player got ${outcome(late).stars} stars on stage 30`);
+});
+
+test('upgrades are bought in order, cost coins, stop at the top level, and wait for their dish', () => {
+  assert.equal(new Set(UPGRADES.map((u) => u.id)).size, UPGRADES.length);
+  for (const u of UPGRADES) assert.equal(u.costs.length, u.says.length, u.id);
+  const menu = stageConfig(1).dishes;
+  assert.deepEqual(buy({}, 10_000, 'taste-meal', menu), { ok: false, reason: 'locked' });
+  assert.deepEqual(buy({}, 10, 'cart', menu), { ok: false, reason: 'coins' });
+  const first = buy({}, 2000, 'cart', menu);
+  assert.deepEqual(first, { ok: true, owned: { cart: 1 }, wallet: 2000 - UPGRADES[0].costs[0], cost: UPGRADES[0].costs[0] });
+  const second = buy(first.owned, first.wallet, 'cart', menu);
+  assert.equal(second.ok, true);
+  assert.equal(levelOf(second.owned, 'cart'), 2);
+  assert.equal(nextCost(second.owned, 'cart'), null);
+  assert.deepEqual(buy(second.owned, 99_999, 'cart', menu), { ok: false, reason: 'max' });
+  assert.deepEqual(first.owned, { cart: 1 }); // nothing passed in is changed
+  assert.equal(levelOf({ cart: 7 }, 'cart'), 2);
+  assert.equal(levelOf({ cart: 'x' }, 'cart'), 0);
+});
+
+test('the kit carries the upgrades into a flight: cart, walk, patience, cookers and prices', () => {
+  const base = kitFor({});
+  assert.equal(base.cart, SKY.cart);
+  assert.equal(base.walk, SKY.walk);
+  assert.deepEqual(base.stations.toast, { cook: STATIONS.toast.cook, burn: STATIONS.toast.burn, slots: 2 });
+  const kit = kitFor({ cart: 2, shoes: 1, seats: 2, 'fast-toast': 2, 'fast-coffee': 1, 'taste-juice': 2 });
+  assert.equal(kit.cart, SKY.cart + 2);
+  assert.ok(Math.abs(kit.walk - SKY.walk * 1.15) < 1e-9);
+  assert.ok(Math.abs(kit.patience - 1.3) < 1e-9);
+  assert.deepEqual(kit.stations.toast, { cook: STATIONS.toast.cook * 0.75, burn: STATIONS.toast.burn + 3, slots: 3 });
+  assert.deepEqual(kit.stations.coffee, { cook: STATIONS.coffee.cook * 0.75, burn: 0, slots: 2 }); // coffee never burns
+  assert.equal(kit.prices.juice, Math.round(DISHES.juice.price * 1.4));
+
+  const s = createStage(13, { 'fast-toast': 2, 'taste-juice': 2, seats: 2 });
+  s.orders = [{ t: 9999, items: ['juice'] }];
+  assert.equal(s.cookers.toast.length, 3);
+  for (let i = 0; i < 3; i += 1) tapStation(s, 'toast');
+  run(s, 0.05);
+  assert.ok(s.cookers.toast.every((slot) => slot && slotPhase('toast', slot) === 'cooking'));
+  run(s, STATIONS.toast.cook * 0.75);
+  assert.ok(s.cookers.toast.every((slot) => slotPhase('toast', slot) === 'ready'));
+  // the dear juice pays its upgraded price; the goals stay on the base prices
+  s.cart = ['juice'];
+  s.calls.push({ id: 1, seat: 0, items: ['juice'], left: ['juice'], patience: 20, max: 20 });
+  tapSeat(s, 0);
+  const pay = run(s, 0.3).find((e) => e.type === 'pay');
+  assert.equal(pay.value, kitFor({ 'taste-juice': 2 }).prices.juice);
+  assert.deepEqual(s.goals, createStage(13).goals);
+});
+
+test('passengers wait longer in comfier seats, and upgrades lift a slow player on the last stage', () => {
+  const plain = createStage(1), comfy = createStage(1, { seats: 2 });
+  run(plain, plain.orders[0].t + 0.05);
+  run(comfy, comfy.orders[0].t + 0.05);
+  assert.ok(Math.abs(comfy.calls[0].max - plain.calls[0].max * 1.3) < 1e-9);
+  const all = Object.fromEntries(UPGRADES.map((u) => [u.id, u.costs.length]));
+  const before = outcome(play(createStage(28), { react: 1 }));
+  const after = outcome(play(createStage(28, all), { react: 1 }));
+  assert.ok(after.coins > before.coins * 1.5, `${before.coins} → ${after.coins}`);
+  assert.ok(after.stars > before.stars);
+});
+
+test('pressure climbs over the stages, with calls that come in pairs, and each route opens gently', () => {
+  for (let st = 2; st <= STAGES; st += 1) {
+    const a = stageConfig(st - 1), b = stageConfig(st);
+    if (b.fresh.length) continue; // a new route eases off for its first stage
+    assert.ok(b.gap <= a.gap && b.patience <= a.patience && b.orders >= a.orders, `stage ${st}`);
+  }
+  const gaps = (st) => planOrders(stageConfig(st)).map((o, i, list) => (i ? o.t - list[i - 1].t : Infinity));
+  assert.ok(gaps(30).some((g) => g < 0.5), 'late stages have calls right after one another');
+  for (const st of [1, 7, 13, 19, 25]) {
+    assert.equal(stageConfig(st).burst, 0, `stage ${st} opens a route`);
+    assert.ok(gaps(st).every((g) => g > 1), `stage ${st}`);
+  }
 });

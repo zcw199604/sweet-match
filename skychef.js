@@ -1,8 +1,12 @@
-// 空中大厨: the view. One 2D canvas seen from above: the score plaques on top, the cabin with its rows of
-// passengers and their order bubbles, the aisle the chef walks along, and the galley at the bottom with the
-// cart and the six stations. skychef-core.js runs the flight; this module draws it, turns taps into queued
-// actions, and plays the events back as floating coins, moods and toasts.
-import { callAt, createStage, discard, DISHES, outcome, rowOf, SEATS_PER_ROW, SKY, slotPhase, stageConfig, STAGES, STATION_ORDER, STATIONS, tapSeat, tapStation, tick } from './skychef-core.js';
+// 空中大厨: the view. One 2D canvas in the style of a cartoon airliner: we stand at the back of the aisle and
+// look up the cabin, the passengers facing us in their seats (nearer rows bigger), the route's city mural on the
+// far bulkhead, the stewardess pushing her cart away from us, and the steel galley along the bottom with the
+// cart's tray and the six stations. skychef-core.js runs the flight and skychef-art.js holds the drawings; this
+// module places them in perspective, turns taps into queued actions, and plays the events back as floating
+// coins, moods and toasts. Between flights the intro card opens the upgrade shop; the wallet and the upgrades
+// belong to the run, so 重新开始 empties both.
+import { buy, callAt, createStage, discard, DISHES, levelOf, nextCost, rowOf, SEATS_PER_ROW, SKY, slotPhase, stageConfig, STAGES, STATION_ORDER, STATIONS, tapSeat, tapStation, tick, UPGRADES } from './skychef-core.js';
+import { drawBubble, drawBulkhead, drawCabinet, drawCoin, drawDish, drawDispenser, drawPill, drawSeat, drawSlotBase, drawStewardess, lookFor, THEMES } from './skychef-art.js';
 
 const LW = 360;
 const LH = 600;
@@ -17,186 +21,50 @@ const el = (tag, className, text) => {
   return node;
 };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
 }
 
 // ---- layout (logical px) ----
-const CABIN = { x: 10, y: 50, w: 340, h: 356, top: 72, bottom: 396 };
+// The cabin is a one-point perspective: depth d counts rows from the nearest (0), each row a fixed step up the
+// screen and 7.5% smaller. Seats and walls close in on the aisle as they shrink.
 const AISLE = 180;
-const COLX = [52, 114, 246, 308]; // seat centres, left window to right window
-const SEAT_W = 58;
+const FLOOR = 398; // the floor under the nearest row
 const GALLEY_Y = 412;
-const CART = { x: 82, y: 418, slot: 44, gap: 6, h: 34 };
-const STATION_BOX = STATION_ORDER.map((id, i) => ({ id, x: 12 + (i % 3) * 114, y: 460 + Math.floor(i / 3) * 70, w: 108, h: 64 }));
-const pitchOf = (rows) => Math.min(66, (CABIN.bottom - CABIN.top) / rows);
-const rowY = (rows, row) => CABIN.bottom - pitchOf(rows) * (row + 0.5);
-function chefY(rows, pos) {
-  const first = rowY(rows, 0);
-  return pos <= 1 ? GALLEY_Y - 6 + (first - GALLEY_Y + 6) * pos : first - (pos - 1) * pitchOf(rows);
+const SEAT_BASE = [46, 110, 250, 314]; // seat centres at full size, left window to right window
+const SHRINK = 0.075;
+const depthAt = (rows, d) => {
+  const pitch = Math.min(76, 300 / rows);
+  return { y: FLOOR - pitch * d, s: 1 - SHRINK * d };
+};
+const seatX = (col, s) => AISLE + (SEAT_BASE[col] - AISLE) * s;
+const wallX = (s) => AISLE - 166 * s; // inner edge of the left wall; the right one mirrors it
+// Where the stewardess stands: pos 0 is the galley door (her legs behind the counter), pos i + 1 is row i.
+function chefAt(rows, pos) {
+  if (pos >= 1) return depthAt(rows, pos - 1);
+  const first = depthAt(rows, 0);
+  return { y: lerp(GALLEY_Y + 26, first.y, pos), s: lerp(1.06, first.s, pos) };
 }
+const CART = { x: 70, span: 222, y: 418, gap: 6, h: 32 }; // the slots share the span, however many the cart has
+const STATION_BOX = STATION_ORDER.map((id, i) => ({ id, x: 10 + (i % 3) * 115, y: 458 + Math.floor(i / 3) * 71, w: 110, h: 66 }));
+function cartSlots(n) {
+  const w = (CART.span - CART.gap * (n - 1)) / n;
+  return Array.from({ length: n }, (_, i) => ({ x: CART.x + i * (w + CART.gap), w }));
+}
+// Cooker slots inside a station box: two big ones, or three smaller once upgraded.
+const cookerSlots = (n) => (n >= 3 ? { left: 21, step: 34, r: 15 } : { left: 30, step: 50, r: 17 });
+const seconds = (t) => `${Number(t.toFixed(1))}`;
 const unlockRoute = (id) => [0, 0, 1, 2, 3, 4][STATION_ORDER.indexOf(id)] + 1;
-
-// ---- art ----
 const ACCENT = { juice: '#ff9f2e', coffee: '#9c6a46', toast: '#e9b65a', cake: '#ff7fae', noodle: '#3fa6ff', meal: '#e0663c' };
-const SKIN = ['#ffd9b8', '#f1c09a', '#d99e72', '#a8704a', '#ffe6d2'];
-const HAIR = ['#3a2a22', '#6b4226', '#e8c15a', '#c2502e', '#2b2f4a', '#9a9aa8', '#f08ab8', '#5b8cff'];
-
-// One dish centred on (x, y), about `s` px across.
-function drawDish(ctx, dish, x, y, s, { alpha = 1 } = {}) {
-  const u = s / 24;
-  ctx.save();
-  ctx.globalAlpha *= alpha;
-  ctx.translate(x, y);
-  ctx.scale(u, u);
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  const blob = (fill, path) => { ctx.beginPath(); path(); ctx.fillStyle = fill; ctx.fill(); };
-  switch (dish) {
-    case 'juice':
-      blob('#ffffffaa', () => { ctx.moveTo(-7, -10); ctx.lineTo(7, -10); ctx.lineTo(5, 11); ctx.lineTo(-5, 11); ctx.closePath(); });
-      blob('#ff9f2e', () => { ctx.moveTo(-6.3, -5); ctx.lineTo(6.3, -5); ctx.lineTo(4.5, 10); ctx.lineTo(-4.5, 10); ctx.closePath(); });
-      blob('#ffd08a', () => { ctx.ellipse(-2, 0, 1.4, 4, 0, 0, Math.PI * 2); });
-      ctx.strokeStyle = '#ff4f7b'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(2, 4); ctx.lineTo(4, -13); ctx.lineTo(8, -13); ctx.stroke();
-      blob('#ffe066', () => { ctx.arc(-6, -10, 4, 0, Math.PI * 2); });
-      break;
-    case 'coffee':
-      blob('#b8c2dc', () => { ctx.ellipse(0, 8, 11, 3.5, 0, 0, Math.PI * 2); });
-      blob('#2fb7bf', () => { ctx.moveTo(-8, -3); ctx.lineTo(8, -3); ctx.quadraticCurveTo(8, 8, 0, 8); ctx.quadraticCurveTo(-8, 8, -8, -3); });
-      ctx.strokeStyle = '#2fb7bf'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(9, 1.5, 3.2, -1.3, 1.3); ctx.stroke();
-      blob('#ffffff', () => { ctx.ellipse(0, -3, 8, 2.6, 0, 0, Math.PI * 2); });
-      blob('#7a4a2c', () => { ctx.ellipse(0, -3, 6.6, 1.9, 0, 0, Math.PI * 2); });
-      ctx.strokeStyle = '#b8c2dc'; ctx.lineWidth = 1.6;
-      for (const dx of [-3, 2]) { ctx.beginPath(); ctx.moveTo(dx, -7); ctx.quadraticCurveTo(dx + 3, -10, dx, -13); ctx.stroke(); }
-      break;
-    case 'toast':
-      blob('#e9b65a', () => { ctx.moveTo(-11, 9); ctx.lineTo(11, 9); ctx.lineTo(0, -11); ctx.closePath(); });
-      blob('#57c25a', () => { ctx.moveTo(-9, 5); ctx.lineTo(9, 5); ctx.lineTo(7.6, 7.4); ctx.lineTo(-7.6, 7.4); ctx.closePath(); });
-      blob('#ff5d5d', () => { ctx.moveTo(-8, 2.5); ctx.lineTo(8, 2.5); ctx.lineTo(7.2, 4.6); ctx.lineTo(-7.2, 4.6); ctx.closePath(); });
-      blob('#fff2c9', () => { ctx.moveTo(-6, 0.5); ctx.lineTo(6, 0.5); ctx.lineTo(0, -8); ctx.closePath(); });
-      break;
-    case 'cake':
-      blob('#ffd6a8', () => { ctx.moveTo(-10, 9); ctx.lineTo(10, 9); ctx.lineTo(10, -2); ctx.lineTo(-10, 2); ctx.closePath(); });
-      blob('#ff7fae', () => { ctx.moveTo(-10, 4); ctx.lineTo(10, 1); ctx.lineTo(10, 4); ctx.lineTo(-10, 7); ctx.closePath(); });
-      blob('#ffffff', () => { ctx.moveTo(-11, 2); ctx.lineTo(11, -3); ctx.quadraticCurveTo(11, -8, 4, -7); ctx.lineTo(-11, -1); ctx.closePath(); });
-      blob('#e8174a', () => { ctx.arc(4, -10, 3.6, 0, Math.PI * 2); });
-      blob('#ffffffaa', () => { ctx.arc(3, -11, 1, 0, Math.PI * 2); });
-      break;
-    case 'noodle':
-      blob('#3fa6ff', () => { ctx.moveTo(-12, -1); ctx.lineTo(12, -1); ctx.quadraticCurveTo(11, 11, 0, 11); ctx.quadraticCurveTo(-11, 11, -12, -1); });
-      blob('#ffffff', () => { ctx.ellipse(0, -1, 12, 4, 0, 0, Math.PI * 2); });
-      blob('#f4c95a', () => { ctx.ellipse(0, -1, 10, 3, 0, 0, Math.PI * 2); });
-      ctx.strokeStyle = '#d9a43a'; ctx.lineWidth = 1.2;
-      for (const dx of [-6, -2, 2]) { ctx.beginPath(); ctx.moveTo(dx, -3); ctx.quadraticCurveTo(dx + 2, 0, dx + 4, -2.5); ctx.stroke(); }
-      blob('#ffffff', () => { ctx.arc(6, -2, 2.6, 0, Math.PI * 2); });
-      blob('#ffc23d', () => { ctx.arc(6, -2, 1.2, 0, Math.PI * 2); });
-      blob('#3fbf5a', () => { ctx.ellipse(-7, -2.5, 2, 1.1, 0.4, 0, Math.PI * 2); });
-      ctx.strokeStyle = '#ffffff99'; ctx.lineWidth = 1.5;
-      for (const dx of [-3, 3]) { ctx.beginPath(); ctx.moveTo(dx, -7); ctx.quadraticCurveTo(dx + 3, -10, dx, -13); ctx.stroke(); }
-      break;
-    case 'meal':
-      blob('#e9eef7', () => { ctx.ellipse(0, 1, 13, 10, 0, 0, Math.PI * 2); });
-      blob('#ffffff', () => { ctx.ellipse(0, 0, 11.5, 8.6, 0, 0, Math.PI * 2); });
-      blob('#a8542c', () => { ctx.ellipse(-2, 0.5, 6.5, 4.6, -0.3, 0, Math.PI * 2); });
-      ctx.strokeStyle = '#6e3418'; ctx.lineWidth = 1.2;
-      for (const dx of [-5, -2, 1]) { ctx.beginPath(); ctx.moveTo(dx, -2.5); ctx.lineTo(dx + 2.5, 3.5); ctx.stroke(); }
-      blob('#fff7e8', () => { ctx.arc(6.5, -3, 3.2, 0, Math.PI * 2); });
-      blob('#3fbf5a', () => { ctx.arc(6.5, 4, 2.6, 0, Math.PI * 2); ctx.arc(8.5, 2.8, 2, 0, Math.PI * 2); });
-      break;
-    default: // charcoal
-      blob('#2b2228', () => { ctx.ellipse(0, 3, 10, 7, 0, 0, Math.PI * 2); });
-      blob('#4a3a40', () => { ctx.ellipse(-3, 1, 4, 2.5, 0, 0, Math.PI * 2); });
-      ctx.strokeStyle = '#8a8a9a99'; ctx.lineWidth = 2;
-      for (const dx of [-4, 3]) { ctx.beginPath(); ctx.moveTo(dx, -4); ctx.quadraticCurveTo(dx + 4, -8, dx, -13); ctx.stroke(); }
-  }
-  ctx.restore();
-}
-
-// A passenger in a seat, nose of the plane up: a round head with a face and hair, shoulders, maybe a hat.
-function drawPassenger(ctx, x, y, look, mood, now) {
-  const { skin, hair, style } = look;
-  const shake = mood === 'angry' ? Math.sin(now / 40) * 1.5 : 0;
-  ctx.save();
-  ctx.translate(x + shake, y);
-  // shoulders
-  ctx.fillStyle = look.shirt;
-  roundRect(ctx, -15, 6, 30, 16, 8);
-  ctx.fill();
-  // head
-  ctx.fillStyle = skin;
-  ctx.beginPath(); ctx.arc(0, -2, 11, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = hair;
-  ctx.beginPath();
-  if (style === 0) { ctx.arc(0, -4, 11.5, Math.PI * 1.05, Math.PI * 1.95); ctx.fill(); }
-  else if (style === 1) { ctx.arc(0, -4, 11.5, Math.PI * 1.05, Math.PI * 1.95); ctx.fill(); ctx.beginPath(); ctx.arc(0, -15, 5, 0, Math.PI * 2); ctx.fill(); }
-  else if (style === 2) { ctx.arc(0, -3, 12.5, Math.PI * 0.95, Math.PI * 2.05); ctx.lineTo(12.5, 6); ctx.lineTo(9, 6); ctx.lineTo(9, -2); ctx.lineTo(-9, -2); ctx.lineTo(-9, 6); ctx.lineTo(-12.5, 6); ctx.closePath(); ctx.fill(); }
-  else { ctx.arc(0, -5, 11.5, Math.PI, Math.PI * 2); ctx.fill(); ctx.fillRect(-13, -6, 26, 3); }
-  // face
-  ctx.fillStyle = '#2a1636';
-  const eyeY = -1;
-  if (mood === 'happy') {
-    ctx.strokeStyle = '#2a1636'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
-    for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(side * 4, eyeY + 1, 2, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
-    ctx.beginPath(); ctx.arc(0, 3, 3.4, 0.15, Math.PI - 0.15); ctx.stroke();
-  } else {
-    for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(side * 4, eyeY, 1.6, 0, Math.PI * 2); ctx.fill(); }
-    ctx.strokeStyle = '#2a1636'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
-    ctx.beginPath();
-    if (mood === 'angry' || mood === 'cross') {
-      ctx.arc(0, 7, 3, Math.PI * 1.2, Math.PI * 1.8);
-      ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-6.5, eyeY - 4.5); ctx.lineTo(-2, eyeY - 3); ctx.moveTo(6.5, eyeY - 4.5); ctx.lineTo(2, eyeY - 3);
-    } else {
-      ctx.moveTo(-2, 4.5); ctx.lineTo(2, 4.5);
-    }
-    ctx.stroke();
-  }
-  if (mood !== 'angry') {
-    ctx.fillStyle = '#ff6d8a44';
-    for (const side of [-1, 1]) { ctx.beginPath(); ctx.ellipse(side * 7, 2.5, 2.4, 1.5, 0, 0, Math.PI * 2); ctx.fill(); }
-  }
-  ctx.restore();
-}
-
-// The chef seen from above, pushing the cart up the aisle (the cart is on the nose side).
-function drawChef(ctx, x, y, cart, walking, now) {
-  const bob = walking && !calm() ? Math.sin(now / 70) * 1.4 : 0;
-  ctx.save();
-  ctx.translate(x, y + bob);
-  // cart
-  ctx.fillStyle = '#c9d2e6';
-  roundRect(ctx, -15, -40, 30, 24, 5); ctx.fill();
-  ctx.fillStyle = '#eef2fb';
-  roundRect(ctx, -13, -38, 26, 20, 4); ctx.fill();
-  ctx.strokeStyle = '#8f9bb8'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-15, -15); ctx.lineTo(15, -15); ctx.stroke();
-  cart.slice(0, 4).forEach((dish, i) => drawDish(ctx, dish, -6.5 + (i % 2) * 13, -33 + Math.floor(i / 2) * 10, 11));
-  // body and arms
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.ellipse(0, 2, 14, 11, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#d7deec'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.fillStyle = '#ffd9b8';
-  for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(side * 11, -12, 3.6, 0, Math.PI * 2); ctx.fill(); }
-  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5;
-  for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(side * 12, -2); ctx.lineTo(side * 11, -11); ctx.stroke(); }
-  // scarf
-  ctx.fillStyle = '#ff5d8f';
-  ctx.beginPath(); ctx.moveTo(-6, -6); ctx.lineTo(6, -6); ctx.lineTo(0, 1); ctx.closePath(); ctx.fill();
-  // head and hat
-  ctx.fillStyle = '#ffd9b8';
-  ctx.beginPath(); ctx.arc(0, -4, 8.5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(-4, -1, 5.5, 0, Math.PI * 2); ctx.arc(4, -1, 5.5, 0, Math.PI * 2); ctx.arc(0, 2, 6.5, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#d7deec'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.restore();
-}
 
 export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
   let alive = true;
   let core = null;
   let runScore = 0;
+  let wallet = 0; // coins to spend: everything earned this run, cleared or not, less what the shop took
+  let owned = {}; // upgrade id -> level bought this run
   let best = Number(readJson(STORE.best)) || 0;
   let raf = 0;
   let last = 0;
@@ -224,27 +92,26 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     const text = `第 ${core.stage} 关 · ${core.coins} 金币 · 总分 ${runScore}`;
     if (text !== lastHud) { lastHud = text; onHud(text); }
   };
-  const save = (stage, score) => writeJson(STORE.save, { stage, score });
+  const save = (stage) => writeJson(STORE.save, { stage, score: runScore, wallet, owned });
 
   function begin(stage) {
-    core = createStage(stage);
-    looks = Array.from({ length: core.config.rows * SEATS_PER_ROW }, (_, seat) => {
-      const h = (seat * 7 + core.stage * 13) >>> 0;
-      return { skin: SKIN[h % SKIN.length], hair: HAIR[(h >> 1) % HAIR.length], style: (h >> 2) % 4, shirt: ['#7a8cff', '#ff9f6b', '#5cc9a7', '#c792ff', '#ffcf5a', '#ff7f9e'][(seat * 5 + core.stage) % 6] };
-    });
+    core = createStage(stage, owned);
+    looks = Array.from({ length: core.config.rows * SEATS_PER_ROW }, (_, seat) => lookFor(seat, core.stage));
     moods.clear();
     floaters.length = 0;
     flashes.clear();
     toast = null;
     playing = false;
     lastHud = '';
-    save(core.stage, runScore);
+    save(core.stage);
     hud();
     intro();
     poke();
   }
   function restart() {
     runScore = 0;
+    wallet = 0;
+    owned = {};
     begin(1);
   }
 
@@ -270,10 +137,45 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     const c = core.config;
     const lines = [`${c.name} · ${core.orders.length} 份订单 · ${c.rows} 排乘客`, `目标金币 ★${core.goals[0]} · ★★${core.goals[1]} · ★★★${core.goals[2]}`];
     for (const dish of c.fresh) {
-      const st = STATIONS[dish];
-      lines.push(st.cook === 0 ? `新菜：${DISHES[dish].name}，${st.name}点一下就能装上餐车` : `新菜：${DISHES[dish].name}，${st.name}要做 ${st.cook} 秒${st.burn ? `，做好后 ${st.burn} 秒不拿就会糊` : ''}`);
+      const st = STATIONS[dish], kit = core.kit.stations[dish];
+      lines.push(st.cook === 0 ? `新菜：${DISHES[dish].name}，${st.name}点一下就能装上餐车` : `新菜：${DISHES[dish].name}，${st.name}要做 ${seconds(kit.cook)} 秒${kit.burn ? `，做好后 ${seconds(kit.burn)} 秒不拿就会糊` : ''}`);
     }
-    card(`第 ${core.stage} 关`, lines, [{ label: '起飞 ✈', action: start }]);
+    card(`第 ${core.stage} 关`, lines, [{ label: '起飞 ✈', action: start }, { label: `升级厨房 · 钱包 ${wallet}`, action: shop, ghost: true }]);
+  }
+  // The shop: every upgrade with its level, what the next level does and what it costs. Buying rebuilds the
+  // stage (it has not started yet) so the flight runs on the new numbers.
+  function shop() {
+    overlay.replaceChildren();
+    overlay.className = 'skychef-overlay';
+    const box = el('div', 'skychef-card skychef-shop');
+    box.append(el('strong', '', '升级厨房'), el('p', 'skychef-purse', `钱包 ${wallet} 金币 · 升级只在这一轮有效`));
+    const list = el('div', 'skychef-list');
+    for (const u of UPGRADES) {
+      const level = levelOf(owned, u.id), cost = nextCost(owned, u.id);
+      const locked = Boolean(u.need) && !core.config.dishes.includes(u.need);
+      const row = el('div', `skychef-item${locked ? ' locked' : ''}`);
+      const text = el('div', 'skychef-item-text');
+      text.append(el('b', '', `${u.name} ${'●'.repeat(level)}${'○'.repeat(u.costs.length - level)}`));
+      text.append(el('span', '', locked ? `第 ${unlockRoute(u.need)} 条航线解锁` : cost === null ? '已经升满' : u.says[level]));
+      const button = el('button', 'skychef-buy', cost === null ? '满级' : `${cost} 金币`);
+      button.dataset.upgrade = u.id;
+      button.disabled = locked || cost === null || wallet < cost;
+      button.addEventListener('click', () => {
+        const r = buy(owned, wallet, u.id, core.config.dishes);
+        if (!r.ok) return;
+        owned = r.owned;
+        wallet = r.wallet;
+        begin(core.stage);
+        shop();
+      });
+      row.append(text, button);
+      list.append(row);
+    }
+    const back = el('button', 'skychef-again', '返回');
+    back.addEventListener('click', intro);
+    box.append(list, back);
+    overlay.append(box);
+    overlay.hidden = false;
   }
   function start() {
     if (core.done) return;
@@ -286,24 +188,27 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     const stage = core.stage;
     const starLine = `${'★'.repeat(result.stars)}${'☆'.repeat(3 - result.stars)}  ${result.coins} 金币（目标 ${core.goals[0]}）`;
     const tally = `送达 ${result.served} 份 · 等不及的 ${result.missed} 位`;
+    wallet += result.coins; // the coins are earned either way; only a cleared stage counts toward the score
     if (!result.passed) {
-      card('金币不够', [starLine, tally, '这趟航班的订单不会变，换个顺序再飞一次。'], [{ label: '重试本关', action: () => begin(stage) }]);
+      save(stage);
+      card('金币不够', [starLine, tally, `赚到的 ${result.coins} 金币进了钱包，可以先升级再飞。这趟航班的订单不会变。`], [{ label: '重试本关', action: () => begin(stage) }]);
       return;
     }
     runScore += result.coins;
     if (runScore > best) { best = runScore; writeJson(STORE.best, best); }
     const lastStage = stage >= STAGES;
-    save(lastStage ? 1 : stage + 1, lastStage ? 0 : runScore);
+    if (lastStage) writeJson(STORE.save, { stage: 1, score: 0, wallet: 0, owned: {} });
+    else save(stage + 1);
     hud();
     const note = card(lastStage ? '全部航线飞完！' : '平稳落地', [starLine, tally, `总分 ${runScore} · 本机最佳 ${best}`], lastStage
       ? [{ label: '再飞一轮', action: restart }]
-      : [{ label: '下一关', action: () => begin(stage + 1) }, { label: '重玩本关', action: () => { runScore -= result.coins; begin(stage); }, ghost: true }], 'won');
+      : [{ label: '下一关', action: () => begin(stage + 1) }, { label: '重玩本关', action: () => { runScore -= result.coins; wallet -= result.coins; begin(stage); }, ghost: true }], 'won');
     onResult?.('skychef', runScore).then((text) => { if (text && note.isConnected) note.textContent = text; });
   }
 
   // ---- events ----
   function float(x, y, text, color) { floaters.push({ x, y, text, color, t0: performance.now() }); }
-  const seatXY = (seat) => [COLX[seat % SEATS_PER_ROW], rowY(core.config.rows, rowOf(seat))];
+  const seatXY = (seat) => { const { y, s } = depthAt(core.config.rows, rowOf(seat)); return [seatX(seat % SEATS_PER_ROW, s), y - 60 * s]; };
   const stationXY = (id) => { const b = STATION_BOX.find((box) => box.id === id); return [b.x + b.w / 2, b.y + 14]; };
   function handle(events) {
     const now = performance.now();
@@ -325,7 +230,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       } else if (e.type === 'full') {
         say('餐车满了，点餐车上的菜可以扔掉');
       } else if (e.type === 'busy') {
-        say(`${STATIONS[e.station].name}两格都在用`);
+        say(`${STATIONS[e.station].name}的格子都在用`);
       } else if (e.type === 'burnt') {
         const [x, y] = stationXY(e.station);
         float(x, y, '糊了！', '#ff8a8a');
@@ -349,16 +254,21 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
   };
   function hit(x, y) {
     for (const b of STATION_BOX) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return { station: b.id };
-    for (let i = 0; i < SKY.cart; i += 1) {
-      const cx = CART.x + i * (CART.slot + CART.gap);
-      if (x >= cx && x <= cx + CART.slot && y >= CART.y && y <= CART.y + CART.h) return { cart: i };
+    for (const [i, slot] of cartSlots(core.kit.cart).entries()) {
+      if (x >= slot.x && x <= slot.x + slot.w && y >= CART.y && y <= CART.y + CART.h) return { cart: i };
     }
-    const rows = core.config.rows, pitch = pitchOf(rows);
-    if (y < CABIN.bottom && y > CABIN.bottom - pitch * rows) {
-      const row = Math.floor((CABIN.bottom - y) / pitch);
-      let col = -1, nearest = Infinity;
-      COLX.forEach((cx, i) => { const d = Math.abs(cx - x); if (d < nearest) { nearest = d; col = i; } });
-      if (nearest <= SEAT_W / 2 + 8) return { seat: row * SEATS_PER_ROW + col };
+    if (y >= GALLEY_Y) return null;
+    // an order bubble serves its seat (the nearest drawn last, so it wins)
+    for (let i = bubbleHits.length - 1; i >= 0; i -= 1) {
+      const b = bubbleHits[i];
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return { seat: b.seat };
+    }
+    // otherwise the passenger: nearest rows first, as they are drawn over the ones behind
+    const rows = core.config.rows;
+    for (let row = 0; row < rows; row += 1) {
+      const { y: fy, s } = depthAt(rows, row);
+      if (y < fy - 92 * s || y > fy + 18 * s) continue;
+      for (let col = 0; col < SEATS_PER_ROW; col += 1) if (Math.abs(x - seatX(col, s)) <= 30 * s) return { seat: row * SEATS_PER_ROW + col };
     }
     return null;
   }
@@ -401,111 +311,115 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
   window.addEventListener('keydown', onKey);
 
   // ---- drawing ----
+  let bubbleHits = []; // where each order bubble was drawn this frame, nearest last, so taps on it serve that seat
+  const theme = () => THEMES[core.config.route] ?? THEMES[0];
   function drawTop() {
-    roundRect(ctx, 12, 6, 132, 38, 12);
-    ctx.fillStyle = '#ffffff22'; ctx.fill();
+    // stage and route
+    drawPill(ctx, 4, 6, 118, 32);
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff'; ctx.font = '800 14px system-ui, sans-serif';
-    ctx.fillText(`第 ${core.stage} 关`, 22, 18);
-    ctx.fillStyle = '#c9d6ff'; ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillText(core.config.name, 22, 34);
-    // coins against the goals
-    const x = 152, w = 196;
-    roundRect(ctx, x, 6, w, 38, 12);
-    ctx.fillStyle = '#ffffff22'; ctx.fill();
-    ctx.fillStyle = '#ffd543'; ctx.font = '800 14px system-ui, sans-serif';
-    ctx.fillText(`${core.coins} 金币`, x + 10, 18);
-    ctx.textAlign = 'right'; ctx.fillStyle = '#c9d6ff'; ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillText(`订单 ${core.served + core.missed}/${core.orders.length}`, x + w - 10, 18);
-    const bx = x + 10, bw = w - 20, by = 33, top = core.goals[2] * 1.08;
-    roundRect(ctx, bx, by, bw, 7, 4); ctx.fillStyle = '#0006'; ctx.fill();
-    roundRect(ctx, bx, by, bw * clamp(core.coins / top, 0, 1), 7, 4); ctx.fillStyle = '#ffd543'; ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.font = '900 13px system-ui, sans-serif';
+    ctx.fillText(`第 ${core.stage} 关`, 18, 16);
+    ctx.fillStyle = '#cfe0ff'; ctx.font = '700 9px system-ui, sans-serif';
+    ctx.fillText(core.config.name, 18, 30);
+    // coins against the three goals
+    const x = 116, w = 152;
+    drawPill(ctx, x, 6, w, 32);
+    drawCoin(ctx, x + 20, 22, 10);
+    ctx.fillStyle = '#ffffff'; ctx.font = '900 13px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(String(core.coins), x + 34, 16);
+    const bx = x + 34, bw = w - 52, by = 26, top = core.goals[2] * 1.08;
+    roundRect(ctx, bx, by, bw, 6, 3); ctx.fillStyle = '#0b1a3a'; ctx.fill();
+    roundRect(ctx, bx, by, bw * clamp(core.coins / top, 0, 1), 6, 3); ctx.fillStyle = '#ffd23f'; ctx.fill();
     core.goals.forEach((goal) => {
       const gx = bx + bw * goal / top;
-      ctx.fillStyle = core.coins >= goal ? '#ffd543' : '#ffffff88';
-      ctx.font = '800 10px system-ui, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('★', gx, by - 3);
-      ctx.fillStyle = '#ffffffaa'; ctx.fillRect(gx - 0.5, by, 1, 7);
+      ctx.fillStyle = core.coins >= goal ? '#ffd23f' : '#8fa3c8';
+      ctx.font = '900 12px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('★', gx, by - 6);
     });
+    // happy passengers and the orders still to come
+    drawPill(ctx, x + w - 6, 6, LW - 4 - (x + w - 6), 32);
+    roundRect(ctx, x + w + 10, 13, 18, 18, 5); ctx.fillStyle = '#ffd23f'; ctx.fill();
+    ctx.fillStyle = '#3a2a00';
+    ctx.beginPath(); ctx.arc(x + w + 15.5, 20, 1.6, 0, Math.PI * 2); ctx.arc(x + w + 22.5, 20, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x + w + 19, 23, 4, 0.3, Math.PI - 0.3); ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.font = '900 13px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(String(core.served), x + w + 33, 16);
+    ctx.fillStyle = '#cfe0ff'; ctx.font = '700 9px system-ui, sans-serif';
+    ctx.fillText(`还有 ${core.orders.length - core.served - core.missed} 单`, x + w + 33, 30);
   }
-  function drawCabin(now) {
-    const rows = core.config.rows, pitch = pitchOf(rows);
-    // fuselage
-    roundRect(ctx, CABIN.x, CABIN.y, CABIN.w, CABIN.h, [60, 60, 14, 14]);
-    const g = ctx.createLinearGradient(CABIN.x, 0, CABIN.x + CABIN.w, 0);
-    g.addColorStop(0, '#dfe7fb'); g.addColorStop(0.5, '#f6f8ff'); g.addColorStop(1, '#dfe7fb');
-    ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = '#9fb0e0'; ctx.stroke();
-    // aisle carpet, from the first row in use down to the galley
-    const used = CABIN.bottom - pitch * rows;
-    const front = used - CABIN.top > 30 ? used - 4 : CABIN.top - 10;
-    ctx.fillStyle = '#5b6fd6';
-    ctx.fillRect(AISLE - 26, front, 52, CABIN.bottom - front + 6);
-    ctx.fillStyle = '#ffffff22';
-    for (let y = front + 4; y < CABIN.bottom; y += 18) ctx.fillRect(AISLE - 2, y, 4, 8);
-    // the first-class curtain above the rows in use
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (used - CABIN.top > 30) {
-      ctx.fillStyle = '#ff9fc0';
-      for (let x = CABIN.x + 20; x < CABIN.x + CABIN.w - 20; x += 10) { ctx.beginPath(); ctx.ellipse(x, used - 10, 5, 8, 0, 0, Math.PI * 2); ctx.fill(); }
-      ctx.fillStyle = '#7a86b8';
-      ctx.fillText('头等舱 · 敬请期待', AISLE, (CABIN.top + used - 20) / 2);
-    }
-    // rows: windows, seats, passengers
-    for (let row = 0; row < rows; row += 1) {
-      const y = rowY(rows, row);
-      ctx.fillStyle = '#a9d8ff';
-      for (const wx of [CABIN.x + 6, CABIN.x + CABIN.w - 6]) { roundRect(ctx, wx - 3, y - 10, 6, 18, 3); ctx.fill(); }
-      for (let col = 0; col < SEATS_PER_ROW; col += 1) {
-        const seat = row * SEATS_PER_ROW + col, x = COLX[col];
-        const waiting = callAt(core, seat);
-        roundRect(ctx, x - SEAT_W / 2, y - pitch / 2 + 6, SEAT_W, pitch - 10, 10);
-        ctx.fillStyle = waiting ? '#3d4fae' : '#4c5fc4'; ctx.fill();
-        // seat back behind the passenger (toward the galley)
-        roundRect(ctx, x - SEAT_W / 2 + 2, y + pitch / 2 - 14, SEAT_W - 4, 10, 5);
-        ctx.fillStyle = '#2f3d8e'; ctx.fill();
-        roundRect(ctx, x - 12, y + pitch / 2 - 13, 24, 6, 3);
-        ctx.fillStyle = '#ff9fc0'; ctx.fill();
-        const shown = moods.get(seat);
-        let mood = 'calm';
-        if (shown && shown.until > now) mood = shown.mood;
-        else if (shown) moods.delete(seat);
-        if (mood === 'calm' && waiting && waiting.patience / waiting.max < 0.35) mood = 'cross';
-        drawPassenger(ctx, x, y + 6, looks[seat], mood, now);
-        if (waiting) {
-          ctx.fillStyle = `rgba(255, 213, 67, ${0.65 + 0.35 * Math.sin(now / 160)})`;
-          ctx.beginPath(); ctx.arc(x + SEAT_W / 2 - 8, y - pitch / 2 + 14, 3.5, 0, Math.PI * 2); ctx.fill();
-        }
+  function drawShell() {
+    const t = theme(), rows = core.config.rows;
+    const back = depthAt(rows, rows - 0.35), near = depthAt(rows, -0.25);
+    const bx = wallX(back.s), nx = wallX(near.s);
+    // floor
+    ctx.fillStyle = '#b4bccb';
+    ctx.fillRect(0, 0, LW, GALLEY_Y);
+    // the far bulkhead with the route's mural
+    drawBulkhead(ctx, t, bx, LW - bx, 0, back.y);
+    // side walls closing in toward the bulkhead, with a window by every row
+    for (const side of [-1, 1]) {
+      const X = (v) => (side < 0 ? v : LW - v);
+      ctx.beginPath();
+      ctx.moveTo(X(0), 0); ctx.lineTo(X(bx), 0); ctx.lineTo(X(bx), back.y); ctx.lineTo(X(nx), GALLEY_Y); ctx.lineTo(X(0), GALLEY_Y); ctx.closePath();
+      const g = ctx.createLinearGradient(X(0), 0, X(bx), 0);
+      g.addColorStop(0, '#d9dde6'); g.addColorStop(1, '#f7f8fb');
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = '#aab3c4'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(X(bx), back.y); ctx.lineTo(X(nx), GALLEY_Y); ctx.stroke();
+      for (let i = 0; i < rows; i += 1) {
+        const { y, s } = depthAt(rows, i + 0.15);
+        const wx = X(wallX(s) * 0.5);
+        roundRect(ctx, wx - 5 * s, y - 92 * s, 10 * s, 24 * s, 5 * s);
+        ctx.fillStyle = '#ffffff'; ctx.fill();
+        roundRect(ctx, wx - 3.5 * s, y - 90 * s, 7 * s, 20 * s, 3.5 * s);
+        ctx.fillStyle = '#8fd0ff'; ctx.fill();
       }
     }
+    // the aisle carpet, its pattern shrinking with the distance
+    const half = (s) => 30 * s;
+    ctx.beginPath();
+    ctx.moveTo(AISLE - half(near.s), GALLEY_Y); ctx.lineTo(AISLE - half(back.s), back.y); ctx.lineTo(AISLE + half(back.s), back.y); ctx.lineTo(AISLE + half(near.s), GALLEY_Y); ctx.closePath();
+    ctx.fillStyle = t.carpet; ctx.fill();
+    ctx.fillStyle = t.carpetMark;
+    for (let d = rows - 0.6; d > -0.3; d -= 0.5) {
+      const { y, s } = depthAt(rows, d);
+      ctx.beginPath(); ctx.moveTo(AISLE, y - 5 * s); ctx.lineTo(AISLE + 9 * s, y); ctx.lineTo(AISLE, y + 5 * s); ctx.lineTo(AISLE - 9 * s, y); ctx.closePath(); ctx.fill();
+    }
   }
-  function drawBubbles() {
+  function moodOf(seat, now) {
+    const shown = moods.get(seat);
+    if (shown && shown.until > now) return shown.mood;
+    if (shown) moods.delete(seat);
+    const waiting = callAt(core, seat);
+    return waiting && waiting.patience / waiting.max < 0.35 ? 'cross' : 'calm';
+  }
+  function drawRow(row, now) {
+    const { y, s } = depthAt(core.config.rows, row);
+    for (const col of [0, 3, 1, 2]) { // window seats first, so the aisle seats overlap them
+      const seat = row * SEATS_PER_ROW + col;
+      drawSeat(ctx, seatX(col, s), y, s, theme(), looks[seat], moodOf(seat, now), Boolean(callAt(core, seat)), now);
+    }
+  }
+  function drawCabin(now, walking) {
+    const rows = core.config.rows, here = core.pos - 1;
+    drawShell();
+    let chefDrawn = false;
+    const chef = () => { const { y, s } = chefAt(rows, core.pos); drawStewardess(ctx, AISLE, y, s, core.cart, walking, now, drawDish); chefDrawn = true; };
+    for (let row = rows - 1; row >= 0; row -= 1) {
+      if (!chefDrawn && row < here - 0.01) chef();
+      drawRow(row, now);
+    }
+    if (!chefDrawn) chef();
+  }
+  function drawBubbles(now) {
+    bubbleHits = [];
     const rows = core.config.rows;
-    for (const call of core.calls) {
-      const x0 = COLX[call.seat % SEATS_PER_ROW], y = rowY(rows, rowOf(call.seat));
-      const w = call.items.length * 20 + 10, h = 22;
-      const x = clamp(x0 - w / 2, CABIN.x + 4, CABIN.x + CABIN.w - 4 - w);
-      const top = y - 32;
-      const share = call.patience / call.max;
-      roundRect(ctx, x, top, w, h, 9);
-      ctx.fillStyle = '#ffffff'; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.strokeStyle = share < 0.35 ? '#ff6f6f' : '#c7d0ea'; ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x0 - 4, top + h); ctx.lineTo(x0, top + h + 5); ctx.lineTo(x0 + 4, top + h); ctx.fill();
-      const left = [...call.left];
-      call.items.forEach((dish, i) => {
-        const at = left.indexOf(dish);
-        const owed = at >= 0;
-        if (owed) left.splice(at, 1);
-        const ix = x + 15 + i * 20;
-        drawDish(ctx, dish, ix, top + h / 2, 17, { alpha: owed ? 1 : 0.3 });
-        if (!owed) { ctx.fillStyle = '#2fb86a'; ctx.font = '900 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('✓', ix, top + h / 2 + 1); }
-      });
-      // patience
-      roundRect(ctx, x + 3, top + h + 1 - 5, w - 6, 3, 2);
-      ctx.fillStyle = '#0002'; ctx.fill();
-      roundRect(ctx, x + 3, top + h + 1 - 5, (w - 6) * clamp(share, 0, 1), 3, 2);
-      ctx.fillStyle = share > 0.6 ? '#3fcf7a' : share > 0.35 ? '#ffc23d' : '#ff5f5f'; ctx.fill();
+    const calls = [...core.calls].sort((a, b) => rowOf(b.seat) - rowOf(a.seat)); // far ones first, near ones on top
+    for (const call of calls) {
+      const { y, s } = depthAt(rows, rowOf(call.seat));
+      const k = Math.max(0.78, s);
+      const rect = drawBubble(ctx, seatX(call.seat % SEATS_PER_ROW, s), y - 102 * s, k, call, drawDish, now);
+      bubbleHits.push({ seat: call.seat, ...rect });
     }
   }
   function drawQueueMarks() {
@@ -516,35 +430,43 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       const n = count.get(key) ?? 0;
       count.set(key, n + 1);
       let x, y;
-      if (action.kind === 'serve') { x = COLX[action.seat % SEATS_PER_ROW] - SEAT_W / 2 + 9 + n * 13; y = rowY(rows, rowOf(action.seat)) + 10; }
-      else { const b = STATION_BOX.find((box) => box.id === action.id); x = b.x + b.w - 10 - n * 15; y = b.y + 10; }
-      ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff5d8f'; ctx.fill();
+      if (action.kind === 'serve') {
+        const { y: fy, s } = depthAt(rows, rowOf(action.seat));
+        x = seatX(action.seat % SEATS_PER_ROW, s) - 20 * s + n * 13; y = fy - 30 * s;
+      } else { const b = STATION_BOX.find((box) => box.id === action.id); x = b.x + b.w - 26 - n * 15; y = b.y + 11; }
+      ctx.beginPath(); ctx.arc(x, y, 7.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff4f7b'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = '800 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(String(i + 1), x, y + 0.5);
     });
   }
   function drawGalley(now) {
+    // steel cabinets under a blue speckled countertop
     const g = ctx.createLinearGradient(0, GALLEY_Y, 0, LH);
-    g.addColorStop(0, '#2c3a7a'); g.addColorStop(1, '#1b2357');
-    roundRect(ctx, 6, GALLEY_Y, LW - 12, LH - GALLEY_Y - 2, 14);
-    ctx.fillStyle = g; ctx.fill();
-    // cart strip
-    ctx.fillStyle = '#c9d6ff'; ctx.font = '800 12px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText('餐车', 22, CART.y + CART.h / 2 - 6);
-    ctx.fillStyle = '#8f9bd0'; ctx.font = '600 9px system-ui, sans-serif';
-    ctx.fillText('点菜可扔', 22, CART.y + CART.h / 2 + 9);
-    for (let i = 0; i < SKY.cart; i += 1) {
-      const x = CART.x + i * (CART.slot + CART.gap);
+    g.addColorStop(0, '#e6ebf2'); g.addColorStop(1, '#a9b4c6');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, GALLEY_Y, LW, LH - GALLEY_Y);
+    ctx.fillStyle = '#34548a';
+    ctx.fillRect(0, GALLEY_Y, LW, 42);
+    ctx.fillStyle = '#ffffff1f';
+    for (let i = 0; i < 70; i += 1) ctx.fillRect((i * 97) % LW, GALLEY_Y + 3 + ((i * 31) % 36), 2, 1.5);
+    ctx.fillStyle = '#23406f'; ctx.fillRect(0, GALLEY_Y + 40, LW, 4);
+    // the cart's tray
+    ctx.fillStyle = '#ffffff'; ctx.font = '900 12px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('餐车', 14, CART.y + CART.h / 2 - 6);
+    ctx.fillStyle = '#b9cdf0'; ctx.font = '700 9px system-ui, sans-serif';
+    ctx.fillText('点菜可扔', 14, CART.y + CART.h / 2 + 9);
+    for (const [i, { x, w }] of cartSlots(core.kit.cart).entries()) {
       const flash = flashes.get(`cart${i}`);
       const pop = flash && !calm() ? Math.max(0, 1 - (now - flash) / 220) : 0;
-      roundRect(ctx, x, CART.y, CART.slot, CART.h, 9);
-      ctx.fillStyle = core.cart[i] ? '#ffffff' : '#ffffff1c'; ctx.fill();
-      if (core.cart[i]) drawDish(ctx, core.cart[i], x + CART.slot / 2, CART.y + CART.h / 2, 24 * (1 + pop * 0.25));
+      roundRect(ctx, x, CART.y, w, CART.h, 7);
+      ctx.fillStyle = core.cart[i] ? '#f4f7fc' : '#ffffff26'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = core.cart[i] ? '#c3cde0' : '#ffffff40'; ctx.stroke();
+      if (core.cart[i]) drawDish(ctx, core.cart[i], x + w / 2, CART.y + CART.h / 2, 24 * (1 + pop * 0.25));
     }
-    ctx.textAlign = 'right'; ctx.fillStyle = '#c9d6ff'; ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillText(`待办 ${core.queue.length}/${SKY.queue}`, LW - 16, CART.y + CART.h / 2);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff'; ctx.font = '800 10px system-ui, sans-serif';
+    ctx.fillText(`待办 ${core.queue.length}/${SKY.queue}`, LW - 10, CART.y + CART.h / 2);
     // stations
     for (const b of STATION_BOX) {
       const open = core.config.dishes.includes(b.id);
@@ -554,55 +476,44 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       ctx.save();
       ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
       ctx.scale(1 + pop * 0.04, 1 + pop * 0.04);
-      roundRect(ctx, -b.w / 2, -b.h / 2, b.w, b.h, 12);
-      if (open) {
-        const sg = ctx.createLinearGradient(0, -b.h / 2, 0, b.h / 2);
-        sg.addColorStop(0, '#ffffff'); sg.addColorStop(1, '#e3e9fa');
-        ctx.fillStyle = sg;
-      } else ctx.fillStyle = '#ffffff14';
-      ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = open ? ACCENT[b.id] : '#ffffff22'; ctx.stroke();
+      ctx.translate(-(b.x + b.w / 2), -(b.y + b.h / 2));
+      drawCabinet(ctx, b, st.name, ACCENT[b.id], open);
       ctx.restore();
       if (!open) {
-        ctx.globalAlpha = 0.35;
+        ctx.globalAlpha = 0.45;
         drawDish(ctx, b.id, b.x + 24, b.y + b.h / 2, 26);
         ctx.globalAlpha = 1;
-        ctx.fillStyle = '#c9d6ff'; ctx.font = '700 10px system-ui, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#4a5670'; ctx.font = '800 10px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         ctx.fillText(`第 ${unlockRoute(b.id)} 条航线`, b.x + 44, b.y + b.h / 2);
         continue;
       }
-      ctx.fillStyle = '#2a2f55'; ctx.font = '800 11px system-ui, sans-serif'; ctx.textAlign = 'left';
-      ctx.fillText(st.name, b.x + 8, b.y + 12);
-      ctx.fillStyle = '#8a92b8'; ctx.font = '700 9px system-ui, sans-serif';
-      ctx.fillText(`${STATION_ORDER.indexOf(b.id) + 1}`, b.x + b.w - 12, b.y + b.h - 9);
-      if (st.cook === 0) {
-        drawDish(ctx, b.id, b.x + b.w / 2, b.y + 40, 30);
-        continue;
-      }
+      ctx.fillStyle = '#9fb0cf'; ctx.font = '800 9px system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${STATION_ORDER.indexOf(b.id) + 1}`, b.x + b.w - 9, b.y + 12);
+      if (st.cook === 0) { drawDispenser(ctx, b.id, b.x + b.w / 2, b.y + 42, drawDish); continue; }
+      const { left, step, r } = cookerSlots(core.cookers[b.id].length);
       core.cookers[b.id].forEach((slot, i) => {
-        const cx = b.x + 28 + i * 50, cy = b.y + 40;
+        const cx = b.x + left + i * step, cy = b.y + 43;
         const phase = slotPhase(b.id, slot);
-        ctx.beginPath(); ctx.arc(cx, cy, 17, 0, Math.PI * 2);
-        ctx.fillStyle = '#d9e0f2'; ctx.fill();
+        drawSlotBase(ctx, b.id, cx, cy, r);
         if (phase === 'empty') {
-          ctx.fillStyle = '#9aa3c6'; ctx.font = '800 16px system-ui, sans-serif'; ctx.textAlign = 'center';
+          ctx.fillStyle = b.id === 'noodle' ? '#ffffff66' : '#8d99b2'; ctx.font = '800 16px system-ui, sans-serif'; ctx.textAlign = 'center';
           ctx.fillText('+', cx, cy + 1);
           return;
         }
         if (phase === 'cooking') {
-          drawDish(ctx, b.id, cx, cy, 22, { alpha: 0.4 });
-          ctx.beginPath(); ctx.arc(cx, cy, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (slot.t / st.cook));
+          drawDish(ctx, b.id, cx, cy, r * 1.3, { alpha: 0.45 });
+          ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (slot.t / slot.cook));
           ctx.lineWidth = 4; ctx.strokeStyle = ACCENT[b.id]; ctx.stroke();
           return;
         }
-        if (phase === 'burnt') { drawDish(ctx, 'burnt', cx, cy, 24); return; }
+        if (phase === 'burnt') { drawDish(ctx, 'burnt', cx, cy, r * 1.4); return; }
         // ready: glow, and blink red once it is close to burning
-        const danger = st.burn > 0 && slot.t > st.cook + st.burn * 0.55;
-        ctx.beginPath(); ctx.arc(cx, cy, 17, 0, Math.PI * 2);
+        const danger = slot.burn > 0 && slot.t > slot.cook + slot.burn * 0.55;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.lineWidth = 3;
-        ctx.strokeStyle = danger ? `rgba(255, 80, 80, ${0.5 + 0.5 * Math.sin(now / 80)})` : '#3fcf7a';
+        ctx.strokeStyle = danger ? `rgba(255, 70, 70, ${0.5 + 0.5 * Math.sin(now / 80)})` : '#36c96a';
         ctx.stroke();
-        drawDish(ctx, b.id, cx, cy, 26);
+        drawDish(ctx, b.id, cx, cy, r * 1.5);
       });
     }
   }
@@ -613,9 +524,9 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       if (t >= 1) { floaters.splice(i, 1); continue; }
       ctx.save();
       ctx.globalAlpha = 1 - t * t;
-      ctx.font = '800 14px system-ui, sans-serif';
+      ctx.font = '900 15px system-ui, sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = '#1b2357cc';
+      ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = '#1b2a57dd';
       ctx.strokeText(f.text, f.x, f.y - t * 28);
       ctx.fillStyle = f.color;
       ctx.fillText(f.text, f.x, f.y - t * 28);
@@ -631,21 +542,20 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     if (playing && !core.done && dt > 0) handle(tick(core, dt));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, LW, LH);
-    drawTop();
-    drawCabin(now);
+    drawCabin(now, core.pos !== before);
     drawGalley(now);
-    drawChef(ctx, AISLE, chefY(core.config.rows, core.pos), core.cart, core.pos !== before, now);
-    drawBubbles();
+    drawBubbles(now);
     drawQueueMarks();
+    drawTop();
     drawFloaters(now);
     if (toast && toast.until > now) {
       ctx.font = '800 13px system-ui, sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const width = ctx.measureText(toast.text).width + 28;
-      roundRect(ctx, (LW - width) / 2, GALLEY_Y - 40, width, 26, 13);
+      roundRect(ctx, (LW - width) / 2, GALLEY_Y - 36, width, 26, 13);
       ctx.fillStyle = '#000c'; ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.fillText(toast.text, LW / 2, GALLEY_Y - 27);
+      ctx.fillText(toast.text, LW / 2, GALLEY_Y - 23);
     }
     const busy = playing || floaters.length || (toast && toast.until > now);
     if (busy && alive) raf = requestAnimationFrame(frame);
@@ -653,16 +563,26 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
 
   // Pick up the run where it was left: the stage to fly next and the score so far.
   const saved = readJson(STORE.save);
-  if (saved && Number.isInteger(saved.stage) && saved.stage >= 1 && saved.stage <= STAGES) runScore = Math.max(0, Number(saved.score) || 0);
+  if (saved && Number.isInteger(saved.stage) && saved.stage >= 1 && saved.stage <= STAGES) {
+    runScore = Math.max(0, Number(saved.score) || 0);
+    // A run saved before the shop existed has no wallet: its score is what it earned.
+    wallet = Math.max(0, Math.floor(Number(saved.wallet ?? saved.score) || 0));
+    owned = Object.fromEntries(UPGRADES.map((u) => [u.id, levelOf(saved.owned, u.id)]).filter(([, level]) => level > 0));
+  }
   begin(saved?.stage >= 1 && saved?.stage <= STAGES ? saved.stage : 1);
   return {
     get state() { return core; },
     get playing() { return playing; },
     get runScore() { return runScore; },
+    get wallet() { return wallet; },
+    get owned() { return { ...owned }; },
+    shop,
     restart,
     start,
     tapStation: (id) => act({ station: id }),
     tapSeat: (seat) => act({ seat }),
+    // Where a seat's passenger is on the canvas, in logical px (tests tap there).
+    pointOf(seat) { const { y, s } = depthAt(core.config.rows, rowOf(seat)); return { x: seatX(seat % SEATS_PER_ROW, s), y: y - 40 * s }; },
     discard: (index) => act({ cart: index }),
     // Fly ahead by `seconds` without waiting for frames (tests).
     advance(seconds) {

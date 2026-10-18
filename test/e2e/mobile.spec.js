@@ -1013,7 +1013,7 @@ test('空中大厨: 起飞 starts the flight, taps on the galley load the cart, 
   await openSkychef(page);
   await expect(page.locator('.skychef-card strong')).toHaveText('第 1 关');
   await expect(page.locator('.skychef-card')).toContainText('新菜：咖啡');
-  await page.locator('.skychef-again').click();
+  await page.locator('.skychef-again').first().click();
   await expect(page.locator('.skychef-overlay')).toBeHidden();
   expect((await skyState(page)).playing).toBe(true);
   await page.evaluate(() => window.__arcade.skychef.advance(2)); // the first passenger calls 1.5 s in
@@ -1030,8 +1030,9 @@ test('空中大厨: 起飞 starts the flight, taps on the galley load the cart, 
   }
   await expect.poll(async () => (await skyState(page)).cart.length).toBe(call.left.length);
   await tapSky(page, 270, 466); // a locked station only explains itself
-  // the seat: four columns at x 52 / 114 / 246 / 308, rows 66 px tall from the cabin floor at y 396
-  await tapSky(page, [52, 114, 246, 308][call.seat % 4], 396 - 66 * (Math.floor(call.seat / 4) + 0.5));
+  // the passenger in that seat (the cabin is drawn in perspective, so ask the view where they sit)
+  const seat = await page.evaluate((n) => window.__arcade.skychef.pointOf(n), call.seat);
+  await tapSky(page, seat.x, seat.y);
   await page.evaluate(() => window.__arcade.skychef.advance(2));
   const after = await skyState(page);
   expect(after.served).toBe(1);
@@ -1042,7 +1043,7 @@ test('空中大厨: 起飞 starts the flight, taps on the galley load the cart, 
 test('空中大厨: landing with enough coins posts the run, and the next visit resumes at stage 2', async ({ page }) => {
   const posts = await stubScores(page);
   await openSkychef(page);
-  await page.locator('.skychef-again').click();
+  await page.locator('.skychef-again').first().click();
   await flySkychef(page);
   await expect(page.locator('.skychef-card strong')).toHaveText('平稳落地');
   const { coins, run } = await skyState(page);
@@ -1058,14 +1059,48 @@ test('空中大厨: landing with enough coins posts the run, and the next visit 
 
 test('空中大厨: a flight where nobody is served fails, and 重试本关 flies the same orders again', async ({ page }) => {
   await openSkychef(page);
-  await page.locator('.skychef-again').click();
+  await page.locator('.skychef-again').first().click();
   const orders = await page.evaluate(() => JSON.stringify(window.__arcade.skychef.state.orders));
   await page.evaluate(() => window.__arcade.skychef.advance(300));
   await expect(page.locator('.skychef-card strong')).toHaveText('金币不够');
-  await page.locator('.skychef-again').click();
+  await page.locator('.skychef-again').first().click();
   await expect(page.locator('.skychef-card strong')).toHaveText('第 1 关');
   expect(await page.evaluate(() => JSON.stringify(window.__arcade.skychef.state.orders))).toBe(orders);
   expect((await skyState(page)).coins).toBe(0);
+});
+
+test('空中大厨: coins from a flight buy upgrades before the next one, they stick, and 重新开始 empties the wallet', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('pao-skychef-save', JSON.stringify({ stage: 2, score: 800 })); }
+  });
+  await openSkychef(page);
+  // a run saved before the shop existed spends what it has earned
+  await expect(page.locator('.skychef-again.ghost')).toHaveText('升级厨房 · 钱包 800');
+  await page.locator('.skychef-again.ghost').click();
+  await expect(page.locator('.skychef-card strong')).toHaveText('升级厨房');
+  await expect(page.locator('.skychef-buy[data-upgrade="taste-meal"]')).toBeDisabled(); // its route is not open yet
+  await page.locator('.skychef-buy[data-upgrade="cart"]').click();
+  await expect(page.locator('.skychef-purse')).toContainText('钱包 350 金币');
+  await expect(page.locator('.skychef-buy[data-upgrade="cart"]')).toHaveText('1400 金币');
+  await expect(page.locator('.skychef-buy[data-upgrade="cart"]')).toBeDisabled(); // not enough left
+  await page.locator('.skychef-buy[data-upgrade="fast-coffee"]').click();
+  await expect(page.locator('.skychef-purse')).toContainText('钱包 100 金币');
+  expect(await page.evaluate(() => ({ cart: window.__arcade.skychef.state.kit.cart, coffee: window.__arcade.skychef.state.kit.stations.coffee.cook }))).toEqual({ cart: 5, coffee: 1.875 });
+  await page.locator('.skychef-again', { hasText: '返回' }).click();
+  await expect(page.locator('.skychef-card strong')).toHaveText('第 2 关');
+  // the six-slot cart strip takes taps on its fifth slot
+  await page.locator('.skychef-again', { hasText: '起飞' }).click();
+  await page.evaluate(() => { const g = window.__arcade.skychef; for (let i = 0; i < 5; i += 1) g.tapStation('juice'); g.advance(0.2); });
+  expect((await skyState(page)).cart).toHaveLength(5);
+  await tapSky(page, 70 + 4 * ((222 - 4 * 6) / 5 + 6) + 10, 435);
+  await expect.poll(async () => (await skyState(page)).cart.length).toBe(4);
+  // leaving keeps the upgrades; 重新开始 drops them with the wallet
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="skychef"]').click();
+  await page.waitForFunction(() => window.__arcade.skychef?.state);
+  expect(await page.evaluate(() => [window.__arcade.skychef.wallet, window.__arcade.skychef.owned])).toEqual([100, { cart: 1, 'fast-coffee': 1 }]);
+  await page.locator('#restart-game').click();
+  expect(await page.evaluate(() => [window.__arcade.skychef.wallet, window.__arcade.skychef.owned, window.__arcade.skychef.state.kit.cart])).toEqual([0, {}, 4]);
 });
 
 // 数独: a puzzle that is the answer with one cell blanked, so a whole game is a couple of taps.

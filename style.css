@@ -467,6 +467,16 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .canvas-wrap.g2048-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6667)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6667)));aspect-ratio:360/540}
 .canvas-wrap.suika-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6429)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6429)));aspect-ratio:360/560}
 .canvas-wrap.skychef-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6)));aspect-ratio:360/600}
+.skychef-card.skychef-shop{gap:calc(var(--u) * 2.4);padding:calc(var(--u) * 5) calc(var(--u) * 4);max-height:100%}
+.skychef-purse{color:var(--yellow)!important;font-weight:800}
+.skychef-list{display:grid;gap:calc(var(--u) * 1.6);max-height:calc(var(--u) * 108);overflow-y:auto;overscroll-behavior:contain;text-align:left;padding-right:calc(var(--u) * 1)}
+.skychef-item{display:grid;grid-template-columns:1fr auto;align-items:center;gap:calc(var(--u) * 2);padding:calc(var(--u) * 2) calc(var(--u) * 3);border-radius:calc(var(--u) * 3);background:#ffffff10}
+.skychef-item.locked{opacity:.45}
+.skychef-item-text{display:grid;gap:calc(var(--u) * .6)}
+.skychef-item-text b{font-size:calc(var(--u) * 3.8);color:#fff;letter-spacing:.02em}
+.skychef-item-text span{font-size:calc(var(--u) * 3.2);color:#aeb7d6}
+.skychef-buy{min-width:calc(var(--u) * 21);padding:calc(var(--u) * 2) calc(var(--u) * 2.4);border:1px solid var(--yellow);border-radius:calc(var(--u) * 2.4);background:var(--yellow);color:#2a1f00;font:inherit;font-size:calc(var(--u) * 3.4);font-weight:800;cursor:pointer}
+.skychef-buy:disabled{background:transparent;border-color:#ffffff33;color:#8f96b8;cursor:default}
 .skychef-wrap .game-canvas{height:100%;touch-action:none;background:radial-gradient(120% 90% at 50% 0%,#6fb6ff,#3a6fd0 55%,#213f8f);cursor:pointer}
 .canvas-wrap.tetris-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 270px) * .6)));width:min(100%,420px,max(240px,calc((100dvh - 270px) * .6)));aspect-ratio:360/600}
 .canvas-wrap.sudoku-wrap{--u:1cqw;container-type:inline-size;width:min(100%,420px,max(240px,calc((100vh - 340px) * .6429)));width:min(100%,420px,max(240px,calc((100dvh - 340px) * .6429)));aspect-ratio:360/560}
