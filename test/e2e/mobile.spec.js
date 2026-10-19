@@ -836,6 +836,26 @@ test('2048: making 2048 offers to go on, and the board keeps playing', async ({ 
   await expect.poll(() => page.evaluate(() => window.__arcade.g2048.state.moves)).toBe(2);
 });
 
+test('2048: the theme button cycles 糖果 → 经典 → 霓虹, is remembered, and a neon merge sets off effects', async ({ page }) => {
+  await openG2048(page, [{ r: 0, c: 0, v: 64 }, { r: 0, c: 3, v: 64 }]);
+  const theme = () => page.evaluate(() => window.__arcade.g2048.theme);
+  expect(await theme()).toBe('candy');
+  await page.locator('#g2048-theme').click();
+  await expect(page.locator('#g2048-theme')).toHaveText('主题 · 经典');
+  expect(await theme()).toBe('classic');
+  await expect(page.locator('.g2048-wrap')).toHaveAttribute('data-theme', 'classic');
+  await page.locator('#g2048-theme').click();
+  expect(await theme()).toBe('neon');
+  await swipe(page, -90, 0);
+  await expect.poll(() => page.evaluate(() => window.__arcade.g2048.effects)).toBeGreaterThan(10);
+  await expect.poll(async () => (await tilesOf(page)).find((t) => t.r === 0 && t.c === 0)?.v).toBe(128);
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="g2048"]').click();
+  await page.waitForFunction(() => window.__arcade.g2048);
+  expect(await theme()).toBe('neon');
+  await expect(page.locator('#g2048-theme')).toHaveText('主题 · 霓虹');
+});
+
 // 合成大西瓜 is one canvas; `load` sets a hand-made pile, `advance` runs the physics ahead, and the state is on window.__arcade.suika.
 async function openSuika(page, fruits, extra = {}) {
   await open(page, 'suika');

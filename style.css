@@ -495,6 +495,12 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .g2048-note:empty,.sudoku-note:empty,.suika-note:empty,.tetris-note:empty,.skychef-note:empty{display:none}
 .g2048-again,.sudoku-again,.suika-again,.tetris-again,.skychef-again{justify-self:center;padding:calc(var(--u) * 3) calc(var(--u) * 10);border:1px solid var(--pink);border-radius:calc(var(--u) * 3);background:var(--pink);color:#fff;font:inherit;font-weight:800;cursor:pointer}
 .g2048-again.ghost,.sudoku-again.ghost,.suika-again.ghost,.tetris-again.ghost,.skychef-again.ghost{background:transparent;border-color:#ffffff59;color:#d5daf0}
+/* 2048 themes (g2048-art.js): 经典 is the original beige board, 霓虹 is dark glass with glowing edges; the canvas paints its own backdrop for both. */
+.g2048-wrap[data-theme=classic] .game-canvas{background:#faf8ef}.g2048-wrap[data-theme=neon] .game-canvas{background:#0d0726}
+.g2048-wrap[data-theme=classic] .g2048-overlay{background:#eee4dacc}.g2048-wrap[data-theme=classic] .g2048-card{background:#faf8ef;border-color:#bbada0;color:#776e65}.g2048-wrap[data-theme=classic] .g2048-card p{color:#8f7a66}.g2048-wrap[data-theme=classic] .g2048-overlay.won .g2048-card{border-color:#edc22e}
+.g2048-wrap[data-theme=classic] .g2048-again{background:#8f7a66;border-color:#8f7a66;color:#f9f6f2}.g2048-wrap[data-theme=classic] .g2048-again.ghost{background:transparent;border-color:#bbada0;color:#776e65}
+.g2048-wrap[data-theme=neon] .g2048-overlay{background:#05031ad9}.g2048-wrap[data-theme=neon] .g2048-card{background:#0f0a2a;border-color:#b44bff;box-shadow:0 0 24px #b44bff66,inset 0 0 18px #2ef2ff22}.g2048-wrap[data-theme=neon] .g2048-card strong{color:#fff;text-shadow:0 0 12px #ff3bd4}
+.g2048-wrap[data-theme=neon] .g2048-again{background:linear-gradient(#ff3bd4,#9b2cff);border-color:#ff3bd4;box-shadow:0 0 14px #ff3bd488}.g2048-wrap[data-theme=neon] .g2048-again.ghost{background:transparent;border-color:#2ef2ff88;color:#bff8ff;box-shadow:none}
 @media(max-width:800px) and (orientation:portrait){
 body.playing[data-mode=g2048] .canvas-wrap.g2048-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .6667)));width:min(100%,max(240px,calc((100dvh - 190px) * .6667)))}
 body.playing[data-mode=suika] .canvas-wrap.suika-wrap{width:min(100%,max(240px,calc((100vh - 190px) * .6429)));width:min(100%,max(240px,calc((100dvh - 190px) * .6429)))}

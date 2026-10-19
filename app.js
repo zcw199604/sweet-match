@@ -36,7 +36,7 @@ const MODE_META = {
   quest: { label: 'ARCADE 06', title: '三消勇者团', help: '交换相邻方块，三个同色相连就会让对应的英雄出手：⚔ 战士砍人、✦ 法师放穿透魔法、⛨ 盾卫举盾并嘲讽、✚ 牧师治疗。连成 4 个技能升级，5 个是大招；连一次 4 连以上还能多走一步。敌人头上会预告下一招，盾卫和牧师倒下了，他们的方块就没用了。点敌人可以换集火目标，一共 50 关，分成 5 章，每章最后（第 10、20、30、40、50 关）是首领。' },
   park: { label: 'ARCADE 07', title: '挪车接客', help: '点一辆车让它沿车顶的箭头开出去：前面没有挡路的车才开得动。开出来的车停进上方五个车位，候车区排在最前面的乘客会上同色的车，坐满就开走。车位停满、前面的乘客又找不到自己的车就输了，先看队伍里谁在前面，再决定挪哪辆。一共 30 关，点「提示」会让一辆不会死局的车闪一下。' },
   pour: { label: 'ARCADE 08', title: '倒水排序', help: '点一个瓶子再点另一个，把它顶上那一段同色的水倒过去：目标瓶要么是空的，要么顶上是同样的颜色，还得有空位。一瓶倒满同一种颜色就会封口收进上方的收集架，全部收集完过关。倒不动时用下面的道具：回退一步、加一个空瓶、打乱重排、提示一步；这些每关次数有限，用得越少星级越高，步数不超过「最少步数」是三星。一共 50 关，越往后颜色越多、空瓶越少；进度会保存在这台设备上。' },
-  g2048: { label: 'ARCADE 09', title: '2048', help: '滑动屏幕（或按方向键 / WASD），所有方块一起朝那个方向滑，两个相同数字撞上就合成一个、分数加上新数字。每滑一次，空位里会冒出一个 2 或 4。合出 2048 就算通关，之后还能接着往上合；方块塞满、又没有能合的就结束。每局有 3 次「撤销」（也可以按 Z）；没打完的一局会存在这台设备上，分数在结束或重新开始时提交榜单。' },
+  g2048: { label: 'ARCADE 09', title: '2048', help: '滑动屏幕（或按方向键 / WASD），所有方块一起朝那个方向滑，两个相同数字撞上就合成一个、分数加上新数字。每滑一次，空位里会冒出一个 2 或 4。合出 2048 就算通关，之后还能接着往上合；方块塞满、又没有能合的就结束。每局有 3 次「撤销」（也可以按 Z）；没打完的一局会存在这台设备上，分数在结束或重新开始时提交榜单。右上角「主题」可在糖果、经典、霓虹之间切换，霓虹主题合成时有特效。' },
   suika: { label: 'ARCADE 15', title: '合成大西瓜', help: '按住画面左右拖动瞄准（电脑上鼠标移动、点击落下，或用 ←→ 和空格），松手把水果丢进玻璃缸。两个一样的水果碰在一起会合成大一级的水果，从樱桃一路合到西瓜；两个西瓜碰到一起会一起消失。合成越大分越高，几次合成接连发生还有连击加分。水果堆过红色虚线并停留两秒就结束，所以别让它们堆得太高，也别忘了看右上角的「下一个」。没打完的一局会存在这台设备上。' },
   skychef: { label: 'ARCADE 22', title: '空中大厨', help: '点乘客头上的订单气泡，厨师就会推着餐车走过去把他要的菜递上；点下面厨房里的设备，厨师会先走回厨房再操作。果汁机、甜品柜点一下就装上餐车；咖啡机、烤面包机、汤锅、烤箱点一下开始做（每台两格），做好后再点一下装车，热菜做好后放太久会糊，糊了要再点一下倒掉。餐车只能放 4 份菜，点餐车上的菜可以扔掉。每次点击都会排进待办，最多 5 件，厨师按顺序去做，所以先想好路线。乘客等得越久耐心条越短，耐心用完就不要了；送得快还有小费。所有订单处理完飞机落地，金币达到第一颗星的目标才算过关。一共 5 条航线 30 关，每条航线多一道菜；电脑上可以按 1～6 操作对应的设备。每关开始前可以点「升级厨房」，用赚到的金币加宽餐车、换跑鞋、换座椅、升级设备（做得更快、多一格）和食材（卖得更贵）；没过关的那趟金币也进钱包。钱包和升级只在这一轮有效，「重新开始」会清空；榜单只算过关赚到的金币，花掉不扣。每次起飞耗 10 格燃油，油箱 50 格，每分钟自动回 1 格（关掉游戏也会回），三星过关奖励 5 格，也可以在升级厨房里用 150 金币加 10 格；燃油存在这台设备上，重新开始不会加满。气泡里带绿点的菜餐车上已经有了，厨房设备上的「缺 N」是客人还差几份。进度保存在这台设备上。' },
   tetris: { label: 'ARCADE 21', title: '俄罗斯方块', help: '左右键（或 A / D）移动，↑（或 W / X）顺时针旋转，Z 逆时针旋转，↓ 软降，空格直接落到底，C 或 Shift 把当前方块暂存起来（每块限一次），P 或 Esc 暂停；手机用画面下面的六个按钮，点左边的「暂存」框也能暂存。方块按 7 个一包随机发，旋转遇到墙或方块会按标准规则踢开；落地后还能滑动一会儿才锁定。一次消 1～4 行得分递增，T-Spin、连续消除（连击）、背靠背的四消或 T-Spin 都有额外分，清空整个场地还有大奖励。简单、普通、困难各有自己的速度、升级节奏、预览数量和榜单：困难从第 8 级开始、不显示落点虚影、只预览一块。没打完的一局会存在这台设备上，每档各存一份。' },
@@ -574,10 +574,20 @@ function stopG2048() {
   g2048?.destroy();
   g2048 = null;
 }
+// 2048 的外观：糖果 / 经典 / 霓虹。只是显示设置，单人和联机的盘面都跟着换（g2048.js 监听 pao-g2048-theme）。
+const G2048_THEME_IDS = ['candy', 'classic', 'neon'];
+const G2048_THEME_LABEL = { candy: '糖果', classic: '经典', neon: '霓虹' };
+const g2048ThemeLabel = (id) => `主题 · ${G2048_THEME_LABEL[id]}`;
 function buildG2048Stage(stage, meta) {
-  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap g2048-wrap"></div><p class="game-help">${meta.help}</p>`;
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="g2048-theme">${g2048ThemeLabel(getPref('g2048Theme'))}</button><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap g2048-wrap"></div><p class="game-help">${meta.help}</p>`;
   const restart = $('#restart-game'), localWrap = stage.querySelector('.g2048-wrap'), seatText = $('#seat-text');
   restart.addEventListener('click', () => g2048?.restart());
+  $('#g2048-theme').addEventListener('click', (event) => {
+    const current = getPref('g2048Theme'), next = G2048_THEME_IDS[(G2048_THEME_IDS.indexOf(current) + 1) % G2048_THEME_IDS.length];
+    setPref('g2048Theme', next);
+    event.currentTarget.textContent = g2048ThemeLabel(next);
+    document.dispatchEvent(new CustomEvent('pao-g2048-theme', { detail: next }));
+  });
   let onlineHost = null;
   const setHud = (text) => { $('#score-text').textContent = text; };
   const enterLocal = () => {

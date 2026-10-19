@@ -3,6 +3,8 @@
 // and plays the events back: tiles slide, the two parents of a merge melt into one that pops, and a
 // new tile grows in. The core state is always up to date; an animation only changes what is shown.
 import { createState, DIRS, G2048, maxTile, move, restoreState, snapshot, undo } from './g2048-core.js';
+import { createFx, isG2048Theme, themeLook } from './g2048-art.js';
+import { getPref } from './prefs.js';
 
 const LW = 360;
 const LH = 540;
@@ -16,16 +18,6 @@ const el = (tag, className, text) => {
   if (text !== undefined) node.textContent = text;
   return node;
 };
-
-// base, light, dark. The ramp walks the house palette: cool and gentle for small tiles, hot for big ones.
-const PAL = {
-  2: ['#58d4de', '#a8f0f6', '#1f93a3'], 4: ['#44c986', '#8fe8b8', '#1c8a55'], 8: ['#ffd543', '#ffeb9a', '#c29a0c'],
-  16: ['#ffa23c', '#ffcb8a', '#c0680a'], 32: ['#ff6f61', '#ffaaa0', '#b8382c'], 64: ['#ff5d80', '#ffa0b6', '#b92a52'],
-  128: ['#e46bff', '#f2aaff', '#9a2cc0'], 256: ['#8e7bff', '#c3b8ff', '#5238c4'], 512: ['#4f8bff', '#9dc0ff', '#2457b8'],
-  1024: ['#f04b4b', '#ff9a9a', '#a52222'], 2048: ['#ffcf3d', '#fff0a8', '#c78a00']
-};
-const BEYOND = ['#6a3fd0', '#a98cff', '#3c1d8a']; // 4096 and up: royal violet with a gold rim
-const paint = (v) => PAL[v] ?? BEYOND;
 
 const BOARD = { x: 12, y: 112, size: 336, gap: 8, pad: 8 };
 const CELL = (BOARD.size - BOARD.pad * 2 - BOARD.gap * 3) / 4;
@@ -50,6 +42,9 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   let reported = false;
   let toast = null;
   let drag = null; // { id, x, y, done }
+  let theme = 'candy';
+  let look = themeLook(theme);
+  const fx = createFx(); // sparks, rings and shakes; only the neon theme sets them off
 
   const canvas = el('canvas', 'game-canvas');
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -59,6 +54,18 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   const overlay = el('div', 'g2048-overlay');
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
+  // The look is a display setting of this device (or account): it never touches the game or the server.
+  function setTheme(id) {
+    if (!isG2048Theme(id)) return;
+    theme = id;
+    look = themeLook(id);
+    wrap.dataset.theme = id;
+    fx.clear();
+    if (rival) drawRival();
+    poke();
+  }
+  const onTheme = (event) => setTheme(event.detail);
+  document.addEventListener('pao-g2048-theme', onTheme);
   const ctx = canvas.getContext('2d');
   // 对手的小盘面：放在画布外面（画布容器有固定的宽高比）。
   const rivalBox = el('div', 'race-rival'), rivalLine = el('div', ''), rivalGrid = el('div', 'rival-grid');
@@ -69,6 +76,12 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   const SLIDE = () => (calm() ? 20 : 110);
   const POP = () => (calm() ? 20 : 170);
   const poke = () => { if (!raf && alive) raf = requestAnimationFrame(frame); };
+  // Hand a move's merges to the effects, timed for the moment the sliding tiles land.
+  const celebrate = (a) => {
+    if (!look.fx || calm()) return;
+    const spawn = core.tiles.find((t) => t.id === a.spawnId);
+    fx.burst({ merges: a.merges, spawn, at: a.t0 + SLIDE(), centre, cell: CELL, goal: G2048.goal });
+  };
   const hud = () => onHud(online ? `你 ${core.score} 分 · 对手 ${rival?.score ?? 0} 分 · 目标 ${online.view.target}` : `${core.score} 分 · 最高 ${best} · ${core.moves} 步`);
   const say = (text) => { toast = { text, until: performance.now() + 1500 }; poke(); };
   const persist = () => {
@@ -84,6 +97,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   function begin(state = createState()) {
     core = state;
     anim = null;
+    fx.clear();
     toast = null;
     reported = false;
     overlay.hidden = true;
@@ -115,11 +129,13 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     const result = move(core, dir);
     if (!result.ok) return false;
     anim = { t0: performance.now(), before, slides: result.slides, merges: result.merges, spawnId: result.spawned?.id ?? 0 };
+    celebrate(anim);
     bump();
     persist();
     hud();
     poke();
-    const settle = SLIDE() + POP() + 30;
+    // With the effects on, the 2048 card waits for the fireworks to play out instead of covering them.
+    const settle = SLIDE() + POP() + 30 + (result.firstWin && look.fx && !calm() ? 900 : 0);
     setTimeout(() => { if (alive && core.over) finish(); else if (alive && result.firstWin) won(); }, settle);
     return true;
   }
@@ -129,6 +145,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     const result = undo(core);
     if (!result.ok) return say(result.reason === 'none-left' ? '撤销次数用完了' : '还没有可以撤销的一步');
     anim = null;
+    fx.clear();
     reported = false;
     persist();
     hud();
@@ -208,88 +225,35 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
 
   // ---- drawing ----
   function panel(x, y, w, h, label, value, accent) {
-    roundRect(ctx, x, y, w, h, 16);
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, '#ffffff2e');
-    g.addColorStop(1, '#ffffff12');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#ffffff33';
-    ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#c9cffc';
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText(label, x + w / 2, y + 17);
-    ctx.fillStyle = accent;
-    ctx.font = '800 26px system-ui, sans-serif';
-    ctx.fillText(String(value), x + w / 2, y + 42);
-  }
-  function drawWell() {
-    const { x, y, size } = BOARD;
+    const P = look.panel;
     ctx.save();
-    ctx.shadowColor = '#58d4de66';
-    ctx.shadowBlur = 22;
-    roundRect(ctx, x, y, size, size, 20);
-    const g = ctx.createLinearGradient(0, y, 0, y + size);
-    g.addColorStop(0, '#1a1840');
-    g.addColorStop(1, '#0d0c24');
+    if (P.glow) { ctx.shadowColor = P.edge; ctx.shadowBlur = 14; }
+    roundRect(ctx, x, y, w, h, P.radius);
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, P.top);
+    g.addColorStop(1, P.bottom);
     ctx.fillStyle = g;
     ctx.fill();
     ctx.restore();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#58d4de99';
-    roundRect(ctx, x, y, size, size, 20);
-    ctx.stroke();
-    for (let r = 0; r < 4; r += 1) {
-      for (let c = 0; c < 4; c += 1) {
-        const p = cellXY(r, c);
-        roundRect(ctx, p.x, p.y, CELL, CELL, 13);
-        const slot = ctx.createLinearGradient(0, p.y, 0, p.y + CELL);
-        slot.addColorStop(0, '#0a0920');
-        slot.addColorStop(1, '#1a1844');
-        ctx.fillStyle = slot;
-        ctx.fill();
-      }
+    if (P.edge) {
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = P.edge;
+      ctx.stroke();
     }
-  }
-  // One glossy tile: a drop shadow, a body that darkens toward the bottom, a lit top edge and a soft streak.
-  function drawTile(cx, cy, v, scale = 1, alpha = 1) {
-    const [base, light, dark] = paint(v);
-    const s = CELL * scale;
-    const x = cx - s / 2, y = cy - s / 2;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    if (v >= 128) { ctx.shadowColor = base; ctx.shadowBlur = v >= 2048 ? 26 : 12; }
-    roundRect(ctx, x, y + 3 * scale, s, s, 14 * scale);
-    ctx.fillStyle = dark;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    roundRect(ctx, x, y, s, s - 3 * scale, 14 * scale);
-    const g = ctx.createLinearGradient(0, y, 0, y + s);
-    g.addColorStop(0, light);
-    g.addColorStop(0.18, base);
-    g.addColorStop(1, dark);
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = v > 2048 ? '#ffd543' : '#ffffff59';
-    ctx.stroke();
-    roundRect(ctx, x + s * 0.12, y + s * 0.08, s * 0.76, s * 0.12, s * 0.06);
-    ctx.fillStyle = '#ffffff40';
-    ctx.fill();
-    const digits = String(v).length;
-    const size = (digits <= 2 ? 34 : digits === 3 ? 29 : digits === 4 ? 24 : 19) * scale;
-    ctx.font = `800 ${size}px "Manrope", system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 4 * scale;
-    ctx.strokeStyle = `${dark}cc`;
-    ctx.strokeText(String(v), cx, cy - 1 * scale);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(String(v), cx, cy - 1 * scale);
+    ctx.fillStyle = P.label;
+    ctx.font = `700 12px ${P.font}`;
+    ctx.fillText(label, x + w / 2, y + 17);
+    ctx.fillStyle = accent;
+    ctx.font = `800 26px ${P.font}`;
+    ctx.fillText(String(value), x + w / 2, y + 42);
+  }
+  const slots = Array.from({ length: 16 }, (_, i) => cellXY(Math.floor(i / 4), i % 4));
+  function drawTile(cx, cy, v, scale = 1, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    look.tile(ctx, cx, cy, v, CELL, scale);
     ctx.restore();
   }
   const centre = (r, c) => { const p = cellXY(r, c); return { x: p.x + CELL / 2, y: p.y + CELL / 2 }; };
@@ -297,10 +261,15 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     const elapsed = anim ? now - anim.t0 : Infinity;
     const slideT = anim ? clamp01(elapsed / SLIDE()) : 1;
     if (anim && slideT < 1) {
-      const k = ease(slideT);
-      for (const s of anim.slides) {
-        const a = centre(s.from.r, s.from.c), b = centre(s.to.r, s.to.c);
-        drawTile(mix(a.x, b.x, k), mix(a.y, b.y, k), anim.before.get(s.id));
+      // The glowing theme leaves a fading streak of copies behind each moving tile.
+      const lags = look.trail && !calm() ? [0.34, 0.18, 0] : [0];
+      for (const lag of lags) {
+        const k = ease(clamp01(slideT - lag));
+        for (const s of anim.slides) {
+          const a = centre(s.from.r, s.from.c), b = centre(s.to.r, s.to.c);
+          if (lag && a.x === b.x && a.y === b.y) continue;
+          drawTile(mix(a.x, b.x, k), mix(a.y, b.y, k), anim.before.get(s.id), lag ? 0.94 : 1, lag ? 0.42 - lag : 1);
+        }
       }
       return;
     }
@@ -310,7 +279,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
       const p = centre(t.r, t.c);
       let scale = 1;
       if (anim && popT < 1) {
-        if (merged.has(t.id)) scale = 1 + 0.2 * Math.sin(popT * Math.PI);
+        if (merged.has(t.id)) scale = 1 + look.pop * Math.sin(popT * Math.PI);
         else if (t.id === anim.spawnId) scale = ease(popT);
       }
       if (scale > 0.02) drawTile(p.x, p.y, t.v, scale);
@@ -319,28 +288,34 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   }
   function drawButton() {
     const off = !core.history.length || core.undosLeft <= 0;
-    roundRect(ctx, BTN.x, BTN.y + 3, BTN.w, BTN.h, 16);
-    ctx.fillStyle = off ? '#3e4262' : '#1e55c4';
+    const B = look.button, [top, bottom, base, ink] = off ? B.off : B.on;
+    ctx.save();
+    if (B.glow && !off) { ctx.shadowColor = top; ctx.shadowBlur = 16; }
+    roundRect(ctx, BTN.x, BTN.y + 3, BTN.w, BTN.h, B.radius);
+    ctx.fillStyle = base;
     ctx.fill();
-    roundRect(ctx, BTN.x, BTN.y, BTN.w, BTN.h - 3, 16);
+    ctx.restore();
+    roundRect(ctx, BTN.x, BTN.y, BTN.w, BTN.h - 3, B.radius);
     const g = ctx.createLinearGradient(0, BTN.y, 0, BTN.y + BTN.h);
-    g.addColorStop(0, off ? '#6a6f93' : '#6aa4ff');
-    g.addColorStop(1, off ? '#555a7c' : '#3f7bff');
+    g.addColorStop(0, top);
+    g.addColorStop(1, bottom);
     ctx.fillStyle = g;
     ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#ffffff55';
-    ctx.stroke();
-    ctx.fillStyle = off ? '#c4c7d8' : '#fff';
+    if (B.edge) {
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = B.edge;
+      ctx.stroke();
+    }
+    ctx.fillStyle = ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '800 18px system-ui, sans-serif';
+    ctx.font = `800 18px ${look.panel.font}`;
     ctx.fillText('↶ 撤销', BTN.x + BTN.w / 2 - 6, BTN.y + BTN.h / 2 - 2);
     ctx.beginPath();
     ctx.arc(BTN.x + BTN.w - 9, BTN.y + 9, 11, 0, Math.PI * 2);
-    ctx.fillStyle = off ? '#8a8ea8' : '#ff5d80';
+    ctx.fillStyle = off ? B.badgeOff : B.badge;
     ctx.fill();
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = off ? '#fff' : B.badgeInk;
     ctx.font = '800 12px system-ui, sans-serif';
     ctx.fillText(String(core.undosLeft), BTN.x + BTN.w - 9, BTN.y + 9.5);
   }
@@ -349,17 +324,24 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     if (!alive) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, LW, LH);
-    panel(12, 14, 164, 66, '分数', core.score, '#ffd543');
-    panel(184, 14, 164, 66, online ? '对手' : '最高', online ? (rival?.score ?? 0) : Math.max(best, core.score), '#58d4de');
-    ctx.fillStyle = '#c9cffc';
-    ctx.font = '700 13px system-ui, sans-serif';
+    look.backdrop?.(ctx, LW, LH);
+    panel(12, 14, 164, 66, '分数', core.score, look.panel.score);
+    panel(184, 14, 164, 66, online ? '对手' : '最高', online ? (rival?.score ?? 0) : Math.max(best, core.score), look.panel.best);
+    ctx.fillStyle = look.ink;
+    ctx.font = `700 13px ${look.panel.font}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(online ? `先合出 ${online.view.target} 的人获胜` : `滑动合并相同数字，合出 ${G2048.goal}`, LW / 2, 98);
-    drawWell();
+    const busy = fx.alive(now);
+    const jolt = fx.shake(now);
+    ctx.save();
+    ctx.translate(jolt.x, jolt.y);
+    look.well(ctx, BOARD, slots, CELL);
     drawTiles(now);
+    if (busy) fx.draw(ctx, now, LW, LH, BOARD);
+    ctx.restore();
     drawButton();
-    ctx.fillStyle = '#8f96c9';
+    ctx.fillStyle = look.faint;
     ctx.font = '600 11px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('方向键 / WASD 也能玩 · Z 撤销', LW / 2, 462);
@@ -367,12 +349,12 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
       ctx.font = '800 14px system-ui, sans-serif';
       const width = ctx.measureText(toast.text).width + 28;
       roundRect(ctx, (LW - width) / 2, BOARD.y + BOARD.size / 2 - 14, width, 28, 14);
-      ctx.fillStyle = '#000c';
+      ctx.fillStyle = look.toast[0];
       ctx.fill();
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = look.toast[1];
       ctx.fillText(toast.text, LW / 2, BOARD.y + BOARD.size / 2);
     }
-    if (anim || (toast && toast.until > now)) raf = requestAnimationFrame(frame);
+    if (anim || busy || (toast && toast.until > now)) raf = requestAnimationFrame(frame);
   }
 
   // ---- online ----
@@ -383,7 +365,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     for (const t of rival.tiles) cells[t.r * 4 + t.c] = t;
     rivalGrid.replaceChildren(...cells.map((t) => {
       const cell = el('i', '', t.v ? String(t.v) : '');
-      if (t.v) cell.style.background = paint(t.v)[0];
+      if (t.v) [cell.style.background, cell.style.color] = look.swatch(t.v);
       return cell;
     }));
   }
@@ -414,6 +396,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     const wasStuck = core?.over;
     core = fromView(mine);
     anim = next;
+    if (next) celebrate(next);
     rival = view.players[1 - online.seat];
     drawRival();
     hud();
@@ -423,6 +406,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   }
   const off = online?.on('state', applyServer);
 
+  setTheme(getPref('g2048Theme'));
   if (online) {
     rival = online.view.players[1 - online.seat];
     drawRival();
@@ -436,6 +420,9 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   return {
     get state() { return core; },
     get animating() { return Boolean(anim); },
+    get theme() { return theme; },
+    get effects() { return fx.count; },
+    setTheme,
     restart,
     play,
     undo: takeBack,
@@ -448,6 +435,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     destroy() {
       alive = false;
       off?.();
+      document.removeEventListener('pao-g2048-theme', onTheme);
       rivalBox.remove();
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);
