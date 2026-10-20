@@ -1,0 +1,119 @@
+/* ARCADE 23 起的新游戏共用的舞台：一块竖屏画布（kit.js），--ar 是宽高比，--u 是画布宽度的 1%。 */
+.canvas-wrap.kit-wrap{--u:1cqw;container-type:inline-size;width:min(100%,440px,max(240px,calc((100vh - 300px) * var(--ar))));width:min(100%,440px,max(240px,calc((100dvh - 300px) * var(--ar))))}
+.kit-wrap .game-canvas{height:100%;touch-action:none;background:radial-gradient(120% 90% at 50% 0%,#3b3f86,#232659 55%,#12142f);cursor:pointer;outline:none}
+.kit-overlay{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:calc(var(--u) * 5);background:#0b0f1ce0;border-radius:13px}
+.kit-overlay[hidden]{display:none}
+.kit-card{display:grid;gap:calc(var(--u) * 3);width:100%;max-height:100%;overflow:auto;padding:calc(var(--u) * 7) calc(var(--u) * 5);border-radius:calc(var(--u) * 5);background:#1d2438;border:1px solid #ffffff2e;text-align:center;font-size:calc(var(--u) * 3.8)}
+.kit-card strong{font-size:calc(var(--u) * 7.6);letter-spacing:-.02em}
+.kit-card p{margin:0;color:#c3c9d6;line-height:1.55}
+.kit-overlay.won .kit-card{border-color:var(--yellow)}
+.kit-overlay.lost .kit-card{border-color:var(--pink)}
+.kit-note:empty{display:none}
+.kit-buttons{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(var(--u) * 3)}
+.kit-again{padding:calc(var(--u) * 3) calc(var(--u) * 8);border:1px solid var(--pink);border-radius:calc(var(--u) * 3);background:var(--pink);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.kit-again.ghost{background:transparent;border-color:#ffffff55}
+.stage-actions [data-kit-action][hidden]{display:none}
+@media(max-width:800px) and (orientation:portrait){
+  body.playing .canvas-wrap.kit-wrap{width:min(100%,max(240px,calc((100vh - 190px) * var(--ar))));width:min(100%,max(240px,calc((100dvh - 190px) * var(--ar))))}
+  .stage-actions [data-kit-action]{padding:7px 10px}
+}
+@media(orientation:landscape) and (max-height:600px){
+  body.playing .canvas-wrap.kit-wrap{width:calc((100vh - 70px) * var(--ar));width:calc((100dvh - 70px) * var(--ar))}
+}
+
+/* ---- 首页卡片插画 ---- */
+.arrows .art{background:radial-gradient(125% 125% at 20% 8%,#4a56b8,#2b2f7a 58%,#171a45)}
+.art-arrows{position:absolute;inset:0;background-image:radial-gradient(#ffffff40 2px,transparent 2.5px);background-size:26px 26px;background-position:13px 13px}
+.art-arrows i{position:absolute;height:10px;border-radius:6px;box-shadow:0 3px 0 #0005}
+.art-arrows i::after{content:"";position:absolute;right:-12px;top:50%;margin-top:-10px;border:10px solid transparent;border-left:14px solid currentColor;border-right:0}
+.art-arrows .a0{left:20%;top:30%;width:34%;background:#ff5d80;color:#ff5d80}
+.art-arrows .a1{left:42%;top:56%;width:28%;background:#58d4de;color:#58d4de;transform:rotate(-90deg);transform-origin:left center}
+.art-arrows .a2{left:18%;top:72%;width:22%;background:#ffd543;color:#ffd543}
+.art-arrows .a3{left:60%;top:24%;width:24%;background:#44c986;color:#44c986;transform:rotate(90deg);transform-origin:left center}
+.recent-card[data-game=arrows]{--c:#ff5d80}
+
+.sheep .art{background:radial-gradient(125% 125% at 20% 8%,#a7d878,#6aa84a 58%,#3d6e2c)}
+.art-sheep{position:absolute;inset:0}
+.art-sheep i{position:absolute;width:52px;height:52px;display:grid;place-items:center;font-size:28px;font-style:normal;border-radius:10px;background:#fffbea;border:2px solid #c9dca0;box-shadow:0 5px 0 #7a9a4a}
+.art-sheep i:nth-child(1){left:22%;top:18%}.art-sheep i:nth-child(2){left:40%;top:26%}.art-sheep i:nth-child(3){left:58%;top:16%}.art-sheep i:nth-child(4){left:32%;top:48%;filter:brightness(.7)}.art-sheep i:nth-child(5){left:50%;top:52%}
+.recent-card[data-game=sheep]{--c:#6aa84a}
+
+.nonogram .art{background:radial-gradient(125% 125% at 20% 8%,#6a5acd,#3f3290 58%,#221a55)}
+.art-nono{position:absolute;left:50%;top:50%;width:132px;height:132px;margin:-62px 0 0 -54px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:6px;background:#fff8ec;border-radius:10px;box-shadow:0 8px 14px #0006}
+.art-nono i{border-radius:4px}.art-nono i.f{background:linear-gradient(#cdb4ff,#9b6bff 40%,#6038c4)}
+.art-nono::before{content:"2 1\A 4\A 2\A 1 1";white-space:pre;position:absolute;right:calc(100% + 8px);top:10px;font:800 15px/31px Manrope,system-ui;color:#fff;text-align:right}
+.recent-card[data-game=nonogram]{--c:#9b6bff}
+
+.mahjong .art{background:radial-gradient(125% 125% at 20% 8%,#3a9a6a,#1f5a3e 58%,#0f2f20)}
+.art-mj{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;gap:8px}
+.art-mj i{width:44px;height:58px;display:grid;place-items:center;font:900 30px "Songti SC","Noto Serif SC",serif;font-style:normal;color:#23305a;border-radius:7px;background:linear-gradient(#fffdf6,#efe4c8);box-shadow:0 5px 0 #2f7d55,0 9px 12px #0005}
+.art-mj i.r{color:#d23a3a}.art-mj i.g{color:#1f8a4c}
+.art-mj-line{position:absolute;left:calc(50% - 77px);top:22px;width:154px;height:16px;border:3px solid #ffe14d;border-bottom:0;border-radius:6px 6px 0 0;filter:drop-shadow(0 0 5px #ffe14d)}
+.recent-card[data-game=mahjong]{--c:#2f9a62}
+
+.solitaire .art{background:radial-gradient(125% 125% at 20% 8%,#2f9a72,#1d6b50 58%,#0e3a2b)}
+.art-sol{position:absolute;left:50%;top:14px;width:70px;margin-left:-35px}
+.art-sol i{position:absolute;left:0;width:70px;height:96px;padding:5px 7px;border-radius:9px;background:#fffdf8;border:2px solid #fff;color:#232946;font:900 13px/1.1 Manrope,system-ui;font-style:normal;box-shadow:0 -2px 6px #0003}
+.art-sol i.r{color:#e0344f}.art-sol i:nth-child(2){top:30px}.art-sol i:nth-child(3){top:60px}.art-sol i:nth-child(4){top:90px}
+.art-sol::before{content:"";position:absolute;right:calc(100% + 18px);top:0;width:56px;height:80px;border-radius:9px;background:linear-gradient(135deg,#9b6bff,#5b3cc4);border:2px solid #fff;box-shadow:0 6px 10px #0005}
+.recent-card[data-game=solitaire]{--c:#2f9a72}
+
+.hexsort .art{background:radial-gradient(125% 125% at 20% 8%,#f08bb8,#b44d8c 58%,#5e2257)}
+.art-hex{position:absolute;inset:0}
+.art-hex i{position:absolute;width:56px;height:48px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+.art-hex i.h0{left:28%;top:22%;background:linear-gradient(#ff9a9a,#f04b4b);box-shadow:0 6px 0 #a82626}
+.art-hex i.h1{left:50%;top:36%;background:linear-gradient(#9cc4ff,#3d8bff)}
+.art-hex i.h2{left:30%;top:52%;background:linear-gradient(#ffe9a0,#ffcf3d)}
+.art-hex i.h3{left:52%;top:12%;background:linear-gradient(#93e8b3,#38c26b)}
+.recent-card[data-game=hexsort]{--c:#e05a9a}
+
+.sokoban .art{background:radial-gradient(125% 125% at 20% 8%,#8e7bff,#5b4a9e 58%,#2b2350)}
+.art-soko{position:absolute;left:50%;top:50%;width:176px;height:132px;margin:-66px 0 0 -88px;display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:#efe4ff;border-radius:10px;overflow:hidden;box-shadow:0 8px 14px #0006}
+.art-soko i{display:block}.art-soko i.w{background:#5b4a9e;border:3px solid #7f6cc9;border-radius:8px}
+.art-soko i.p{background:radial-gradient(circle closest-side,#9cc4ff 15%,#3d8bff 55%,#1f55b3 80%,transparent 84%)}
+.art-soko i.b{margin:5px;border-radius:7px;background:linear-gradient(#ffc08a,#ff8f2e 40%,#b3560a)}
+.art-soko i.g{background:radial-gradient(circle,#ff5d80 22%,#ff5d8055 23%,#ff5d8055 40%,transparent 42%)}
+.recent-card[data-game=sokoban]{--c:#7f6cc9}
+
+.screw .art{background:radial-gradient(125% 125% at 20% 8%,#5a6aa8,#3a457a 58%,#1d2347)}
+.art-screw{position:absolute;inset:0}
+.art-screw i{position:absolute;border-radius:16px;border:3px solid #ffffffb0;display:flex;justify-content:space-between;align-items:center;padding:0 10px}
+.art-screw i.p0{left:18%;top:26%;width:62%;height:44px;background:#9cc4ffc8}
+.art-screw i.p1{left:40%;top:16%;width:46px;height:62%;background:#ffb8dec8;flex-direction:column;justify-content:space-between;padding:10px 0}
+.art-screw b{width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe9a0,#ffcf3d 45%,#b88c0a);box-shadow:inset 0 0 0 2px #0002}
+.art-screw i.p1 b{background:radial-gradient(circle at 35% 35%,#ff9a9a,#f04b4b 45%,#a82626)}
+.recent-card[data-game=screw]{--c:#5a7ad0}
+
+.yarn .art{background:radial-gradient(125% 125% at 20% 8%,#ffb07a,#d9744a 58%,#7a3520)}
+.art-yarn{position:absolute;left:50%;top:50%;width:120px;margin:-50px 0 0 -90px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.art-yarn i{aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ff9a9a,#f04b4b 55%,#a82626);box-shadow:inset 0 0 0 3px #ff9a9a55}
+.art-yarn i.p{background:radial-gradient(circle at 35% 35%,#ffb8de,#ff77c0 55%,#b83d86)}
+.art-spool{position:absolute;right:16%;top:24%;width:44px;height:80px;border-top:10px solid #c98b52;border-bottom:10px solid #c98b52;border-radius:6px;background:linear-gradient(90deg,#a82626,#ff9a9a 45%,#f04b4b)}
+.recent-card[data-game=yarn]{--c:#d9744a}
+
+.sand .art{background:radial-gradient(125% 125% at 20% 8%,#ffd28a,#e09a4a 58%,#8a4e1c)}
+.art-sand{position:absolute;left:50%;top:14px;width:120px;height:96px;margin-left:-60px;border-radius:14px;border:3px solid #ffffff80;background:linear-gradient(175deg,#9cc4ff 0 22%,#ff77c0 22% 40%,#ffcf3d 40% 58%,#38c26b 58% 78%,#f04b4b 78%);box-shadow:0 8px 14px #0005}
+.art-pails{position:absolute;left:50%;bottom:14px;margin-left:-66px;display:flex;gap:18px}
+.art-pails i{width:30px;height:28px;clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);background:#f4efe6;border-top:6px solid}
+.art-pails .a{border-color:#f04b4b}.art-pails .b{border-color:#38c26b}.art-pails .c{border-color:#ff77c0}
+.recent-card[data-game=sand]{--c:#e09a4a}
+
+.runfast .art{background:radial-gradient(130% 120% at 20% 8%,#e46b8f,#a23a6a 58%,#4e1a3c)}
+.recent-card[data-game=runfast]{--c:#e46b8f}
+
+.tiaoqi .art{background:radial-gradient(125% 125% at 20% 8%,#4a7ad0,#2b4a9a 58%,#16234e)}
+.art-star{position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;background:#ffffff26;clip-path:polygon(50% 0,63% 25%,93% 25%,77% 50%,93% 75%,63% 75%,50% 100%,37% 75%,7% 75%,23% 50%,7% 25%,37% 25%)}
+.art-pegs{position:absolute;inset:0}
+.art-pegs i{position:absolute;width:20px;height:20px;border-radius:50%;box-shadow:0 3px 4px #0005}
+.art-pegs .a{background:radial-gradient(circle at 35% 35%,#ffb8de,#ff77c0 50%,#b83d86)}
+.art-pegs .b{background:radial-gradient(circle at 35% 35%,#98f0f3,#2fcfd6 50%,#17878d)}
+.art-pegs .c{background:radial-gradient(circle at 35% 35%,#ffe9a0,#ffcf3d 50%,#b88c0a)}
+.art-pegs i:nth-child(1){left:46%;top:72%}.art-pegs i:nth-child(2){left:40%;top:62%}.art-pegs i:nth-child(3){left:52%;top:62%}.art-pegs i:nth-child(4){left:46%;top:16%}.art-pegs i:nth-child(5){left:52%;top:26%}.art-pegs i:nth-child(6){left:24%;top:30%}
+.recent-card[data-game=tiaoqi]{--c:#4a7ad0}
+
+.weiqi .art{background:radial-gradient(125% 125% at 20% 8%,#3a6a5a,#23443a 58%,#10221c)}
+.art-go{position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:10px;background:linear-gradient(#f2c98a,#d9a35e);background-image:linear-gradient(#7a5226 1px,transparent 1px),linear-gradient(90deg,#7a5226 1px,transparent 1px),linear-gradient(#f2c98a,#d9a35e);background-size:25px 25px,25px 25px,auto;background-position:12px 12px,12px 12px,0 0;box-shadow:0 8px 14px #0006}
+.art-go i{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;box-shadow:0 3px 4px #0005}
+.art-go i.b{background:radial-gradient(circle at 35% 35%,#8b90a8,#4a4f63 45%,#111320)}
+.art-go i.w{background:radial-gradient(circle at 35% 35%,#fff,#f4f2ec 50%,#b9b4a6)}
+.recent-card[data-game=weiqi]{--c:#3a6a5a}

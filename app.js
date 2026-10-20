@@ -43,6 +43,19 @@ const MODE_META = {
   sudoku: { label: 'ARCADE 10', title: '数独', help: '每行、每列、每个 3×3 宫都要填进 1～9，且不能重复。点一格再点下面的数字填入；填错会亮红并扣一次机会，错满 3 次本局失败。打开「笔记」可以在格子里记候选数，填对一个数时同行同列同宫的候选会自动划掉。点「提示」会直接填出一格，但用了提示的局不计入榜单；其余按用时排名。简单、普通、困难各有自己的榜单和各自没做完的题，题目都保证只有唯一解：简单和普通光靠「只剩一个可能」就能推完，困难需要更多技巧。电脑上可以用 1～9、方向键、Backspace、N、Z、H。' },
   soulforge: { label: 'EXTRA · 第三方', title: 'SOULFORGE 灵魂锻炉', help: '第三方像素冒险游戏，嵌入自作者的站点 soulforge.glasden.top，本站不保存它的进度。存档在这台设备的浏览器里，和直接打开原站玩的存档是分开的两份，可以用游戏里的「导入存档」迁移。电脑上用键盘玩，先点一下游戏画面；手机只能横屏玩，可以点游戏里的「全屏并横屏」。' },
   achroma: { label: 'EXTRA · 第三方', title: 'Achroma', help: '第三方像素动作游戏，嵌入自作者的站点 game.unsnow.online，本站不保存它的进度。嵌在这里时不能登录（linux.do 登录页不允许被嵌入），要上传成绩、看自己的记录请点「在原站打开」。电脑上用键盘玩，先点一下游戏画面；手机横屏玩更舒服。' },
+  arrows: { label: 'ARCADE 23', title: '箭头消除', help: '点一条箭头，它会像贪吃蛇一样沿箭头方向一路往前走：头前面一直到边上都没有别的线段，就整条滑出去消掉；半路撞上别的线段会弹回原位，扣一次机会。三次机会用完本关失败，原样重试。先找头前面没有东西挡着的箭头，一条条拆开，全部清空就过关。每关都一定有解，零失误三星；点「提示」会让一条现在就能走的箭头闪一下。关卡越往后点阵越大、线段越长越绕，进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  sheep: { label: 'ARCADE 34', title: '羊了个羊', help: '桌上的图案牌一层压一层，只有上面没被压住的（亮着的）才能点。点到的牌会进下方的 7 格槽，槽里凑齐三张同样的就消掉；7 格塞满就输。底下两摞是盲牌，只露出最上面一张。三个道具每关各能用一次：「移出」把槽里前三张挪到槽上面一排，之后可以再点回来；「撤回」把上一张放回原处；「洗牌」把桌上剩下的牌重新分配图案。槽满时也可以用移出或撤回接着玩。每关都按一个合法顺序发牌，保证有解；第 1 关是热身，之后图案越来越多、层越来越厚。进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  nonogram: { label: 'ARCADE 29', title: '数织', help: '左边和上边的数字，是这一行（列）里连续涂黑的格子有几段、每段多长，按顺序排；段和段之间至少隔一格。照着数字推理，把整张图涂出来。点格子涂黑，再点一次擦掉；切到「打叉」可以把肯定不涂的格子标出来（电脑上右键也是打叉）。按住拖动能一次涂一排。一行的数字对上了会变暗。「撤销」退回上一步，「提示」直接改对或涂上一格，但用了提示的题不计入榜单。简单 5×5、普通 10×10、困难 15×15，题目保证只靠逐行推理就能解出唯一的图；每个难度各存一份没做完的题，榜单按用时排名。' },
+  mahjong: { label: 'ARCADE 28', title: '麻将连连看', help: '点两张一样的麻将牌：如果能用一条最多拐两个弯的线把它们连起来（线只能走空位，可以绕到牌阵外面一圈），两张就一起消掉。时间条走完前把牌消光就过关，剩下的时间换成奖励分；3 秒内接着消算连击，加分更多。从第 4 关起，消掉之后牌会往一个方向挤过去（下、左、上、右轮换）。没有能连的牌时会自动洗牌；每关还有 3 次「提示」和 3 次「洗牌」。进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  solitaire: { label: 'ARCADE 30', title: '纸牌接龙', help: '经典的 Klondike 接龙。下面七列牌桌按「红黑交替、点数递减」接起来，可以把一整串明牌一起挪；空列只能放 K。上面右边四个收牌区按花色从 A 收到 K，四叠收齐就赢。左上角是牌堆，点它翻牌（抽一张或抽三张，翻完可以无限次重来）。点一张牌会自动挪到最合适的地方，也可以按住拖到想放的那一列；挪走后露出的暗牌会自动翻开。牌堆和翻牌区都用完、牌桌全是明牌时，剩下的会自动收完。「撤销」退回上一步，「提示」会点亮一步可走的牌；不是每一局都有解，走不动了就换一局。抽一张和抽三张各有一份按用时排名的榜单，没打完的一局会存在这台设备上。' },
+  hexsort: { label: 'ARCADE 27', title: '六角排序', help: '下面托盘里有三叠彩色六角片，点一叠再点棋盘上的空格（或者直接拖过去）把它放下。放下后，挨着的几叠如果最上面是同一种颜色，这段颜色就会挪到同一叠上，可能一路连锁下去；某一叠顶上的同色片攒够 10 片就整段消掉。叠顶上的数字是最上面那段同色有几片。三叠都放完会再发三叠。消掉的片数达到本关目标就过关；棋盘被占满就输，原样重试。越往后颜色越多、叠越高，还会有放不了东西的石头格。进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  sokoban: { label: 'ARCADE 31', title: '推箱子', help: '把所有木箱推到粉色的目标点上就过关。人只能推、不能拉，一次只能推一个箱子；箱子推进墙角就再也拉不出来了，推之前先想清楚。走路的方法：方向键或 WASD、在画面上朝一个方向滑一下、点下面的四个方向按钮，都是走一步；点地板上的某一格，小人会自己找路走过去；点紧挨着小人的箱子就把它推一格。「撤销」（也可以按 Z）退回一步，「重新开始」把本关摆回原样。每关都标了最少推箱次数，推的次数不超过它就是三星。一共 50 关，箱子从 2 个慢慢加到 4 个，进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  screw: { label: 'ARCADE 24', title: '拧螺丝', help: '一块块半透明的彩色板子用螺丝钉在一起，点一颗螺丝把它拧下来：上面被别的板子盖住的拧不动。拧下来的螺丝会自己飞进上面同色的螺丝盒（每盒装 3 颗，同时摆出两盒），没有同色的盒子就先放进中间的暂存孔；新盒子来了，暂存孔里同色的螺丝会自己跳进去。一块板子上的螺丝全拧光，它就掉下去，露出下面的螺丝。暂存孔塞满、又没有能直接进盒的螺丝就输；每关可以用一次「加一个孔」。螺丝全部拧完过关。每关都按一个合法顺序发色，保证有解；越往后板子越多、颜色越多。进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  yarn: { label: 'ARCADE 35', title: '毛线三消', help: '一幅用毛线球拼成的像素画，只能从外圈往里拆：上下左右至少有一边空着（或者挨着画边）的毛线球才拿得到，被围在里面的颜色暗一些。点一个拿得到的球，它会飞到上面同色的线轴上（每个线轴绕 3 个，同时摆出三轴）；没有同色线轴就先挂到中间的暂存杆上，新线轴来了，杆上同色的球会自己绕过去。暂存杆挂满、又没有能直接绕上线轴的球就输；每关可以用一次「多一个挂钩」。整幅画拆完就过关。八幅画轮流出现，越往后线轴的顺序越不贴心、暂存杆越短。每关都保证有解，进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  sand: { label: 'ARCADE 25', title: '沙画消消', help: '上面是一瓶分层的彩色流沙，下面三列排着沙桶。点某一列最前面的桶，它就放上中间的传送带（5 格）。传送带上的桶会吸走瓶子最底下两行里和自己同色的沙子，桶上的数字是还能装多少，装满就收走、空出位置。底下的沙子被吸走后，上面的沙子会往下流、往两边滑，露出新的颜色。传送带上凑齐三个同色的桶会合成一个大桶，腾出两格。传送带占满、又没有一个桶吸得到沙子，就输了；每关可以用一次「加一格」。沙子全部吸光过关。越往后颜色越多、层越碎、桶的顺序越乱；每关都先模拟玩过一遍，保证有解。进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  runfast: { label: 'ARCADE 26', title: '跑得快', help: '你和两个电脑各拿 16 张牌（去掉大小王、三张 2 只留 ♠2、去掉一张 A），谁先出完谁赢。牌点从小到大是 3 4 5 … K A 2。第一局拿到 ♠3 的人先出，第一手要带上 ♠3；之后由上一局的赢家先出。能出的牌型：单张、对子、连对（两对起）、三带二、顺子（五张起，2 不能进顺子）、飞机（两组以上连续的三张，每组带两张）、炸弹（四张同点，能压任何非炸弹）；最后一手可以三带一、只出三张，飞机也可以少带。有大必压：压得过上家就必须出，不能「不要」。下家报单（只剩一张）时，你出单张只能出手里最大的。点手牌选中，再点「出牌」；「提示」会帮你选一手。一局结束，没出完的人按剩下的张数扣分，一张都没出过的翻倍；每打出一个炸弹，另两家各给 10 分。总分保存在这台设备上，「重新开始」清零。' },
+  tiaoqi: { label: 'ARCADE 32', title: '中国跳棋', help: '六角星形的棋盘上，每人 10 颗棋子从自己的角出发，谁先把棋子全部走进正对面的角谁赢。点自己的棋子，能去的孔会亮起黄点，再点一个就走过去。一步可以挪到相邻的空孔；也可以隔着紧挨着的一颗棋子（谁的都行）跳到正对面的空孔，能连着跳就一直跳下去，一次走得很远——但走和跳不能混在一起。防堵角规则：对面的角已经被棋子占满，只要里面有你的棋子也算你赢。顶栏可以换玩法：对一个电脑、对两个电脑（三人局）、或者两个人同屏轮流；「悔棋」退回到你上一次落子之前。对电脑的战绩记在这台设备上。' },
+  weiqi: { label: 'ARCADE 33', title: '围棋 9×9', help: '9 路小棋盘的围棋，黑先白后，点交叉点落子。一块棋四周的气（相邻的空点）全被对方堵住就被提掉；不能下到自己没气、又提不掉对方的地方（自杀），也不能下出以前出现过的局面（打劫要先在别处找劫材）。双方连续「停一手」就进入数子：电脑会先把它猜的死子打上叉，点一块棋可以改它的死活，再点「确认数子」；要是还想接着下，点「继续下」。按中国规则数子：棋子加围住的空点，白方贴 7.5 子，多的一方赢。「悔棋」对电脑时退回到你上一步之前。顶栏可以选执黑或执白对电脑、或者两个人同屏轮流，电脑有简单、普通、困难三档（越难想得越久）。对电脑的战绩记在这台设备上。' },
   goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
 // 抓大鹅, 方块爆破, 三消勇者团, 挪车接客, 倒水排序, 2048 and 数独 are solo games: no seats, no snapshots, no co-op toggle.
@@ -58,7 +71,25 @@ const CLASSIC_GAMES = {
   draughts: { load: () => import('./board-games.js'), mount: 'mountDraughts' },
   jungle: { load: () => import('./board-games.js'), mount: 'mountJungle' }
 };
-const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'skychef', 'sudoku', ...Object.keys(CLASSIC_GAMES), ...Object.keys(EMBED_GAMES)];
+// ARCADE 23 起的新游戏：每款一个模块，mount(wrap, { onHud, onResult, onButtons, onBoard }) 返回 { restart, destroy, board?, …按钮动作 }。
+// buttons 是顶栏里「重新开始」之外的按钮（动作名 → 文字），点了就调模块上的同名方法，模块可以用 onButtons 改文字或藏起来（null）。
+// canvas：画布游戏放进 .canvas-wrap，否则放进 .classic-wrap；board：有全球榜单（榜单 id 由模块的 board 给出，默认是游戏 id）。
+const KIT_GAMES = {
+  arrows: { load: () => import('./arrows.js'), mount: 'mountArrows', canvas: true, board: true, buttons: { hint: '提示' } },
+  sheep: { load: () => import('./sheep.js'), mount: 'mountSheep', canvas: true, board: true, buttons: { hint: '提示' } },
+  nonogram: { load: () => import('./nonogram.js'), mount: 'mountNonogram', canvas: true, board: true, buttons: { level: '换难度', hint: '提示' } },
+  mahjong: { load: () => import('./mahjong.js'), mount: 'mountMahjong', canvas: true, board: true, buttons: { hint: '提示', shuffle: '洗牌' } },
+  solitaire: { load: () => import('./solitaire.js'), mount: 'mountSolitaire', canvas: true, board: true, buttons: { mode: '换玩法' } },
+  hexsort: { load: () => import('./hexsort.js'), mount: 'mountHexsort', canvas: true, board: true },
+  sokoban: { load: () => import('./sokoban.js'), mount: 'mountSokoban', canvas: true, board: true, buttons: { undo: '撤销' } },
+  screw: { load: () => import('./screw.js'), mount: 'mountScrew', canvas: true, board: true, buttons: { hint: '提示' } },
+  yarn: { load: () => import('./yarn.js'), mount: 'mountYarn', canvas: true, board: true, buttons: { hint: '提示' } },
+  sand: { load: () => import('./sand.js'), mount: 'mountSand', canvas: true, board: true, buttons: { slot: '加一格' } },
+  runfast: { load: () => import('./runfast.js'), mount: 'mountRunfast', canvas: true, seat: '人机' },
+  tiaoqi: { load: () => import('./tiaoqi.js'), mount: 'mountTiaoqi', canvas: true, seat: '对弈', buttons: { mode: '换玩法', undo: '悔棋' } },
+  weiqi: { load: () => import('./weiqi.js'), mount: 'mountWeiqi', canvas: true, seat: '对弈', buttons: { mode: '换玩法', level: '电脑难度' } }
+};
+const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'skychef', 'sudoku', ...Object.keys(CLASSIC_GAMES), ...Object.keys(EMBED_GAMES), ...Object.keys(KIT_GAMES)];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
 const DRAG_GAIN = 1.25;
 const $ = (selector) => document.querySelector(selector);
@@ -115,6 +146,8 @@ let sudokuToken = 0;
 let sudokuLevel = 'normal';
 let classic = null;
 let classicToken = 0;
+let kit = null;
+let kitToken = 0;
 // 邀请链接（?game=…&room=…）带来的待加入房间；对应游戏的舞台建好时取走。
 let pendingInvite = null;
 const takeInvite = (game) => { const invite = pendingInvite?.game === game ? pendingInvite.code : null; if (invite) pendingInvite = null; return invite; };
@@ -143,7 +176,7 @@ let rtc = { peer: null, channel: null };
 let onlineSession = null;
 
 function showScreen(id) {
-  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSuika(); stopTetris(); stopSkychef(); stopSudoku(); stopClassic(); clearModeTabs(); }
+  if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSuika(); stopTetris(); stopSkychef(); stopSudoku(); stopClassic(); stopKit(); clearModeTabs(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
@@ -392,10 +425,12 @@ function buildStage() {
   stopSkychef();
   stopSudoku();
   stopClassic();
+  stopKit();
   clearModeTabs();
-  $('#game-link').hidden = Boolean(CLASSIC_GAMES[mode] || EMBED_GAMES[mode]);
-  $('#game-board').hidden = Boolean(CLASSIC_GAMES[mode] || EMBED_GAMES[mode]);
+  $('#game-link').hidden = Boolean(CLASSIC_GAMES[mode] || EMBED_GAMES[mode] || KIT_GAMES[mode]);
+  $('#game-board').hidden = Boolean(CLASSIC_GAMES[mode] || EMBED_GAMES[mode] || (KIT_GAMES[mode] && !KIT_GAMES[mode].board));
   if (CLASSIC_GAMES[mode]) return buildClassicStage(stage, meta);
+  if (KIT_GAMES[mode]) return buildKitStage(stage, meta);
   if (EMBED_GAMES[mode]) return buildEmbedStage(stage, meta);
   if (mode === 'goose') return buildGooseStage(stage, meta);
   if (mode === 'quest') return buildQuestStage(stage, meta);
@@ -423,7 +458,7 @@ function startGame(nextMode) {
   mode = nextMode; activePlayer = lan.role === 'guest' ? 1 : 0;
   noteOpened(mode);
   // The 2D loop idles while state is null, which leaves the frame to goose.js.
-  if (['goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'skychef', 'sudoku'].includes(mode) || CLASSIC_GAMES[mode] || EMBED_GAMES[mode]) { state = null; buildStage(); showScreen('game'); return; }
+  if (['goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'skychef', 'sudoku'].includes(mode) || CLASSIC_GAMES[mode] || EMBED_GAMES[mode] || KIT_GAMES[mode]) { state = null; buildStage(); showScreen('game'); return; }
   // Read the saved skin before the first frame draws.
   applyStoredTheme();
   state = lan.role === 'guest' ? null : newGame(); resetBlastView();
@@ -486,6 +521,38 @@ async function buildClassicStage(stage, meta) {
     if (startOnline) return enterOnline(invite);
   }
   return enterLocal();
+}
+function stopKit() {
+  kitToken += 1;
+  kit?.destroy();
+  kit = null;
+}
+async function buildKitStage(stage, meta) {
+  const gameMode = mode, token = kitToken, config = KIT_GAMES[mode];
+  const extra = Object.entries(config.buttons ?? {}).map(([key, label]) => `<button type="button" data-kit-action="${key}">${label}</button>`).join('');
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · ${config.seat ?? '单人'}</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions">${extra}<button id="restart-game">重新开始</button></div></div><div class="${config.canvas ? 'canvas-wrap' : 'classic-wrap'}"></div><p class="game-help">${meta.help}</p>`;
+  const wrap = stage.querySelector('.canvas-wrap, .classic-wrap'), hud = stage.querySelector('#score-text');
+  stage.querySelectorAll('[data-kit-action]').forEach((node) => node.addEventListener('click', () => kit?.[node.dataset.kitAction]?.()));
+  stage.querySelector('#restart-game').addEventListener('click', () => kit?.restart());
+  const live = () => token === kitToken && mode === gameMode;
+  const onButtons = (labels) => {
+    if (!live()) return;
+    for (const [key, label] of Object.entries(labels)) {
+      const node = stage.querySelector(`[data-kit-action="${key}"]`);
+      if (!node) continue;
+      node.hidden = label === null;
+      if (label !== null) node.textContent = label;
+    }
+  };
+  try {
+    const module = await config.load();
+    if (!live()) return;
+    kit = module[config.mount](wrap, { onHud: (text) => { if (live()) hud.textContent = text; }, onResult: reportScore, onButtons, onBoard: () => { if (live()) syncActivity(); } });
+  } catch (error) {
+    if (!live()) return;
+    console.error(error);
+    hud.textContent = '游戏加载失败，请返回后重试';
+  }
 }
 // 第三方游戏（iframe）借用 classic 这个句柄，离开游戏页时由 stopClassic 一并卸掉。
 function buildEmbedStage(stage, meta) {
@@ -1027,6 +1094,7 @@ const pop3Record = () => state.endless && state.players.length === 1;
 
 // 每个游戏的每个模式各有一份全球榜。
 function boardId() {
+  if (KIT_GAMES[mode]) return kit?.board ?? mode;
   if (mode === 'quest') return 'quest';
   if (mode === 'park') return 'park';
   if (mode === 'sudoku') return `sudoku-${sudokuLevel}`;
@@ -1506,7 +1574,7 @@ document.addEventListener('keydown', keyboard); document.addEventListener('keyup
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
-window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get suika() { return suika; }, get tetris() { return tetris; }, get skychef() { return skychef; }, get sudoku() { return sudoku; }, get classic() { return classic; } };
+window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get suika() { return suika; }, get tetris() { return tetris; }, get skychef() { return skychef; }, get sudoku() { return sudoku; }, get classic() { return classic; }, get kit() { return kit; } };
 // The card handlers only exist once this module has run, so tests wait on this
 // rather than racing the import.
 document.body.dataset.ready = '1';

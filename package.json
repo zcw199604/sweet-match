@@ -9,6 +9,7 @@
     "test:e2e": "playwright test",
     "vendor": "node scripts/vendor.js",
     "gen:pour": "node scripts/gen-pour-levels.js",
+    "gen:sokoban": "node scripts/gen-sokoban.js",
     "build:monopoly": "node scripts/build-monopoly.js"
   },
   "devDependencies": {

@@ -138,7 +138,7 @@ test('最近常玩: 拒绝非法玩家标识、未知游戏和不合理的数值
   const future = await (await post(store, { pid: PID(2), items: [{ game: 'pop2', last: 9_999_999_999_999, ms: 0 }] }, 1_000_000)).json();
   assert.equal(future.games.pop2.last, 1_000_000 + 10 * MIN);
   assert.equal((await handleRecent(new Request('http://x/api/recent', { method: 'POST', body: '{坏的' }), store)).status, 400);
-  assert.equal((await handleRecent(new Request('http://x/api/recent', { method: 'POST', body: 'x'.repeat(3000) }), store)).status, 413);
+  assert.equal((await handleRecent(new Request('http://x/api/recent', { method: 'POST', body: 'x'.repeat(5000) }), store)).status, 413);
   assert.equal((await handleRecent(new Request('http://x/api/recent', { method: 'DELETE' }), store)).status, 405);
   assert.equal((await get(store, 'x')).status, 400);
 });

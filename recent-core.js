@@ -12,7 +12,8 @@ const known = (game) => GAMES.some((item) => item.id === game);
 const MAX_ITEMS = GAMES.length;
 const MAX_DELTA_MS = 12 * 3600_000; // 单次上报最多累计 12 小时，挡住明显的乱填
 const FUTURE_SLACK_MS = 10 * 60_000; // 允许客户端时钟比服务端快一点
-const BODY_LIMIT = 2048;
+// 每个游戏一条记录约 60 字节；游戏多了（现在 37 款）一次全报上来也不能超。
+const BODY_LIMIT = 60 * MAX_ITEMS + 512;
 
 // 存储里的内容不可信：未知游戏、负数和非数字一律丢掉。
 function cleanMap(map) {
