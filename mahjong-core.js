@@ -1,32 +1,33 @@
 // 麻将连连看（ARCADE 28）的规则：点两张一样的麻将牌，能用不超过三段直线（最多拐两个弯）、
 // 只经过空位（可以绕到牌阵外面一圈）把它们连起来，就一起消掉。限时内消光过关。
-// 后面的关卡消掉之后牌会往一个方向挤过去（重力），没有能连的就自动洗牌。
+// 经典模式牌不动；「移动模式」每关定一个方向，消掉之后同一行（列）的牌往那边挤过去（下、左、上、右轮换）。没有能连的就自动洗牌。
 import { levelSeed, rng, shuffle } from './kit-core.js';
 
 // 34 种牌：0–8 万，9–17 筒，18–26 条，27–30 东南西北，31–33 中发白。
 export const KINDS = 34;
-export const GRAVITY = ['none', 'none', 'none', 'down', 'left', 'up', 'right'];
+export const MODES = ['classic', 'move'];
+export const DIRECTIONS = ['down', 'left', 'up', 'right'];
 
-export function levelShape(level) {
+export function levelShape(level, mode = 'classic') {
   const n = Math.max(1, level);
   const cols = Math.min(8, 5 + Math.floor((n + 1) / 3));
   const rows = Math.min(10, 6 + Math.floor(n / 2));
   const pairs = Math.floor((cols * rows) / 2);
   const kinds = Math.min(KINDS, 8 + n * 2, pairs);
-  const gravity = n <= 3 ? 'none' : GRAVITY[3 + ((n - 4) % 4)];
+  const gravity = mode === 'move' ? DIRECTIONS[(n - 1) % DIRECTIONS.length] : 'none';
   const time = Math.round(pairs * Math.max(3.2, 6 - n * 0.15) + 20);
   return { cols, rows, kinds, gravity, time, pairs };
 }
 
-export function createLevel(level, seed = levelSeed('mahjong', level)) {
-  const shape = levelShape(level);
+export function createLevel(level, seed = levelSeed('mahjong', level), mode = 'classic') {
+  const shape = levelShape(level, mode);
   const rand = rng(seed);
   const kinds = shuffle([...Array(KINDS).keys()], rand).slice(0, shape.kinds);
   const tiles = [];
   for (let i = 0; i < shape.pairs; i += 1) tiles.push(kinds[i % kinds.length], kinds[i % kinds.length]);
   shuffle(tiles, rand);
   const grid = Array.from({ length: shape.rows }, (_, r) => Array.from({ length: shape.cols }, (_, c) => tiles[r * shape.cols + c] ?? -1));
-  const state = { level, seed, rows: shape.rows, cols: shape.cols, gravity: shape.gravity, grid, time: shape.time, left: shape.time, pairs: shape.pairs, cleared: 0, hints: 3, shuffles: 3, combo: 0, lastAt: -99, score: 0 };
+  const state = { level, seed, mode, rows: shape.rows, cols: shape.cols, gravity: shape.gravity, grid, time: shape.time, left: shape.time, pairs: shape.pairs, cleared: 0, hints: 3, shuffles: 3, combo: 0, lastAt: -99, score: 0 };
   // 开局没有能连的就先洗一次
   if (!findPair(state)) reshuffle(state, rand);
   return state;
@@ -86,18 +87,24 @@ export function reshuffle(state, rand = Math.random) {
   }
   return false;
 }
-// 消掉之后按本关的重力把牌挤过去。
+// 消掉之后按本关的方向把牌挤过去。返回挪了位置的牌（from → to），给画面做滑动。
 function settle(state) {
   const { rows, cols, grid, gravity } = state;
-  if (gravity === 'none') return;
+  const moves = [];
+  if (gravity === 'none') return moves;
   const vertical = gravity === 'down' || gravity === 'up';
   const lines = vertical ? cols : rows;
   for (let k = 0; k < lines; k += 1) {
     const cells = vertical ? Array.from({ length: rows }, (_, r) => [r, k]) : Array.from({ length: cols }, (_, c) => [k, c]);
     if (gravity === 'down' || gravity === 'right') cells.reverse();
-    const kinds = cells.map(([r, c]) => grid[r][c]).filter((v) => v >= 0);
-    cells.forEach(([r, c], i) => { grid[r][c] = kinds[i] ?? -1; });
+    const tiles = cells.filter(([r, c]) => grid[r][c] >= 0).map(([r, c]) => ({ from: [r, c], kind: grid[r][c] }));
+    cells.forEach(([r, c], i) => {
+      const tile = tiles[i];
+      grid[r][c] = tile ? tile.kind : -1;
+      if (tile && (tile.from[0] !== r || tile.from[1] !== c)) moves.push({ from: tile.from, to: [r, c] });
+    });
   }
+  return moves;
 }
 export const remaining = (state) => state.grid.flat().filter((v) => v >= 0).length;
 export const outcome = (state) => (remaining(state) === 0 ? 'won' : state.left <= 0 ? 'lost' : 'playing');
@@ -115,10 +122,10 @@ export function link(state, a, b, now = 0) {
   state.combo = now - state.lastAt <= 3 ? state.combo + 1 : 1;
   state.lastAt = now;
   state.score += 10 + (state.combo - 1) * 5;
-  settle(state);
+  const moves = settle(state);
   let shuffled = false;
   if (remaining(state) && !findPair(state)) shuffled = reshuffle(state);
-  return { ok: true, path, kind: ka, shuffled };
+  return { ok: true, path, kind: ka, shuffled, moves };
 }
 export function tick(state, seconds) {
   if (outcome(state) !== 'playing') return;

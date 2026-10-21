@@ -39,7 +39,9 @@ export const BOARDS = {
   'nonogram-easy': { game: 'nonogram', label: '5×5', order: 'asc', unit: '秒', scale: 10, min: 30, max: 108_000 },
   'nonogram-normal': { game: 'nonogram', label: '10×10', order: 'asc', unit: '秒', scale: 10, min: 100, max: 108_000 },
   'nonogram-hard': { game: 'nonogram', label: '15×15', order: 'asc', unit: '秒', scale: 10, min: 200, max: 108_000 },
-  mahjong: { game: 'mahjong', label: '最高关卡', order: 'desc', unit: '关', scale: 1, min: 1, max: 9_999 },
+  // 麻将连连看：经典（牌不动）和移动模式（消掉后牌往一个方向挤）各一份榜。
+  mahjong: { game: 'mahjong', label: '经典', order: 'desc', unit: '关', scale: 1, min: 1, max: 9_999 },
+  'mahjong-move': { game: 'mahjong', label: '移动模式', order: 'desc', unit: '关', scale: 1, min: 1, max: 9_999 },
   // 纸牌接龙按通关用时（0.1 秒存成整数），抽一张、抽三张各一份榜。
   'solitaire-1': { game: 'solitaire', label: '抽一张', order: 'asc', unit: '秒', scale: 10, min: 300, max: 360_000 },
   'solitaire-3': { game: 'solitaire', label: '抽三张', order: 'asc', unit: '秒', scale: 10, min: 300, max: 360_000 },

@@ -91,6 +91,22 @@ test('麻将连连看: tapping two linkable tiles removes them, props count down
   expect((await posted).postDataJSON()).toMatchObject({ board: 'mahjong', value: 1 });
 });
 
+test('麻将连连看: move mode names its direction, keeps its own progress, and posts to its own board', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await open(page, 'mahjong');
+  expect(await kit(page, (k) => k.playMode)).toBe('classic');
+  await tapAt(page, await kit(page, (k) => k.locateSwitch('move')));
+  expect(await kit(page, (k) => [k.playMode, k.board, k.state.gravity])).toEqual(['move', 'mahjong-move', 'down']);
+  const posted = page.waitForRequest((r) => r.url().includes('/api/scores') && r.method() === 'POST');
+  await kit(page, (k) => { for (let p = k.pair(); p; p = k.pair()) { k.choose(p[0].r, p[0].c); k.choose(p[1].r, p[1].c); } });
+  await expect(page.locator('.kit-card')).toContainText('第 1 关清空');
+  expect((await posted).postDataJSON()).toMatchObject({ board: 'mahjong-move', value: 1 });
+  // 切回经典，两边进度各记各的
+  await page.locator('.kit-card button', { hasText: '下一关' }).click();
+  await tapAt(page, await kit(page, (k) => k.locateSwitch('classic')));
+  expect(await kit(page, (k) => [k.playMode, k.state.level, k.state.gravity])).toEqual(['classic', 1, 'none']);
+});
+
 test('纸牌接龙: tapping the waste ace sends it home, the rest auto-collects, the time is posted, and 抽三张 turns three', async ({ page }) => {
   await open(page, 'solitaire');
   // 只差黑桃：A♠ 在翻牌区，K♠…2♠ 摞在第一列（2♠ 在最上面），其余三种花色已经收齐

@@ -40,8 +40,22 @@ test('gravity squeezes the tiles toward one side after a pair goes', () => {
   link(state, { r: 0, c: 1 }, { r: 1, c: 1 });
   assert.deepEqual(state.grid.map((row) => row[1]), [-1, -1, 6]);
   const left = hand([[3, 3, 4, 4]], 'left');
-  link(left, { r: 0, c: 0 }, { r: 0, c: 1 });
+  const result = link(left, { r: 0, c: 0 }, { r: 0, c: 1 });
   assert.deepEqual(left.grid[0], [4, 4, -1, -1]);
+  // 挪了位置的牌都报出来，画面靠它做滑动
+  assert.deepEqual(result.moves, [{ from: [0, 2], to: [0, 0] }, { from: [0, 3], to: [0, 1] }]);
+  const still = hand([[3, 3, 4, 4]]);
+  assert.deepEqual(link(still, { r: 0, c: 0 }, { r: 0, c: 1 }).moves, []);
+  assert.deepEqual(still.grid[0], [-1, -1, 4, 4]);
+});
+
+test('classic levels never move; move mode turns down, left, up, right from level 1', () => {
+  for (const level of [1, 4, 5, 9, 30]) assert.equal(levelShape(level).gravity, 'none');
+  assert.deepEqual([1, 2, 3, 4, 5].map((level) => levelShape(level, 'move').gravity), ['down', 'left', 'up', 'right', 'down']);
+  const state = createLevel(6, 7, 'move');
+  assert.equal(state.mode, 'move');
+  assert.equal(state.gravity, 'left');
+  assert.equal(createLevel(6, 7).gravity, 'none');
 });
 
 test('every level starts with a move, runs out of time, and props are limited', () => {
