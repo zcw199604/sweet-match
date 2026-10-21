@@ -205,6 +205,13 @@ export function mountYarn(wrap, { onHud = () => {}, onResult = null } = {}) {
     if (flights.length || departs.length || hintOn || vis.spools.some((s) => s && now - s.t0 < 180)) shell.poke(16);
   };
 
+  // 全屏：上面的线轴 / 挂钩、下面的加挂钩按钮是信息栏，毛线图案是游戏区
+  shell.regions = () => [
+    { x: 0, y: 0, w: W, h: PIC_Y - 14, role: 'top' },
+    { x: lay.x - 12, y: PIC_Y - 12, w: lay.cell * state.cols + 24, h: lay.cell * state.rows + 24, role: 'main' },
+    { x: 0, y: ADD_BTN.y - 12, w: W, h: H - ADD_BTN.y + 12, role: 'bottom' }
+  ];
+
   const api = {
     get state() { return state; },
     get playing() { return playing; },

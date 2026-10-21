@@ -169,6 +169,13 @@ export function mountRunfast(wrap, { onHud = () => {} } = {}) {
   };
 
   deal();
+  // 全屏：上面两个电脑座位、下面的出牌按钮是信息栏，牌桌连同手牌是游戏区
+  shell.regions = () => [
+    { x: 0, y: 0, w: W, h: 96, role: 'top' },
+    { x: 0, y: 100, w: W, h: BTN.play.y - 108, role: 'main' },
+    { x: 0, y: BTN.play.y - 6, w: W, h: BTN.play.h + 12, role: 'bottom' }
+  ];
+
   return {
     get state() { return state; },
     restart() {

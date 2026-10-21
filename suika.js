@@ -3,6 +3,7 @@
 // candy fruits, lets the player aim and drop, and plays the events back as juice and floating scores.
 // The core state is always up to date; an effect only changes what is shown.
 import { advance, canDrop, clampX, createState, drop, isMoving, LEVELS, restoreState, snapshot, SUIKA, TOP_LEVEL, WORLD } from './suika-core.js';
+import { fitView } from './fit-view.js';
 
 const LW = 360;
 const LH = 560;
@@ -228,7 +229,13 @@ export function mountSuika(wrap, { onHud = () => {}, onResult = null } = {}) {
   const overlay = el('div', 'suika-overlay');
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
+  // 全屏：上面的分数 / 下一个、下面的说明是信息栏，箱子是游戏区（fit-view.js）
+  const fit = fitView(canvas, { width: LW, height: LH, onChange: () => poke(), regions: () => [
+    { x: 0, y: 0, w: LW, h: 48, role: 'top' },
+    { x: 0, y: 50, w: LW, h: 484, role: 'main' },
+    { x: 0, y: 534, w: LW, h: LH - 534, role: 'bottom' }
+  ] });
 
   const poke = () => { if (!raf && alive) { last = 0; raf = requestAnimationFrame(frame); } };
   const say = (text) => { toast = { text, until: performance.now() + 1600 }; poke(); };
@@ -348,10 +355,8 @@ export function mountSuika(wrap, { onHud = () => {}, onResult = null } = {}) {
   }
 
   // ---- input ----
-  const toLogical = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    return { x: (event.clientX - rect.left) * LW / rect.width, y: (event.clientY - rect.top) * LH / rect.height };
-  };
+  // 拖动瞄准：手指滑出箱子也按箱子换算
+  const toLogical = (event) => fit.point(event.clientX, event.clientY, 'main');
   const aimAt = (x) => { aimX = clampX(core.current, x); poke(); };
   function onDown(event) {
     if (!alive || !overlay.hidden) return;
@@ -539,8 +544,7 @@ export function mountSuika(wrap, { onHud = () => {}, onResult = null } = {}) {
     }
     if (core.over && overlay.hidden && overAt && now - overAt > 700) finish();
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
+    ctx = fit.begin();
     panel(12, 6, 108, 40, '分数', core.score, '#ffd543');
     panel(128, 6, 108, 40, '最高', Math.max(best, core.score), '#58d4de');
     panel(244, 6, 104, 40, '下一个', null, '');
@@ -566,6 +570,7 @@ export function mountSuika(wrap, { onHud = () => {}, onResult = null } = {}) {
       ctx.fillText(toast.text, LW / 2, 315);
     }
     const busy = isMoving(core) || core.danger > 0 || bits.length || floaters.length || pops.size || (toast && toast.until > now) || (core.over && overlay.hidden);
+    fit.end();
     if (busy && alive) raf = requestAnimationFrame(frame);
   }
 
@@ -592,6 +597,7 @@ export function mountSuika(wrap, { onHud = () => {}, onResult = null } = {}) {
     destroy() {
       persist();
       alive = false;
+      fit.destroy();
       clearInterval(saveTimer);
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);

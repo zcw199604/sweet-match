@@ -233,6 +233,18 @@ export function mountHexsort(wrap, { onHud = () => {}, onResult = null } = {}) {
   };
 
   begin(progress.level || 1);
+  // 全屏：上面的进度、下面的托盘是信息栏，六角棋盘是游戏区
+  shell.regions = () => {
+    const spots = Object.keys(state.board).map(center);
+    const xs = spots.map((p) => p[0]), ys = spots.map((p) => p[1]), pad = lay.s * 1.25;
+    const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad - 14;
+    return [
+      { x: 0, y: 0, w: W, h: 62, role: 'top' },
+      { x: x0, y: y0, w: Math.max(...xs) + pad - x0, h: Math.max(...ys) + pad - y0, role: 'main' },
+      { x: 0, y: TRAY_Y - 98, w: W, h: 138, role: 'bottom' }
+    ];
+  };
+
   return {
     get state() { return state; },
     get busy() { return busy; },

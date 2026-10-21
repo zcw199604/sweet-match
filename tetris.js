@@ -3,6 +3,7 @@
 // does; this module draws glossy candy blocks, runs the key / button repeat (hold a direction and the piece keeps
 // sliding), and plays the events back as flashes and call-outs. Each difficulty keeps its own unfinished game, so
 // switching level never throws progress away.
+import { fitView } from './fit-view.js';
 import {
   cellsOf, COLS, createState, DIFFS, DIFF_IDS, ghostY, hardDrop, hold as swapHold, HIDDEN, move, previews, restoreState,
   rotate, ROWS, SHAPES, snapshot, tick
@@ -107,7 +108,13 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
   const overlay = el('div', 'tetris-overlay');
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
+  // 全屏：上面的分数、下面的按键是信息栏，暂存 / 井 / 下一个这一排是游戏区（fit-view.js）
+  const fit = fitView(canvas, { width: LW, height: LH, onChange: () => poke(), regions: () => [
+    { x: 0, y: 0, w: LW, h: 50, role: 'top' },
+    { x: 2, y: WELL.y - 4, w: LW - 4, h: WELL.h + 8, role: 'main' },
+    { x: 0, y: BTN.y - 6, w: LW, h: LH - BTN.y + 6, role: 'bottom' }
+  ] });
 
   const poke = () => { if (!raf && alive) { last = 0; raf = requestAnimationFrame(frame); } };
   const say = (text) => { toast = { text, until: performance.now() + 1500 }; poke(); };
@@ -262,10 +269,7 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     down.delete(source);
     if (action && !isHeld(action)) delete das[action];
   }
-  const toLogical = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    return { x: (event.clientX - rect.left) * LW / rect.width, y: (event.clientY - rect.top) * LH / rect.height };
-  };
+  const toLogical = (event) => fit.point(event.clientX, event.clientY);
   const inside = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
   function onDown(event) {
     if (!alive || !overlay.hidden) return;
@@ -491,8 +495,7 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     }
     if (core.over && overlay.hidden && overAt && now - overAt > 600) finish();
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
+    ctx = fit.begin();
     panel(12, 6, 108, 40, '分数', core.score, '#ffd543');
     panel(128, 6, 108, 40, '最高', Math.max(Number(best[level]) || 0, core.score), '#58d4de');
     panel(244, 6, 104, 40, '等级', core.level, '#ff8fd0');
@@ -518,6 +521,7 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
       ctx.fillText(toast.text, WELL.x + WELL.w / 2, WELL.y + 74);
     }
     const busy = playing() || flash || sweeps.length || floaters.length || (toast && toast.until > now) || (core.over && overlay.hidden);
+    fit.end();
     if (busy && alive) raf = requestAnimationFrame(frame);
   }
 
@@ -546,6 +550,7 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     destroy() {
       persist();
       alive = false;
+      fit.destroy();
       clearInterval(saveTimer);
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);

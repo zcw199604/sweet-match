@@ -5,6 +5,7 @@
 // The core state is always up to date; `vis` is what is currently shown, one event behind.
 import { addTube, createState, findHint, outcome, pour, POUR, shuffle, stageScore, STAGES, stars, undo } from './pour-core.js';
 import { LEVEL_DEFS } from './pour-levels.js';
+import { fitView } from './fit-view.js';
 
 const LW = 360;
 const LH = 640;
@@ -71,7 +72,13 @@ export function mountPour(wrap, { onHud = () => {}, onResult = null } = {}) {
   const overlay = el('div', 'pour-overlay');
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
+  // 全屏：上面的置物架、下面的道具栏是信息栏，试管区是游戏区（fit-view.js）
+  const fit = fitView(canvas, { width: LW, height: LH, onChange: () => poke(0), regions: () => [
+    { x: 0, y: 0, w: LW, h: FIELD.y - 6, role: 'top' },
+    { x: FIELD.x - 4, y: FIELD.y - 4, w: FIELD.w + 8, h: FIELD.h + 8, role: 'main' },
+    { x: 0, y: BAR.y - 8, w: LW, h: LH - BAR.y + 8, role: 'bottom' }
+  ] });
 
   const poke = (ms) => { animUntil = Math.max(animUntil, performance.now() + ms); if (!raf && alive) raf = requestAnimationFrame(frame); };
   const speed = (ms) => (calm() ? ms * 0.2 : ms);
@@ -176,7 +183,7 @@ export function mountPour(wrap, { onHud = () => {}, onResult = null } = {}) {
       const cos = Math.cos(at.angle), sin = Math.sin(at.angle);
       const world = (lx, ly) => [at.px + (lx - (at.side > 0 ? tw : 0)) * cos - ly * sin, at.py + (lx - (at.side > 0 ? tw : 0)) * sin + ly * cos];
       const low = Math.max(world(0, 0)[1], world(tw, 0)[1], world(0, th)[1], world(tw, th)[1]);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(fit.unit, 0, 0, fit.unit, 0, 0);
       let top = low - 3;
       for (const layer of layers) {
         const h = layer.h * ch;
@@ -355,8 +362,7 @@ export function mountPour(wrap, { onHud = () => {}, onResult = null } = {}) {
   }
   function onPointer(event) {
     if (!alive || !overlay.hidden) return;
-    const rect = canvas.getBoundingClientRect();
-    const px = (event.clientX - rect.left) * LW / rect.width, py = (event.clientY - rect.top) * LH / rect.height;
+    const { x: px, y: py } = fit.point(event.clientX, event.clientY);
     event.preventDefault();
     if (py >= BAR.y) {
       const index = BUTTONS.findIndex((_, k) => px >= btnX(k) && px <= btnX(k) + BTN.w);
@@ -479,8 +485,7 @@ export function mountPour(wrap, { onHud = () => {}, onResult = null } = {}) {
     for (let i = anims.length - 1; i >= 0; i -= 1) {
       if (now - anims[i].t0 >= anims[i].ms) { const [done] = anims.splice(i, 1); done.resolve(); }
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
+    ctx = fit.begin();
     drawShelf(now);
     drawTubes(now);
     drawBar();
@@ -495,6 +500,7 @@ export function mountPour(wrap, { onHud = () => {}, onResult = null } = {}) {
       ctx.textAlign = 'center';
       ctx.fillText(toast.text, LW / 2, BAR.y - 20);
     }
+    fit.end();
     const marking = [...marks.values()].some((mark) => mark.until > now) || (toast && toast.until > now) || flash > now;
     if (anims.length || marking || now < animUntil) raf = requestAnimationFrame(frame);
   }
@@ -519,11 +525,12 @@ export function mountPour(wrap, { onHud = () => {}, onResult = null } = {}) {
     tap(i) { if (!busy && overlay.hidden && vis.tubes[i] && !vis.sealed[i]) tapTube(i); },
     // Where a tube sits on the page, for tests that click it.
     locate(i) {
-      const rect = canvas.getBoundingClientRect(), p = tubePos(i);
-      return { x: rect.left + (p.x + lay.tw / 2) * rect.width / LW, y: rect.top + (p.y + lay.th / 2) * rect.height / LH };
+      const p = tubePos(i);
+      return fit.page(p.x + lay.tw / 2, p.y + lay.th / 2);
     },
     destroy() {
       alive = false;
+      fit.destroy();
       cancelAnimationFrame(raf);
       anims.splice(0).forEach((anim) => anim.resolve());
       canvas.removeEventListener('pointerdown', onPointer);

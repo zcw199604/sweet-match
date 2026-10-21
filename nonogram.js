@@ -206,6 +206,16 @@ export function mountNonogram(wrap, { onHud = () => {}, onResult = null, onButto
   const timer = setInterval(() => { if (startedAt && !game.done) { hud(); shell.poke(); } }, 1000);
 
   load(level);
+  // 全屏：上面的难度 / 计时、下面的工具按钮是信息栏，线索连同格子是游戏区
+  shell.regions = () => {
+    const size = game.size, { cell, gx, gy, clueW, clueH } = lay;
+    return [
+      { x: 0, y: 0, w: W, h: 38, role: 'top' },
+      { x: gx - clueW - 6, y: gy - clueH - 6, w: clueW + cell * size + 16, h: clueH + cell * size + 16, role: 'main' },
+      { x: 0, y: TOOLS[0].rect.y - 8, w: W, h: TOOLS[0].rect.h + 16, role: 'bottom' }
+    ];
+  };
+
   return {
     get state() { return game; },
     get board() { return `nonogram-${level}`; },

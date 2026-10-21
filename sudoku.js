@@ -3,6 +3,7 @@
 // style: dark glossy slots, the givens in plain white, every digit you place as a glossy rainbow chip
 // (1 red … 9 pink), and a pad whose buttons are the same chips.
 // Each difficulty keeps its own unfinished puzzle, so switching level never throws progress away.
+import { fitView } from './fit-view.js';
 import {
   createGame, DIFFS, DIFF_IDS, col, emptyCount, erase, firstOpen, generate, hint, isLocked, isWrong, MISTAKES, noteBit,
   pack, PEERS, place, placed, row, toggleNote, undo, unpack
@@ -75,7 +76,13 @@ export function mountSudoku(wrap, { diff = 'normal', onHud = () => {}, onResult 
   const overlay = el('div', 'sudoku-overlay');
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
+  // 全屏：上面的难度 / 计时、下面的工具和数字键是信息栏，九宫格是游戏区（fit-view.js）
+  const fit = fitView(canvas, { width: LW, height: LH, onChange: () => poke(), regions: () => [
+    { x: 0, y: 0, w: LW, h: GRID.y - 6, role: 'top' },
+    { x: GRID.x - 6, y: GRID.y - 6, w: GRID.size + 12, h: GRID.size + 12, role: 'main' },
+    { x: 0, y: TB.y - 8, w: LW, h: LH - TB.y + 8, role: 'bottom' }
+  ] });
 
   const poke = () => { if (!raf && alive) raf = requestAnimationFrame(frame); };
   const say = (text) => { toast = { text, until: performance.now() + 1600 }; poke(); };
@@ -205,8 +212,7 @@ export function mountSudoku(wrap, { diff = 'normal', onHud = () => {}, onResult 
   function onPointer(event) {
     if (!alive || !overlay.hidden) return;
     event.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const px = (event.clientX - rect.left) * LW / rect.width, py = (event.clientY - rect.top) * LH / rect.height;
+    const { x: px, y: py } = fit.point(event.clientX, event.clientY);
     if (py >= NUM.y) {
       for (let d = 1; d <= 9; d += 1) if (px >= numX(d) && px <= numX(d) + NUM.w) return digit(d);
       return;
@@ -411,8 +417,7 @@ export function mountSudoku(wrap, { diff = 'normal', onHud = () => {}, onResult 
   function frame(now) {
     raf = 0;
     if (!alive) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
+    ctx = fit.begin();
     drawHeader();
     drawGrid(now);
     drawTools();
@@ -428,6 +433,7 @@ export function mountSudoku(wrap, { diff = 'normal', onHud = () => {}, onResult 
       ctx.textBaseline = 'middle';
       ctx.fillText(toast.text, LW / 2, GRID.y + GRID.size / 2);
     }
+    fit.end();
     if ((toast && toast.until > now) || (shake && shake.until > now)) raf = requestAnimationFrame(frame);
   }
 
@@ -446,11 +452,10 @@ export function mountSudoku(wrap, { diff = 'normal', onHud = () => {}, onResult 
     tool,
     // Where a cell, a tool or a pad button sits on the page, for tests that click it.
     locate(kind, index) {
-      const rect = canvas.getBoundingClientRect();
       const at = kind === 'cell' ? { x: cellXY(index).x + CELL / 2, y: cellXY(index).y + CELL / 2 }
         : kind === 'tool' ? { x: toolX(TOOLS.findIndex((t) => t.id === index)) + TB.w / 2, y: TB.y + TB.h / 2 }
           : { x: numX(index) + NUM.w / 2, y: NUM.y + NUM.h / 2 };
-      return { x: rect.left + at.x * rect.width / LW, y: rect.top + at.y * rect.height / LH };
+      return fit.page(at.x, at.y);
     },
     // A hand-made puzzle for tests: { puzzle, solution } as 81-digit strings.
     load(puzzle) { core = createGame({ diff: level, ...puzzle }); elapsed = 0; selected = -1; focus = 0; settled = false; overlay.hidden = true; save(); hud(); poke(); },
@@ -458,6 +463,7 @@ export function mountSudoku(wrap, { diff = 'normal', onHud = () => {}, onResult 
       tick(); // bank the seconds since the last tick before the clock stops
       save();
       alive = false;
+      fit.destroy();
       cancelAnimationFrame(raf);
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);

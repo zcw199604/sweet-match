@@ -215,6 +215,37 @@ function fitFull() {
   const height = stage.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom) - (row ? 0 : used);
   stage.style.setProperty('--fw', `${Math.floor(width)}px`);
   stage.style.setProperty('--fh', `${Math.floor(Math.max(160, height))}px`);
+  fitClassicBoard(Math.floor(width), Math.floor(Math.max(160, height)));
+}
+// 棋牌类（网页元素搭的棋盘）：全屏时先按原样量出棋盘，把这个尺寸定住，再用 zoom 放到能放的最大
+// （zoom 会重新排版，字和棋子都清楚，点击也不用换算）。竖屏时棋盘上下的工具、状态照旧；
+// 横屏时棋盘在左边占满高度，其余的排在右边一列（style.css 全屏段的 .full-sized）。斗地主没有棋盘，不动。
+const CLASSIC_BOARDS = '.strategy-board, .aero-board, .mine-board, .junqi-board, .xiangqi-board';
+let fittedBoard = null;
+const classicWatch = typeof MutationObserver === 'function' ? new MutationObserver(() => {
+  // 棋盘元素换了（载入完成、联机进入对局）才重算，平时落子只改格子不用管
+  if ($('#game-stage > .classic-wrap')?.querySelector(`.classic-game > :is(${CLASSIC_BOARDS})`) !== fittedBoard) requestAnimationFrame(() => fitFull());
+}) : null;
+function fitClassicBoard(fw, fh) {
+  const wrap = $('#game-stage > .classic-wrap');
+  classicWatch?.disconnect();
+  fittedBoard = null;
+  if (!wrap) return;
+  wrap.classList.remove('full-sized');
+  if (!isFull()) return;
+  classicWatch?.observe(wrap, { childList: true, subtree: true });
+  const board = wrap.querySelector(`.classic-game > :is(${CLASSIC_BOARDS})`);
+  const box = board?.getBoundingClientRect();
+  if (!box?.width || !box.height) return;
+  fittedBoard = board;
+  let roomW = fw, roomH = fh;
+  if (fw > fh) roomW = fw - Math.min(300, Math.max(180, fw * 0.32)) - 14;   // 右边留一列给工具和状态
+  else roomH = fh - (board.parentElement.getBoundingClientRect().height - box.height);
+  const zoom = Math.max(0.5, Math.min(3, roomW / box.width, roomH / box.height));
+  wrap.style.setProperty('--bw', `${box.width}px`);
+  wrap.style.setProperty('--bh', `${box.height}px`);
+  wrap.style.setProperty('--bz', String(Math.floor(zoom * 1000) / 1000));
+  wrap.classList.add('full-sized');
 }
 // 按钮栏换行、操作按钮重画都会改变剩下的高度，盯着它们重算。
 function watchFull() {
@@ -313,7 +344,7 @@ function installMessageHandler(message) {
     act(state, 1, message.action);
     broadcastSnapshot(message.action?.type !== 'move');
   } else if (message.type === 'snapshot' && lan.role === 'guest' && message.state) {
-    const changed = modeForState(message.state) !== mode || !$('.game-canvas');
+    const changed = modeForState(message.state) !== mode || !$('#main-canvas');
     state = message.state;
     mode = modeForState(state);
     activePlayer = 1;
@@ -524,7 +555,7 @@ function buildStageContent() {
   if (mode === 'sudoku') return buildSudokuStage(stage, meta);
   // Only 泡噗2 is reskinned, so only that board gets the picker.
   const picker = mode === 'pop2' ? '<div class="theme-row" id="theme-row"></div>' : '';
-  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap${viewHeight() === HEIGHT ? '' : ' portrait'}" style="--h:${viewHeight()}"><canvas class="game-canvas" width="720" height="${viewHeight()}" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
+  stage.innerHTML = `<div class="stage-top"><div><span id="seat-text"></span><strong id="score-text">0 分</strong></div><div class="stage-actions">${picker}<button id="restart-game">重新开始</button></div></div><div class="canvas-wrap${viewHeight() === HEIGHT ? '' : ' portrait'}" style="--h:${viewHeight()}"><canvas class="game-canvas" id="main-canvas" width="720" height="${viewHeight()}" tabindex="0" aria-label="${meta.title} 游戏画布"></canvas></div><div class="mobile-controls" id="mobile-controls"></div><p class="game-help">${stageHelp()}</p>`;
   const canvas = stage.querySelector('canvas');
   canvas.addEventListener('pointerdown', pointerDown);
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -1058,7 +1089,7 @@ function pointerDown(event) {
   if (mode === 'blast') blastPointer(entry, point, false);
 }
 function pointerMove(event) {
-  const entry = pointers.get(event.pointerId), canvas = $('.game-canvas');
+  const entry = pointers.get(event.pointerId), canvas = $('#main-canvas');
   if (!entry || !state || !canvas) return;
   event.preventDefault();
   const point = canvasPoint(canvas, event); entry.last = point;
@@ -1557,7 +1588,7 @@ function hudLine() {
   return `${state.score} 分 · 防线 ${state.lives} · 击退 ${state.defeated}/${surgeStage(state).total || '∞'}${tail}`;
 }
 function renderGame() {
-  const canvas = $('.game-canvas'); if (!canvas) return;
+  const canvas = $('#main-canvas'); if (!canvas) return;
   // Toggling solo/shared play or turning the phone changes the board's shape.
   if (viewHeight() !== shownHeight) resizeCanvas();
   const ctx = canvas.getContext('2d');
@@ -1615,8 +1646,9 @@ function setupControls() {
 }
 
 let shownHeight = HEIGHT;
+// 只管泡噗 2/3、山山兔、方块爆破这块画布；别的游戏的画布也叫 .game-canvas，尺寸由它们自己定。
 function resizeCanvas() {
-  const canvas = $('.game-canvas'); if (!canvas) return; const ratio = Math.min(2, window.devicePixelRatio || 1), h = shownHeight = viewHeight();
+  const canvas = $('#main-canvas'); if (!canvas) return; const ratio = Math.min(2, window.devicePixelRatio || 1), h = shownHeight = viewHeight();
   const wrap = canvas.parentElement; wrap.classList.toggle('portrait', h !== HEIGHT); wrap.style.setProperty('--h', h);
   canvas.width = WIDTH * ratio; canvas.height = h * ratio; canvas.style.aspectRatio = `${WIDTH} / ${h}`; canvas.getContext('2d').setTransform(ratio, 0, 0, ratio, 0, 0);
 }

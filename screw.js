@@ -309,6 +309,13 @@ export function mountScrew(wrap, { onHud = () => {}, onResult = null } = {}) {
     if (flights.length || falls.length || departs.length || hintOn || vis.boxes.some((b) => b && now - b.t0 < 200)) shell.poke(16);
   };
 
+  // 全屏：上面的螺丝盒 / 托盘、下面的加孔按钮是信息栏，板子区域是游戏区
+  shell.regions = () => [
+    { x: 0, y: 0, w: W, h: OY - 20, role: 'top' },
+    { x: OX - 14, y: OY - 14, w: AREA.w + 28, h: AREA.h + 28, role: 'main' },
+    { x: 0, y: ADD_BTN.y - 12, w: W, h: H - ADD_BTN.y + 12, role: 'bottom' }
+  ];
+
   const api = {
     get state() { return state; },
     get playing() { return playing; },

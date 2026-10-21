@@ -246,6 +246,13 @@ export function mountSolitaire(wrap, { onHud = () => {}, onResult = null, onButt
   const timer = setInterval(() => { if (startedAt && !done) { hud(); shell.poke(); } }, 1000);
 
   if (saved?.game?.tableau) { game = saved.game; game.history = []; draw = game.draw; elapsed = saved.elapsed || 0; begin(); } else fresh(draw);
+  // 全屏：上面的计时 / 步数、下面的撤销 / 提示是信息栏，牌桌是游戏区
+  shell.regions = () => [
+    { x: 0, y: 0, w: W, h: 32, role: 'top' },
+    { x: 0, y: TOP_Y - 6, w: W, h: UNDO_BTN.y - 8 - (TOP_Y - 6), role: 'main' },
+    { x: 0, y: UNDO_BTN.y - 6, w: W, h: UNDO_BTN.h + 12, role: 'bottom' }
+  ];
+
   const api = {
     get state() { return game; },
     get board() { return `solitaire-${draw}`; },

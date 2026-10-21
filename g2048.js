@@ -6,6 +6,7 @@ import { createState, DIRS, G2048, maxTile, move, restoreState, snapshot, undo }
 import { createFx, isG2048Theme, themeLook } from './g2048-art.js';
 import { getPref } from './prefs.js';
 import { rngFrom } from './rng-core.js';
+import { fitView } from './fit-view.js';
 
 const LW = 360;
 const LH = 540;
@@ -67,7 +68,13 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   }
   const onTheme = (event) => setTheme(event.detail);
   document.addEventListener('pao-g2048-theme', onTheme);
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
+  // 全屏：上面的分数 / 说明、下面的撤销按钮是信息栏，棋盘是游戏区（fit-view.js）
+  const fit = fitView(canvas, { width: LW, height: LH, onChange: () => poke(), regions: () => [
+    { x: 0, y: 0, w: LW, h: 108, role: 'top' },
+    { x: BOARD.x - 4, y: BOARD.y - 4, w: BOARD.size + 8, h: BOARD.size + 8, role: 'main' },
+    { x: 0, y: 450, w: LW, h: LH - 450, role: 'bottom' }
+  ] });
   // 对手的小盘面：放在画布外面（画布容器有固定的宽高比）。
   const rivalBox = el('div', 'race-rival'), rivalLine = el('div', ''), rivalGrid = el('div', 'rival-grid');
   // 联机时每一步都在本地完整算出来（服务端发来的随机状态 seed 能算出同样的新块），发出去不用等；
@@ -194,10 +201,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   }
 
   // ---- input ----
-  const toLogical = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    return { x: (event.clientX - rect.left) * LW / rect.width, y: (event.clientY - rect.top) * LH / rect.height };
-  };
+  const toLogical = (event) => fit.point(event.clientX, event.clientY);
   const SWIPE = 22;
   function onDown(event) {
     if (!alive || !overlay.hidden) return;
@@ -329,8 +333,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   function frame(now) {
     raf = 0;
     if (!alive) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
+    ctx = fit.begin();
     look.backdrop?.(ctx, LW, LH);
     panel(12, 14, 164, 66, '分数', core.score, look.panel.score);
     panel(184, 14, 164, 66, online ? '对手' : '最高', online ? (rival?.score ?? 0) : Math.max(best, core.score), look.panel.best);
@@ -361,6 +364,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
       ctx.fillStyle = look.toast[1];
       ctx.fillText(toast.text, LW / 2, BOARD.y + BOARD.size / 2);
     }
+    fit.end();
     if (anim || busy || (toast && toast.until > now)) raf = requestAnimationFrame(frame);
   }
 
@@ -467,6 +471,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     },
     destroy() {
       alive = false;
+      fit.destroy();
       for (const off of offs) off();
       clearTimeout(rivalTimer);
       document.removeEventListener('pao-g2048-theme', onTheme);

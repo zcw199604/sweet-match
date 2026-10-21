@@ -149,6 +149,12 @@ export function mountTiaoqi(wrap, { onHud = () => {}, onButtons = () => {} } = {
   };
 
   fresh();
+  // 全屏：星形棋盘是游戏区，下面的玩家标识是信息栏
+  shell.regions = () => [
+    { x: 0, y: CY - S * 13.6, w: W, h: S * 27.2, role: 'main' },
+    { x: 0, y: H - 52, w: W, h: 52, role: 'bottom' }
+  ];
+
   return {
     get state() { return state; },
     get modeId() { return mode.id; },

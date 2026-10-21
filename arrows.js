@@ -196,6 +196,12 @@ export function mountArrows(wrap, { onHud = () => {}, onResult = null } = {}) {
   }
 
   begin(best.level || 1);
+  // 全屏：上面的关卡 / 机会是信息栏，点阵连同线段是游戏区（留出半格让飞出去的线段多露一点）
+  shell.regions = () => [
+    { x: 0, y: 0, w: W, h: 70, role: 'top' },
+    { x: lay.x - 20, y: lay.y - 20, w: lay.cell * state.cols + 40, h: lay.cell * state.rows + 40, role: 'main' }
+  ];
+
   return {
     get state() { return state; },
     board: 'arrows',

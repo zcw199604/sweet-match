@@ -26,9 +26,13 @@ test('every game: the full-screen button fits, full screen fills the screen with
     const full = page.locator('[data-game-full]');
     await expect.poll(async () => inside(await full.boundingBox(), view), { message: `${id}: 按钮在屏幕内` }).toBe(true);   // 刚进来页面还在归位
     const before = await page.locator(AREA).boundingBox();
+    // 画布缓冲区的宽高比要和它在屏幕上的宽高比一致：不一致就是被拉变形了
+    // （以前全屏派发的 resize 让泡噗的 resizeCanvas 把别的游戏的画布改成 1440×1440，画面清空、拉歪）
+    const stretched = () => page.evaluate(() => { const c = document.querySelector('#game-stage canvas.game-canvas'); if (!c) return false; const r = c.getBoundingClientRect(); return Math.abs(c.width / c.height - r.width / r.height) > 0.02 * (r.width / r.height); });
     await full.click();
     await expect(page.locator('body'), id).toHaveClass(/game-full/);
     await expect(full).toHaveText('退出全屏');
+    await expect.poll(stretched, { message: `${id}: 画布没被拉变形` }).toBe(false);
     const stage = await page.locator('#game-stage').boundingBox();
     expect([Math.round(stage.x), Math.round(stage.y), Math.round(stage.width), Math.round(stage.height)], `${id}: 铺满屏幕`).toEqual([0, 0, view.width, view.height]);
     await expect.poll(async () => { const box = await page.locator(AREA).boundingBox(); return inside(box, view) && box.width >= before.width * 0.98; }, { message: `${id}: 游戏区在屏幕内且不比平时小` }).toBe(true);
@@ -71,3 +75,59 @@ test('the back gesture leaves full screen but not the game, the exit button leav
   await expect(page.locator('#home')).toHaveClass(/active/);
   await expect.poll(() => page.url()).toContain('#home');
 });
+
+// 全屏时游戏区单独放大：画布游戏把信息栏和游戏区拆开重排（fit-view.js），棋牌类把棋盘 zoom 到最大。
+// 竖屏和横屏各看一遍：游戏区比平时大、横屏时占满高度，点在放大后的位置上也照样落子。
+const PHONE = { portrait: { width: 390, height: 664 }, landscape: { width: 844, height: 390 } };
+for (const [shape, size] of Object.entries(PHONE)) {
+  test(`${shape}: canvas games blow up the play area, keep the bars small, and taps still land`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await open(page, 'mahjong');
+    await page.waitForFunction(() => window.__arcade.kit?.state);
+    // 相邻两张牌中心的距离 = 牌在屏幕上的宽度
+    const tile = () => page.evaluate(() => { const { locate } = window.__arcade.kit; return locate(0, 1).x - locate(0, 0).x; });
+    const before = await tile();
+    await page.locator('[data-game-full]').click();
+    await expect.poll(tile, { message: '牌变大了' }).toBeGreaterThan(before * 1.3);
+    const corners = () => page.evaluate(() => { const { locate, state } = window.__arcade.kit; const a = locate(0, 0), b = locate(state.rows - 1, state.cols - 1); return { top: a.y, bottom: b.y, left: a.x, right: b.x }; });
+    // 进全屏后尺寸要等一两帧才定下来
+    if (shape === 'landscape') await expect.poll(async () => { const c = await corners(); return c.bottom - c.top; }, { message: '横屏时牌桌几乎占满高度' }).toBeGreaterThan(size.height * 0.6);
+    const board = await corners();
+    expect(board.top).toBeGreaterThan(0);
+    expect(board.bottom).toBeLessThan(size.height);
+    expect(board.right).toBeLessThan(size.width);
+    // 真点两下：先点一对能连上的牌
+    const left = () => page.evaluate(() => window.__arcade.kit.state.grid.flat().filter((v) => v >= 0).length);
+    const count = await left();
+    const [a, b] = await page.evaluate(() => { const { pair, locate } = window.__arcade.kit; const [p, q] = pair(); return [locate(p.r, p.c), locate(q.r, q.c)]; });
+    await page.mouse.click(a.x, a.y);
+    await page.mouse.click(b.x, b.y);
+    await expect.poll(left).toBe(count - 2);
+
+    // 自己画画布的游戏（数独）：格子变大，点格子能选中
+    await page.locator('[data-game-full]').click();
+    await open(page, 'sudoku');
+    await page.waitForFunction(() => window.__arcade.sudoku);
+    const cell = () => page.evaluate(() => { const { locate } = window.__arcade.sudoku; return locate('cell', 1).x - locate('cell', 0).x; });
+    const small = await cell();
+    await page.locator('[data-game-full]').click();
+    await expect.poll(cell).toBeGreaterThan(small * 1.15);
+    const spot = await page.evaluate(() => window.__arcade.sudoku.locate('cell', 40));
+    await page.mouse.click(spot.x, spot.y);
+    await expect.poll(() => page.evaluate(() => window.__arcade.sudoku.selected)).toBe(40);
+  });
+
+  test(`${shape}: board games zoom the board to the most room there is and clicks still land`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await open(page, 'gomoku');
+    const boardBox = () => page.locator('.strategy-board').boundingBox();
+    const before = await boardBox();
+    await page.locator('[data-game-full]').click();
+    await expect.poll(async () => (await boardBox()).height).toBeGreaterThan(before.height * (shape === 'landscape' ? 1.3 : 0.99));
+    const board = await boardBox();
+    expect(inside(board, size), '棋盘在屏幕内').toBe(true);
+    if (shape === 'landscape') expect(board.height, '横屏时棋盘占满高度').toBeGreaterThan(size.height * 0.85);
+    await page.locator('[data-cell="112"]').click();
+    await expect(page.locator('[data-cell="112"] .board-piece')).toBeVisible();
+  });
+}

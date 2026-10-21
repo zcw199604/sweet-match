@@ -189,6 +189,12 @@ export function mountWeiqi(wrap, { onHud = () => {}, onButtons = () => {} } = {}
   };
 
   fresh();
+  // 全屏：棋盘是游戏区，下面的提子 / 提示 / 按钮是信息栏
+  shell.regions = () => [
+    { x: OX - 26, y: OY - 26, w: CELL * (SIZE - 1) + 52, h: CELL * (SIZE - 1) + 52, role: 'main' },
+    { x: 0, y: OY + CELL * (SIZE - 1) + 30, w: W, h: H - (OY + CELL * (SIZE - 1) + 30), role: 'bottom' }
+  ];
+
   return {
     get state() { return state; },
     get thinking() { return Boolean(thinking); },

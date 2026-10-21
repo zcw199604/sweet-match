@@ -1,6 +1,7 @@
 // 新一批街机（ARCADE 23 起）共用的画布外壳：高清画布、按需刷新的动画循环、
 // 逻辑坐标换算、结算卡片、提示条、本机存档，以及糖果质感的画笔。
 // 每个游戏只管自己的规则（*-core.js）和画面；app.js 用同一套舞台把它们框起来。
+import { fitView } from './fit-view.js';
 
 export const calm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 export const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
@@ -118,7 +119,8 @@ export function canvasGame(wrap, { width = 360, height = 640, label = '游戏画
   let inFrame = false; // render 里调 poke 只延长 until，由这一帧结尾统一决定要不要下一帧
   const anims = [];
   const offs = [];
-  const shell = { W: width, H: height, render: () => {} };
+  // regions：全屏时哪块是游戏区、哪几块是信息栏（见 fit-view.js），游戏不给就整张画布一起放大
+  const shell = { W: width, H: height, render: () => {}, regions: null };
   const canvas = el('canvas', 'game-canvas');
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   canvas.width = Math.round(width * dpr);
@@ -132,7 +134,7 @@ export function canvasGame(wrap, { width = 360, height = 640, label = '游戏画
   wrap.style.setProperty('--ar', String(width / height));
   wrap.style.aspectRatio = `${width} / ${height}`;
   wrap.replaceChildren(canvas, overlay);
-  const ctx = canvas.getContext('2d');
+  const fit = fitView(canvas, { width, height, regions: () => shell.regions?.() ?? [], onChange: () => wake() });
 
   function frame(now) {
     raf = 0;
@@ -140,8 +142,7 @@ export function canvasGame(wrap, { width = 360, height = 640, label = '游戏画
     for (let i = anims.length - 1; i >= 0; i -= 1) {
       if (now - anims[i].t0 >= anims[i].ms) { const [done] = anims.splice(i, 1); done.resolve(); }
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
+    const ctx = fit.begin();
     inFrame = true;
     try {
       shell.render(ctx, now);
@@ -155,11 +156,12 @@ export function canvasGame(wrap, { width = 360, height = 640, label = '游戏画
       ctx.fill();
       text(ctx, toast.text, width / 2, toast.y + 1, { size: 14 });
     }
+    fit.end();
     if (anims.length || now < until || (toast && toast.until > now)) raf = requestAnimationFrame(frame);
   }
   const wake = () => { if (!raf && alive && !inFrame) raf = requestAnimationFrame(frame); };
   Object.assign(shell, {
-    canvas, ctx, overlay,
+    canvas, ctx: canvas.getContext('2d'), overlay,
     get alive() { return alive; },
     get busy() { return anims.length > 0; },
     get cardOpen() { return !overlay.hidden; },
@@ -171,15 +173,9 @@ export function canvasGame(wrap, { width = 360, height = 640, label = '游戏画
       return new Promise((resolve) => { anims.push({ t0: performance.now(), ms: time, draw, resolve }); wake(); });
     },
     toast(message, ms = 1400, y = height * 0.5) { toast = { text: message, until: performance.now() + ms, y }; this.poke(ms + 50); },
-    point(event) {
-      const rect = canvas.getBoundingClientRect();
-      return { x: (event.clientX - rect.left) * width / rect.width, y: (event.clientY - rect.top) * height / rect.height };
-    },
+    point(event) { return fit.point(event.clientX, event.clientY); },
     // 逻辑坐标 → 页面坐标，给测试点击用。
-    page(x, y) {
-      const rect = canvas.getBoundingClientRect();
-      return { x: rect.left + x * rect.width / width, y: rect.top + y * rect.height / height };
-    },
+    page(x, y) { return fit.page(x, y); },
     on(type, handler, target = canvas) {
       target.addEventListener(type, handler, { passive: false });
       offs.push(() => target.removeEventListener(type, handler));
@@ -207,6 +203,7 @@ export function canvasGame(wrap, { width = 360, height = 640, label = '游戏画
     closeCard() { overlay.hidden = true; overlay.replaceChildren(); },
     destroy() {
       alive = false;
+      fit.destroy();
       cancelAnimationFrame(raf);
       anims.splice(0).forEach((anim) => anim.resolve());
       offs.splice(0).forEach((off) => off());

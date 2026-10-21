@@ -3,6 +3,7 @@
 // the car drives off the board and into a bay, then passengers walk from the queue into it.
 // The core state is always up to date; `vis` is what is currently shown, one event behind.
 import { PARK, STAGES, createLevel, findHint, outcome, sendCar, settle, stageBonus } from './park-core.js';
+import { fitView } from './fit-view.js';
 
 const LW = 360;
 const LH = 640;
@@ -126,7 +127,12 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
   const overlay = el('div', 'park-overlay');
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
+  // 全屏：上面的排队乘客和车位是信息栏，停车场是游戏区（fit-view.js）
+  const fit = fitView(canvas, { width: LW, height: LH, onChange: () => poke(0), regions: () => [
+    { x: 0, y: 0, w: LW, h: BOARD.y - 6, role: 'top' },
+    { x: BOARD.x - 4, y: BOARD.y - 4, w: BOARD.w + 8, h: BOARD.h + 8, role: 'main' }
+  ] });
 
   const poke = (ms) => { animUntil = Math.max(animUntil, performance.now() + ms); if (!raf && alive) raf = requestAnimationFrame(frame); };
   const speed = (ms) => (calm() ? ms * 0.2 : ms);
@@ -279,8 +285,8 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
     return core.cars.find((car) => car.status === 'board' && !vis.left.has(car.id) && car.r <= r && car.c <= c && (car.dir === 1 || car.dir === 3 ? r === car.r && c < car.c + car.len : c === car.c && r < car.r + car.len))?.id ?? null;
   }
   function onPointer(event) {
-    const rect = canvas.getBoundingClientRect();
-    const id = carAt((event.clientX - rect.left) * LW / rect.width, (event.clientY - rect.top) * LH / rect.height);
+    const p = fit.point(event.clientX, event.clientY);
+    const id = carAt(p.x, p.y);
     if (id !== null) { event.preventDefault(); tap(id); }
   }
   canvas.addEventListener('pointerdown', onPointer);
@@ -404,8 +410,7 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
     for (let i = anims.length - 1; i >= 0; i -= 1) {
       if (now - anims[i].t0 >= anims[i].ms) { const [done] = anims.splice(i, 1); done.resolve(); }
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
+    ctx = fit.begin();
     drawQueue(now);
     drawBays(now);
     drawBoard(now);
@@ -420,6 +425,7 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
       ctx.textAlign = 'center';
       ctx.fillText(toast.text, LW / 2, 188);
     }
+    fit.end();
     const marking = [...marks.values()].some((mark) => mark.until > now) || (toast && toast.until > now);
     if (anims.length || marking || now < animUntil) raf = requestAnimationFrame(frame);
   }
@@ -434,11 +440,12 @@ export function mountPark(wrap, { onHud = () => {}, onResult = null } = {}) {
     hint,
     // Where a car sits on the page, for tests that click it.
     locate(id) {
-      const rect = canvas.getBoundingClientRect(), pose = carPose(core.cars[id]);
-      return { x: rect.left + pose.x * rect.width / LW, y: rect.top + pose.y * rect.height / LH };
+      const pose = carPose(core.cars[id]);
+      return fit.page(pose.x, pose.y);
     },
     destroy() {
       alive = false;
+      fit.destroy();
       cancelAnimationFrame(raf);
       anims.splice(0).forEach((anim) => anim.resolve());
       canvas.removeEventListener('pointerdown', onPointer);

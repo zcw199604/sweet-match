@@ -7,6 +7,7 @@
 // belong to the run, so 重新开始 empties both.
 import { addFuel, burnFuel, buy, callAt, createStage, discard, DISHES, flightIn, FUEL, fuelAt, levelOf, nextFuelIn, nextCost, rowOf, SEATS_PER_ROW, SKY, slotPhase, stageConfig, STAGES, STATION_ORDER, STATIONS, tapSeat, tapStation, tick, UPGRADES } from './skychef-core.js';
 import { drawBubble, drawBulkhead, drawCabinet, drawCoin, drawDish, drawDispenser, drawNeed, drawPill, drawSeat, drawSlotBase, drawStewardess, lookFor, THEMES } from './skychef-art.js';
+import { fitView } from './fit-view.js';
 
 const LW = 360;
 const LH = 600;
@@ -87,7 +88,12 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
   const overlay = el('div', 'skychef-overlay');
   overlay.hidden = true;
   wrap.replaceChildren(canvas, overlay);
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
+  // 全屏：机舱（连同叠在上面的关卡 / 金币）是游戏区，下面的厨房是信息栏（fit-view.js）
+  const fit = fitView(canvas, { width: LW, height: LH, onChange: () => poke(), regions: () => [
+    { x: 0, y: 0, w: LW, h: GALLEY_Y, role: 'main' },
+    { x: 0, y: GALLEY_Y, w: LW, h: LH - GALLEY_Y, role: 'bottom' }
+  ] });
 
   const poke = () => { if (!raf && alive) { last = 0; raf = requestAnimationFrame(frame); } };
   const say = (text) => { toast = { text, until: performance.now() + 1500 }; poke(); };
@@ -293,10 +299,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
   }
 
   // ---- input ----
-  const toLogical = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    return { x: (event.clientX - rect.left) * LW / rect.width, y: (event.clientY - rect.top) * LH / rect.height };
-  };
+  const toLogical = (event) => fit.point(event.clientX, event.clientY);
   function hit(x, y) {
     for (const b of STATION_BOX) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return { station: b.id };
     for (const [i, slot] of cartSlots(core.kit.cart).entries()) {
@@ -591,8 +594,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     last = now;
     const before = core.pos;
     if (playing && !core.done && dt > 0) handle(tick(core, dt));
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
+    ctx = fit.begin();
     drawCabin(now, core.pos !== before);
     drawGalley(now);
     drawBubbles(now);
@@ -608,6 +610,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
       ctx.fillStyle = '#fff';
       ctx.fillText(toast.text, LW / 2, GALLEY_Y - 23);
     }
+    fit.end();
     const busy = playing || floaters.length || (toast && toast.until > now);
     if (busy && alive) raf = requestAnimationFrame(frame);
   }
@@ -646,6 +649,7 @@ export function mountSkychef(wrap, { onHud = () => {}, onResult = null } = {}) {
     load(stage) { begin(stageConfig(stage).stage); },
     destroy() {
       alive = false;
+      fit.destroy();
       cancelAnimationFrame(raf);
       clearInterval(fuelTimer);
       window.removeEventListener('keydown', onKey);

@@ -188,6 +188,20 @@ export function mountSheep(wrap, { onHud = () => {}, onResult = null } = {}) {
   };
 
   begin(progress.level || 1);
+  // 全屏：牌堆按本关一开始的范围放大（消牌时不跟着缩放），上面的关卡、下面的移出区 / 槽 / 道具保持原大小
+  let pile = null, pileOf = null;
+  shell.regions = () => {
+    if (pileOf !== state) {
+      const spots = state.tiles.filter((t) => t.where === 'board').map(target);
+      const x0 = Math.min(...spots.map((p) => p.x)), y0 = Math.min(...spots.map((p) => p.y));
+      const x1 = Math.max(...spots.map((p) => p.x)) + T, y1 = Math.max(...spots.map((p) => p.y)) + T;
+      pile = spots.length ? { x: Math.max(8, x0 - 14), y: Math.max(40, y0 - 14), w: 0, h: 0 } : { x: 8, y: 40, w: W - 16, h: 412 };
+      if (spots.length) { pile.w = Math.min(W - 8, x1 + 14) - pile.x; pile.h = Math.min(452, y1 + 18) - pile.y; }
+      pileOf = state;
+    }
+    return [{ x: 0, y: 0, w: W, h: 38, role: 'top' }, { ...pile, role: 'main' }, { x: 0, y: HELD_Y - 6, w: W, h: H - HELD_Y + 6, role: 'bottom' }];
+  };
+
   return {
     get state() { return state; },
     board: 'sheep',

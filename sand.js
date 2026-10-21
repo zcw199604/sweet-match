@@ -179,6 +179,12 @@ export function mountSand(wrap, { onHud = () => {}, onResult = null, onButtons =
     if (streams.length || leaving.length) shell.poke(16);
   };
 
+  // 全屏：瓶子是游戏区，下面的传送带和三列桶保持原大小（横屏时在右边）
+  shell.regions = () => [
+    { x: BX - 12, y: BY - 12, w: COLS * G + 24, h: ROWS * G + 24, role: 'main' },
+    { x: 0, y: BELT_Y - 8, w: W, h: H - BELT_Y + 8, role: 'bottom' }
+  ];
+
   const api = {
     get state() { return state; },
     get loading() { return loading; },

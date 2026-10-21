@@ -279,6 +279,12 @@ export function mountMahjong(wrap, { onHud = () => {}, onResult = null, onBoard 
     if (links.length || hintOn || sliding(now)) shell.poke(16);
   };
 
+  // 全屏：上面的关卡 / 时间条 / 玩法开关是信息栏，桌布连同牌是游戏区
+  shell.regions = () => [
+    { x: 0, y: 0, w: W, h: 94, role: 'top' },
+    { x: lay.x - 12, y: lay.y - 12, w: lay.tw * state.cols + 24, h: lay.th * state.rows + 24, role: 'main' }
+  ];
+
   const api = {
     get state() { return state; },
     get board() { return board(); },

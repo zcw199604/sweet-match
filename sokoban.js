@@ -186,6 +186,13 @@ export function mountSokoban(wrap, { onHud = () => {}, onResult = null } = {}) {
   };
 
   begin(Math.min(progress.level || 0, LEVELS.length - 1));
+  // 全屏：上面的关卡、下面的方向键是信息栏，地图是游戏区
+  shell.regions = () => [
+    { x: 0, y: 0, w: W, h: 38, role: 'top' },
+    { x: lay.x - 6, y: lay.y - 6, w: lay.cell * game.cols + 12, h: lay.cell * game.rows + 12, role: 'main' },
+    { x: 0, y: 470, w: W, h: H - 470, role: 'bottom' }
+  ];
+
   return {
     get state() { return game; },
     board: 'sokoban',
