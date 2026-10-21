@@ -424,6 +424,9 @@ body.playing[data-mode=pour] .canvas-wrap.pour-wrap{width:min(100%,max(240px,cal
 .recent-ago{font:10px 'DM Mono';color:var(--muted)}
 .recent-time{position:absolute;top:12px;right:14px;font:700 11px 'DM Mono';color:var(--ink);background:#f1efe8;border-radius:999px;padding:3px 9px}
 #recent-more[hidden]{display:none}
+/* 管理员（在 /ops.html 登录过）才有：首页「游玩记录」入口和卡片上的近 7 天总时长，见 ops-home.js */
+a.button{text-decoration:none;display:inline-flex;align-items:center;gap:4px}a.button[hidden]{display:none}
+.ops-time{margin:0 10px 0 auto;font:700 10px 'DM Mono';font-style:normal;color:var(--ink);background:#f1efe8;border-radius:999px;padding:2px 8px;align-self:center}
 @media(max-width:800px){.recent-list{grid-template-columns:1fr}}
 
 /* 2048 and 数独: one portrait canvas each (360×540 and 360×560 logical px) with everything drawn into it; --u is 1% of its width. */

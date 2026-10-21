@@ -10,6 +10,7 @@ import { initBoard, openBoard, reportScore } from './leaderboard.js';
 import { initActivity, markActive, trackActivity } from './activity.js';
 import { EMBED_GAMES, embedHost, mountEmbed } from './embed-games.js';
 import { initRecent, noteOpened, showRecent } from './recent.js';
+import { initOpsHome, showOpsHome } from './ops-home.js';
 import { getPref, initPrefs, setPref } from './prefs.js';
 import { ONLINE_GAMES, isOnlineGame } from './online-games.js';
 import { createModeTabs, mountOnlineShell } from './online-shell.js';
@@ -259,7 +260,7 @@ function showScreen(id) {
     else if (id === 'game') history.replaceState(null, '', `#game/${mode}`);
   };
   if (fullUnwinding) afterFullUnwind = route; else route();
-  if (id === 'home') showRecent();
+  if (id === 'home') { showRecent(); showOpsHome(); }
   syncActivity();
 }
 // 游玩记录：在游戏界面里就按当前榜单 id 计时，离开就停。模式切换（泡噗3、抓大鹅）后也要调一次。
@@ -1634,7 +1635,7 @@ function loop(time) {
 $$('.arcade-card[data-mode]').forEach((card) => card.addEventListener('click', () => startGame(card.dataset.mode)));
 $('#open-link').addEventListener('click', openLink); $('#game-link').addEventListener('click', openLink); $('#close-link').addEventListener('click', closeLink); $('#how-link').addEventListener('click', openLink);
 $('#back-home').addEventListener('click', () => { showScreen('home'); });
-initBoard(); initActivity(); initRecent(startGame); initPrefs();
+initBoard(); initActivity(); initRecent(startGame); initPrefs(); initOpsHome();
 $('#open-board').addEventListener('click', () => openBoard());
 $('#game-board').addEventListener('click', () => openBoard(boardId()));
 $('#online-create').addEventListener('click', createOnlineRoom); $('#online-join').addEventListener('click', () => joinOnlineRoom());

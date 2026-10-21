@@ -595,6 +595,45 @@ test('隐藏看板: 令牌错误回到登录，正确后按东八区展示玩家
   await expect(page.locator('#heat i[title*="22:00"]').first()).toBeVisible();
 });
 
+test('隐藏看板: 同一浏览器登录后首页有入口和各游戏时长，退出或令牌失效就消失', async ({ page }) => {
+  const now = Date.now();
+  const sessions = [
+    { sid: 'sess-0001', pid: 'player-0001', name: '小明', board: 'goose-classic', start_at: now - 3600_000, last_at: now - 3000_000, active_ms: 20 * 60_000 },
+    { sid: 'sess-0002', pid: 'player-0002', name: '小红', board: 'goose-endless', start_at: now - 1800_000, last_at: now - 1200_000, active_ms: 5 * 60_000 }
+  ];
+  let valid = 'good';
+  await page.route('**/api/admin/activity**', (route) => route.request().headers().authorization === `Bearer ${valid}`
+    ? route.fulfill({ json: { sessions, truncated: false } }) : route.fulfill({ status: 401, json: { error: '令牌不对' } }));
+  const home = async () => { await page.goto('/'); await page.locator('body[data-ready]').waitFor(); };
+  await home();
+  await expect(page.locator('#open-ops')).toBeHidden();
+  await expect(page.locator('.ops-time')).toHaveCount(0);
+
+  await page.goto('/ops.html');
+  await page.locator('#token').fill('good');
+  await page.locator('#login-form button').click();
+  await expect(page.locator('#panel')).toBeVisible();
+  await home();
+  await expect(page.locator('#open-ops')).toContainText('7 天共 25 分');
+  await expect(page.locator('[data-mode="goose"] .ops-time')).toHaveText('7 天 25 分');
+  await expect(page.locator('[data-mode="pop2"] .ops-time')).toHaveText('7 天 0 分');
+  await page.locator('#open-ops').click();
+  await expect(page.locator('#panel')).toBeVisible();
+
+  await page.locator('#logout').click();
+  await expect(page.locator('#login')).toBeVisible();
+  await home();
+  await expect(page.locator('#open-ops')).toBeHidden();
+
+  // 令牌在服务端换掉了：首页拿到 401 就清掉本机令牌，回到普通首页。
+  await page.evaluate(() => localStorage.setItem('pao-ops-token', 'good'));
+  valid = 'rotated';
+  await home();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('pao-ops-token'))).toBeNull();
+  await expect(page.locator('#open-ops')).toBeHidden();
+  await expect(page.locator('.ops-time')).toHaveCount(0);
+});
+
 // 挪车接客 is one canvas; its live state is on window.__arcade.park, which can also say where a car is on the page.
 const park = (page) => page.evaluate(() => { const { state, busy } = window.__arcade.park; return { stage: state.stage, moves: state.moves, queue: state.queue.length, boarded: state.boarded, busy, score: state.score }; });
 async function openPark(page) {

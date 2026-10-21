@@ -203,9 +203,10 @@
 - **怎么上报**：每累计 60 秒活跃时长发一次心跳，离开游戏界面、切到后台、关页面时补发一次（`sendBeacon`）。心跳带的是累计值（`active_ms`）和距这一段开始的时长（`elapsed_ms`），服务端用自己的时钟推算开始时间，重复或乱序的心跳不会多算；不满 5 秒的误触不上报。
 - **存储**：和榜单共用同一个 D1（绑定名 `DB`），表 `sessions` 第一次请求时自动创建，一行一段游玩。
 - **看板**：选「今天 / 近 7 天 / 近 30 天」，看总览、各游戏时长、玩家列表（点一行只看这个人）、24 小时热力图和时间线。
-- **访问令牌**：看板接口 `GET /api/admin/activity` 要求 `Authorization: Bearer <ADMIN_TOKEN>`。在 Pages 项目的 **Settings → Variables and Secrets** 里新增 Secret `ADMIN_TOKEN`（Production 和 Preview 都加），重新部署后在看板页输入同一个值，只保存在当前标签页的 `sessionStorage`。没配置时接口返回 503，一律不开放。令牌请用足够长的随机串，例如 `openssl rand -hex 24`。
+- **访问令牌**：看板接口 `GET /api/admin/activity` 要求 `Authorization: Bearer <ADMIN_TOKEN>`。在 Pages 项目的 **Settings → Variables and Secrets** 里新增 Secret `ADMIN_TOKEN`（Production 和 Preview 都加），重新部署后在看板页输入同一个值，保存在这个浏览器的 `localStorage`（看板右上角「退出登录」清掉）。没配置时接口返回 503，一律不开放。令牌请用足够长的随机串，例如 `openssl rand -hex 24`。
+- **首页的管理员视图**：同一个浏览器登录过看板后，首页会多一个「📊 游玩记录」按钮（显示近 7 天总时长，点击进看板），每张游戏卡片右上角显示近 7 天所有玩家在这个游戏上的总时长。数据来自同一个 `/api/admin/activity`；没有令牌的浏览器不显示也不请求，令牌失效（401）会自动清掉。见 `ops-home.js`。
 - **要知道的限制**：隐藏页面不是安全措施，真正挡住别人的只有令牌；写入口 `POST /api/activity` 和榜单一样是公开的，只做范围校验，想防灌水可在 WAF 里给 `/api/activity` 加速率限制。清掉站点数据就是新玩家，同一个人换设备不会合并。D1 免费额度是每天 10 万次写入，心跳 60 秒一次，和榜单合计一般用不完。
-- 代码分布：`activity-core.js`（校验、请求处理、内存 / D1 存储、看板汇总函数）、`functions/api/activity.js` 和 `functions/api/admin/activity.js`（Pages Function）、`activity.js`（浏览器端计时和上报）、`ops.html`（看板）、`_headers`（给看板加 `X-Robots-Tag`）。`test/activity.test.js` 与榜单一样用内存存储和 `node:sqlite` 跑同一组用例。
+- 代码分布：`activity-core.js`（校验、请求处理、内存 / D1 存储、看板汇总函数）、`functions/api/activity.js` 和 `functions/api/admin/activity.js`（Pages Function）、`activity.js`（浏览器端计时和上报）、`ops.html`（看板）、`ops-home.js`（首页的管理员入口和卡片时长）、`_headers`（给看板加 `X-Robots-Tag`）。`test/activity.test.js` 与榜单一样用内存存储和 `node:sqlite` 跑同一组用例。
 
 ## 泡噗 2 的主题
 

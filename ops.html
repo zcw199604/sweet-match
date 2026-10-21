@@ -27,7 +27,7 @@ th{color:var(--mute);font-weight:600;font-size:12px}
 .track{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.track i{display:block;height:100%;background:var(--accent)}
 .heat{display:grid;grid-template-columns:84px repeat(24,minmax(10px,1fr));gap:2px;align-items:center;font-size:11px;color:var(--mute);min-width:520px}
 .heat i{display:block;height:18px;border-radius:3px;background:var(--accent)}.heat .h{text-align:center}
-.hide{display:none}
+.hide{display:none}.grow{flex:1}
 </style>
 </head>
 <body>
@@ -38,7 +38,7 @@ th{color:var(--mute);font-weight:600;font-size:12px}
     <p class="err" id="login-error"></p>
   </section>
   <div id="panel" class="hide">
-    <section><div class="bar" id="ranges"></div><p class="err" id="error"></p></section>
+    <section><div class="bar"><div class="bar" id="ranges"></div><span class="grow"></span><a class="mono" href="./#home">回首页</a><button type="button" id="logout">退出登录</button></div><p class="err" id="error"></p></section>
     <section><div class="cards" id="cards"></div></section>
     <section><h2>各游戏时长</h2><div id="games"></div></section>
     <section><h2>玩家（点一行只看这个人）</h2><div class="scroll"><table id="players"></table></div></section>
@@ -56,14 +56,15 @@ const $ = (s) => document.querySelector(s);
 const el = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 const gameTitle = (id) => GAMES.find((g) => g.id === id)?.title ?? id;
 let token = '', days = 7, sessions = [], selected = null;
-try { token = sessionStorage.getItem(KEY) ?? ''; } catch { /* 隐私模式 */ }
+// 存在 localStorage：同一浏览器的首页也能读到，给管理员显示入口和各游戏时长（见 ops-home.js）。
+try { token = localStorage.getItem(KEY) ?? ''; } catch { /* 隐私模式 */ }
 
 async function load() {
   const today = cnDayStart(Date.now());
   const from = today - (days - 1) * DAY, to = today + DAY;
   const response = await fetch(`/api/admin/activity?from=${from}&to=${to}`, { headers: { authorization: `Bearer ${token}` }, cache: 'no-store' });
   const data = await response.json().catch(() => ({}));
-  if (response.status === 401) { try { sessionStorage.removeItem(KEY); } catch {} throw Object.assign(new Error(data.error), { auth: true }); }
+  if (response.status === 401) { try { localStorage.removeItem(KEY); } catch {} throw Object.assign(new Error(data.error), { auth: true }); }
   if (!response.ok) throw new Error(data.error || `请求失败 (${response.status})`);
   sessions = data.sessions;
   $('#error').textContent = data.truncated ? '记录太多，只显示了最早的一部分，请缩小范围。' : '';
@@ -132,9 +133,14 @@ async function refresh() {
 $('#login-form').addEventListener('submit', (event) => {
   event.preventDefault();
   token = $('#token').value.trim(); $('#token').value = '';
-  try { sessionStorage.setItem(KEY, token); } catch { /* 隐私模式 */ }
+  try { localStorage.setItem(KEY, token); } catch { /* 隐私模式 */ }
   $('#login-error').textContent = '';
   refresh();
+});
+$('#logout').addEventListener('click', () => {
+  token = ''; sessions = []; selected = null;
+  try { localStorage.removeItem(KEY); } catch { /* 隐私模式 */ }
+  $('#panel').classList.add('hide'); $('#login').classList.remove('hide');
 });
 if (token) refresh();
 </script>
