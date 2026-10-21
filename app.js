@@ -175,14 +175,90 @@ let rtc = { peer: null, channel: null };
 // 在线房间（Colyseus 的 coop 中继房间）：和局域网版是同一套「房主出快照、客人发操作」，只是传输换成了这个 Session。
 let onlineSession = null;
 
+// ---- 全屏（所有游戏共用）----
+// 舞台铺满视口（body.game-full，样式在 style.css 末尾），按钮栏挪到底部、「退出全屏」在最左边；
+// 浏览器支持网页全屏（安卓、桌面）就顺便请求，把地址栏也藏掉，iPhone 不支持就只铺满视口。
+// 进入时往历史里记一步：iPhone 的返回手势、安卓的返回键先退出全屏，而不是离开页面。
+const FULL_ICON = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+let fullUnwinding = false, afterFullUnwind = null;
+const isFull = () => document.body.classList.contains('game-full');
+const fullObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fitFull()) : null;
+// 平时按钮栏挤，全屏按钮只放一个图标；全屏后写明「退出全屏」。
+function fullButton(node, on) {
+  node.innerHTML = on ? '退出全屏' : FULL_ICON;
+  node.setAttribute('aria-label', on ? '退出全屏' : '全屏');
+  node.title = on ? '退出全屏' : '全屏';
+}
+function addFullButton(stage) {
+  const actions = stage.querySelector('.stage-actions');
+  if (!actions) return;
+  const node = document.createElement('button');
+  node.type = 'button';
+  node.className = 'full-button';
+  node.dataset.gameFull = '';
+  fullButton(node, isFull());
+  node.addEventListener('click', () => setGameFull(!isFull()));
+  actions.append(node);
+  watchFull();
+}
+// 游戏区能用多大：舞台减去按钮栏、操作按钮这些，写成 --fw / --fh，各游戏按自己的宽高比取用。
+// 竖屏按钮在下面（减高度），手机横屏按钮在右边一列（减宽度）。
+function fitFull() {
+  const stage = $('#game-stage');
+  if (!isFull()) { stage.style.removeProperty('--fw'); stage.style.removeProperty('--fh'); return; }
+  const css = getComputedStyle(stage), row = css.flexDirection === 'row';
+  const gap = parseFloat(row ? css.columnGap : css.rowGap) || 0;
+  const others = [...stage.children].filter((node) => !node.matches('.canvas-wrap, .classic-wrap, .embed-wrap') && getComputedStyle(node).display !== 'none');
+  const used = others.reduce((sum, node) => { const box = node.getBoundingClientRect(); return sum + (row ? box.width : box.height) + gap; }, 0);
+  const width = stage.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - (row ? used : 0);
+  const height = stage.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom) - (row ? 0 : used);
+  stage.style.setProperty('--fw', `${Math.floor(width)}px`);
+  stage.style.setProperty('--fh', `${Math.floor(Math.max(160, height))}px`);
+}
+// 按钮栏换行、操作按钮重画都会改变剩下的高度，盯着它们重算。
+function watchFull() {
+  if (!fullObserver) return;
+  fullObserver.disconnect();
+  if (!isFull()) return;
+  const stage = $('#game-stage');
+  fullObserver.observe(stage);
+  for (const node of stage.children) if (!node.matches('.canvas-wrap, .classic-wrap, .embed-wrap')) fullObserver.observe(node);
+}
+function setGameFull(on) {
+  if (isFull() === on) return;
+  document.body.classList.toggle('game-full', on);
+  const button = $('[data-game-full]');
+  if (button) fullButton(button, on);
+  if (on) {
+    history.pushState({ gameFull: true }, '');
+    try { Promise.resolve(document.documentElement.requestFullscreen?.()).catch(() => {}); } catch { /* 不支持就只铺满视口 */ }
+  } else {
+    if (history.state?.gameFull) { fullUnwinding = true; history.back(); }   // 用按钮退出：把进入时记的那一步撤掉
+    try { if (document.fullscreenElement) Promise.resolve(document.exitFullscreen()).catch(() => {}); } catch { /* 同上 */ }
+  }
+  fitFull();
+  watchFull();
+  window.dispatchEvent(new Event('resize'));   // 按容器宽度定画布分辨率的游戏（泡噗、抓大鹅……）重新量一次
+}
+window.addEventListener('popstate', () => {
+  if (fullUnwinding) { fullUnwinding = false; afterFullUnwind?.(); afterFullUnwind = null; return; }
+  setGameFull(false);   // 返回手势 / 返回键
+});
+// 用 Esc / 返回键退出了浏览器全屏：铺满也一起退掉
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setGameFull(false); });
+
 function showScreen(id) {
+  if (id !== 'game') setGameFull(false);
   if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSuika(); stopTetris(); stopSkychef(); stopSudoku(); stopClassic(); stopKit(); clearModeTabs(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
   // The home page may have been scrolled to reach a card; the board must start in view.
   window.scrollTo(0, 0);
-  if (id === 'home') history.replaceState(null, '', '#home');
-  else if (id === 'game') history.replaceState(null, '', `#game/${mode}`);
+  const route = () => {
+    if (id === 'home') history.replaceState(null, '', '#home');
+    else if (id === 'game') history.replaceState(null, '', `#game/${mode}`);
+  };
+  if (fullUnwinding) afterFullUnwind = route; else route();
   if (id === 'home') showRecent();
   syncActivity();
 }
@@ -411,6 +487,10 @@ const POP3_ENDLESS_HELP = '无尽模式没有倒计时和关卡：音符会越�
 function stageHelp() { return mode === 'pop2' ? pop2Help() : mode === 'pop3' && state?.endless ? POP3_ENDLESS_HELP : MODE_META[mode].help; }
 
 function buildStage() {
+  buildStageContent();
+  addFullButton($('#game-stage'));
+}
+function buildStageContent() {
   const meta = MODE_META[mode], stage = $('#game-stage');
   $('#mode-label').textContent = meta.label; $('#game-title').textContent = meta.title;
   // Lets the stylesheet give one board its own page layout (方块爆破 goes edge to edge on phones).
@@ -1572,7 +1652,7 @@ loadBlastBest(); loadPop3Prefs();
 for (const type of ['pointermove', 'pointerup', 'pointercancel']) document.addEventListener(type, type === 'pointermove' ? pointerMove : pointerUp, { passive: false });
 document.addEventListener('keydown', keyboard); document.addEventListener('keyup', keyboard);
 window.addEventListener('blur', () => keys.clear());
-window.addEventListener('resize', resizeCanvas); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
+window.addEventListener('resize', resizeCanvas); window.addEventListener('resize', () => fitFull()); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
 window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get suika() { return suika; }, get tetris() { return tetris; }, get skychef() { return skychef; }, get sudoku() { return sudoku; }, get classic() { return classic; }, get kit() { return kit; } };
 // The card handlers only exist once this module has run, so tests wait on this
