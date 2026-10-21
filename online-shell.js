@@ -270,6 +270,7 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
 
   return {
     get session() { return session; },
+    get game() { return gameHandle; },   // 对局中的游戏本体（e2e 用）
     restart() { /* 联机对局不能单方面重开 */ },
     destroy() {
       alive = false;

@@ -5,6 +5,7 @@
 import { createState, DIRS, G2048, maxTile, move, restoreState, snapshot, undo } from './g2048-core.js';
 import { createFx, isG2048Theme, themeLook } from './g2048-art.js';
 import { getPref } from './prefs.js';
+import { rngFrom } from './rng-core.js';
 
 const LW = 360;
 const LH = 540;
@@ -69,7 +70,12 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   const ctx = canvas.getContext('2d');
   // 对手的小盘面：放在画布外面（画布容器有固定的宽高比）。
   const rivalBox = el('div', 'race-rival'), rivalLine = el('div', ''), rivalGrid = el('div', 'rival-grid');
-  let rival = null, pendingDir = null, ended = false;
+  // 联机时每一步都在本地完整算出来（服务端发来的随机状态 seed 能算出同样的新块），发出去不用等；
+  // core 比 lastMine（服务端最近一次给的我方盘面）多走的那几步就是还没确认的，出错时退回到 lastMine。
+  // rival 是正在显示的对手盘面，rivalNext 是服务端给的最新的：对手面板最多每 RIVAL_EVERY 刷新一次。
+  let rival = null, rivalNext = null, rivalShown = 0, rivalTimer = 0;
+  let lastMine = null, seed = null, ended = false;
+  const RIVAL_EVERY = 2000;
   if (online) { rivalBox.append(rivalLine, rivalGrid); wrap.after(rivalBox); }
   const fromView = (player) => ({ tiles: player.tiles.map((t) => ({ ...t })), nextId: player.nextId, score: player.score, moves: player.moves, won: false, over: player.over, undosLeft: 0, history: [] });
 
@@ -120,13 +126,9 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   function play(dir) {
     if (online) {
       if (!alive || !overlay.hidden || core.over || online.result.over || !DIRS.includes(dir)) return false;
-      pendingDir = dir;
-      online.send({ type: 'move', dir });
-      return true;
-    }
-    if (!alive || !overlay.hidden || core.over) return false;
+    } else if (!alive || !overlay.hidden || core.over) return false;
     const before = new Map(core.tiles.map((t) => [t.id, t.v]));
-    const result = move(core, dir);
+    const result = online ? move(core, dir, rngFrom(seed)) : move(core, dir);
     if (!result.ok) return false;
     anim = { t0: performance.now(), before, slides: result.slides, merges: result.merges, spawnId: result.spawned?.id ?? 0 };
     celebrate(anim);
@@ -134,6 +136,11 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     persist();
     hud();
     poke();
+    if (online) {
+      online.send({ type: 'move', dir });   // 不等回包：服务端用同一个随机状态，会算出一模一样的结果
+      if (core.over) say('你的盘面已经无路可走，等对手结束');
+      return true;
+    }
     // With the effects on, the 2048 card waits for the fireworks to play out instead of covering them.
     const settle = SLIDE() + POP() + 30 + (result.firstWin && look.fx && !calm() ? 900 : 0);
     setTimeout(() => { if (alive && core.over) finish(); else if (alive && result.firstWin) won(); }, settle);
@@ -380,37 +387,63 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     card(winner === null ? '平局' : me ? '你赢了！' : '对手获胜', [why, `你 ${core.score} 分 · 对手 ${rival?.score ?? 0} 分`],
       [{ label: '看看盘面', action: () => { overlay.hidden = true; poke(); }, ghost: true }], me ? 'won' : '');
   }
-  let round = online?.round ?? 0;
-  function applyServer(payload) {
-    const view = payload.view, mine = view.players[online.seat];
-    if (payload.round !== round) { round = payload.round; ended = false; overlay.hidden = true; pendingDir = null; core = null; }   // 再来一局：丢掉上一局的一切
-    let next = null;
-    if (pendingDir && core && mine.moves === core.moves + 1) {
-      // 在旧盘面的拷贝上空跑一遍同方向的滑动，只为拿到「谁滑去哪、谁合并了」的动画数据；盘面本身用服务端的。
-      const sim = fromView({ ...core, max: 0 });
-      sim.over = false;
-      const result = move(sim, pendingDir, () => 0.5);
-      if (result.ok) next = { t0: performance.now(), before: new Map(core.tiles.map((t) => [t.id, t.v])), slides: result.slides, merges: result.merges, spawnId: result.spawned?.id ?? 0 };
+  // 对手面板（小盘面、画布上的「对手」分数、顶栏文字）节流显示；now=true 立刻刷新（开局、结束时）。
+  function showRival(now = false) {
+    const wait = RIVAL_EVERY - (performance.now() - rivalShown);
+    if (!now && wait > 0) {
+      if (!rivalTimer) rivalTimer = setTimeout(() => { rivalTimer = 0; if (alive) showRival(true); }, wait);
+      return;
     }
-    pendingDir = null;
-    const wasStuck = core?.over;
-    core = fromView(mine);
-    anim = next;
-    if (next) celebrate(next);
-    rival = view.players[1 - online.seat];
+    clearTimeout(rivalTimer);
+    rivalTimer = 0;
+    rivalShown = performance.now();
+    if (rival === rivalNext) return;
+    rival = rivalNext;
     drawRival();
     hud();
     poke();
-    if (core.over && !wasStuck && !online.result.over) say('你的盘面已经无路可走，等对手结束');
-    setTimeout(() => { if (alive) onlineEnd(); }, next ? SLIDE() + POP() + 30 : 0);
   }
-  const off = online?.on('state', applyServer);
+  // 盘面和随机状态都换成服务端最后确认的（开局、对不上、被拒、断线时）。
+  function resync() {
+    core = fromView(lastMine);
+    seed = { s: lastMine.rng };
+    anim = null;
+    hud();
+    poke();
+  }
+  // 有一步被拒或连接断了：丢掉还没确认的那几步。
+  const rollback = () => { if (core && core.moves !== lastMine.moves) resync(); };
+  const sameBoard = (a, b) => a.score === b.score && a.tiles.length === b.tiles.length
+    && a.tiles.every((t) => b.tiles.some((u) => u.id === t.id && u.r === t.r && u.c === t.c && u.v === t.v));
+  let round = online?.round ?? 0;
+  function applyServer(payload) {
+    const view = payload.view, mine = view.players[online.seat];
+    if (payload.round !== round) { round = payload.round; ended = false; overlay.hidden = true; core = null; }   // 再来一局：丢掉上一局的一切
+    rivalNext = view.players[1 - online.seat];
+    lastMine = mine;
+    // 本地每一步都已经算在前面了：服务端确认的是更早的某一步、或者只是对手走了，盘面和动画都不动。
+    // 只有开局/重连（服务端走得比本地远），或者全部确认后和本地对不上，才以服务端为准。
+    if (!core || mine.moves > core.moves || (mine.moves === core.moves && !sameBoard(core, mine))) {
+      const wasStuck = core?.over;
+      resync();
+      if (core.over && !wasStuck && !online.result.over) say('你的盘面已经无路可走，等对手结束');
+    }
+    if (online.result.over) showRival(true); else showRival();
+    setTimeout(() => { if (alive) onlineEnd(); }, anim ? SLIDE() + POP() + 30 : 0);
+  }
+  const offs = online ? [
+    online.on('state', applyServer),
+    online.on('reject', rollback),
+    online.on('status', (status) => { if (status !== 'live') rollback(); })
+  ] : [];
 
   setTheme(getPref('g2048Theme'));
   if (online) {
-    rival = online.view.players[1 - online.seat];
-    drawRival();
-    begin(fromView(online.view.players[online.seat]));
+    lastMine = online.view.players[online.seat];
+    rivalNext = online.view.players[1 - online.seat];
+    seed = { s: lastMine.rng };
+    begin(fromView(lastMine));
+    showRival(true);
     onlineEnd();
   } else {
     // Pick up the unfinished game from last time, if there is one.
@@ -434,7 +467,8 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     },
     destroy() {
       alive = false;
-      off?.();
+      for (const off of offs) off();
+      clearTimeout(rivalTimer);
       document.removeEventListener('pao-g2048-theme', onTheme);
       rivalBox.remove();
       cancelAnimationFrame(raf);

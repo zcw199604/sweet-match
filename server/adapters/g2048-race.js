@@ -30,10 +30,11 @@ export default {
     }
     return { ok: true, state: next };
   },
-  // 2048 没有隐藏信息，双方的盘面都发（客户端可以画对手的小棋盘）；撤销历史和随机状态不发。
+  // 2048 没有隐藏信息，双方的盘面都发（客户端可以画对手的小棋盘）；撤销历史不发。
+  // 随机状态也发：客户端用它在本地先算出新块，不用等回包（朋友间对战，不防提前看新块）。
   view: (state) => ({
     target: state.target, status: state.status, winner: state.winner, reason: state.reason,
-    players: state.players.map(({ game }) => ({ tiles: game.tiles, nextId: game.nextId, score: game.score, moves: game.moves, over: game.over, max: maxTile(game) }))
+    players: state.players.map(({ game, rng }) => ({ tiles: game.tiles, nextId: game.nextId, score: game.score, moves: game.moves, over: game.over, max: maxTile(game), rng }))
   }),
   result: (state) => ({ over: state.status === 'over', winner: state.winner })
 };

@@ -151,5 +151,6 @@ test('扫雷竞速：再来一局沿用创建时的难度，换一块新雷区�
   assert.equal(seenA.state.view.rows, 9);
   assert.equal(seenA.state.result.over, false);
   assert.ok(seenA.state.view.me.opened > 0 && seenA.state.view.me.opened < seenA.state.view.me.total);
-  assert.equal(seenA.state.view.cells.some((c) => c.mine), false, '新一局的雷依然不外泄');
+  assert.equal(seenA.state.view.me.acts, 0, '新一局的操作数从 0 算起');
+  assert.equal(seenA.state.view.cells.filter((c) => c.mine).length, 10, '新一局的雷区也整块下发');
 });

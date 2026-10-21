@@ -24,22 +24,16 @@ test('g2048 房间：两人同时滑动没有回合限制，最终有胜负，�
   assert.equal(seenA.rejects.some((m) => /还没轮到你/.test(m)), false, '竞速不应出现「没轮到你」');
 });
 
-test('minesweeper 房间：看不到雷；踩雷的一方输', async (t) => {
+test('minesweeper 竞速房间：自己的雷区整块下发（客户端本地先算）；踩雷的一方输', async (t) => {
   const url = await boot(t);
-  const { a, b, seenA, seenB } = await pair(url, 'minesweeper', { level: 'easy' });
-  assert.equal(seenA.state.view.cells.some((c) => c.mine), false);
-  // 服务端的种子对客户端不可见，所以只能一格格试：翻开不同的格子，直到有人踩雷
-  const closed = seenB.state.view.cells.flatMap((c, i) => (c.open ? [] : [i]));
-  for (const index of closed) {
-    if (seenB.state.result.over) break;
-    const [version, rejects] = [seenB.state.version, seenB.rejects.length];
-    b.send('action', { type: 'reveal', index });
-    await until(() => seenB.state.version > version || seenB.rejects.length > rejects, { what: '这一格被服务端处理' });
-  }
-  assert.equal(seenB.state.result.over, true);
-  if (seenB.state.view.reason === 'mine') assert.equal(seenA.state.result.winner, 0);
-  else assert.equal(seenB.state.result.winner, 1);
-  void a;
+  const { seenA, seenB, b } = await pair(url, 'minesweeper', { level: 'easy' });
+  assert.equal(seenA.state.view.cells.filter((c) => c.mine).length, 10);
+  const mine = seenB.state.view.cells.findIndex((c) => c.mine);
+  b.send('action', { type: 'reveal', index: mine });
+  await until(() => seenA.state.result.over, { what: 'B 踩雷' });
+  assert.equal(seenA.state.view.reason, 'mine');
+  assert.equal(seenA.state.result.winner, 0);
+  assert.equal(seenB.state.view.me.acts, 1);
 });
 
 test('minesweeper 合作房间：轮流翻同一块雷区；有人离开本局作废而不是判对方赢', async (t) => {

@@ -5,6 +5,8 @@ import * as draughts from '../../draughts-core.js';
 import * as jungle from '../../jungle-core.js';
 import * as gomoku from '../../gomoku-core.js';
 import { createXiangqi, legalMoves as xiangqiMoves } from '../../xiangqi-core.js';
+import { move } from '../../g2048-core.js';
+import { chord, neighbours as mineNeighbours, reveal, toggleFlag } from '../../minesweeper-core.js';
 import { adapters } from '../adapters/index.js';
 import { rngFrom } from '../adapters/util.js';
 
@@ -94,7 +96,7 @@ test('g2048: 两人同时可以动（没有回合），先到目标的赢，之�
   assert.equal(a.canAct(s, 0) || a.canAct(s, 1), false);
 });
 
-test('g2048: 不许撤销/乱方向；动一个人的盘不影响另一个；view 不泄漏种子和撤销历史', () => {
+test('g2048: 不许撤销/乱方向；动一个人的盘不影响另一个；view 不发撤销历史', () => {
   const a = adapters.g2048, s = a.init({ seed: 3, target: 512 });
   assert.equal(a.apply(s, 0, { type: 'undo' }).ok, false);
   assert.equal(a.apply(s, 0, { type: 'move', dir: 'sideways' }).ok, false);
@@ -102,8 +104,25 @@ test('g2048: 不许撤销/乱方向；动一个人的盘不影响另一个；vie
   assert.deepEqual(moved.state.players[1], s.players[1]);
   assert.equal(moved.state.players[0].game.moves, 1);
   const text = JSON.stringify(a.view(moved.state, 1));
-  for (const secret of ['history', 'rng', 'seed', 'undosLeft']) assert.equal(text.includes(secret), false, secret);
+  for (const secret of ['history', 'seed', 'undosLeft']) assert.equal(text.includes(secret), false, secret);
   assert.equal(a.view(moved.state, 1).players.length, 2);
+});
+
+test('g2048: 客户端拿 view 里的盘面和随机状态在本地连走几步，结果和服务端一模一样（包括新块）', () => {
+  const a = adapters.g2048;
+  let s = a.init({ seed: 7, target: 2048 });
+  const mine = wire(a.view(s, 0)).players[0];
+  const local = { tiles: mine.tiles, nextId: mine.nextId, score: mine.score, moves: mine.moves, won: false, over: mine.over, undosLeft: 0, history: [] };
+  const box = { s: mine.rng };
+  for (let i = 0; i < 30; i++) {
+    const dir = dirs.find((d) => move(structuredClone(local), d, () => 0).ok);
+    if (!dir) break;
+    move(local, dir, rngFrom(box));
+    s = a.apply(s, 0, { type: 'move', dir }).state;
+  }
+  const server = wire(a.view(s, 0)).players[0];
+  assert.ok(server.moves > 5);
+  assert.deepEqual([local.tiles, local.nextId, local.score, local.moves, local.over, box.s], [server.tiles, server.nextId, server.score, server.moves, server.over, server.rng]);
 });
 
 test('g2048: 一方无路可走就停手，另一方可以继续', () => {
@@ -127,13 +146,39 @@ test('minesweeper: 两人雷区完全一样，起手中心格已翻开；不同�
   assert.equal(a.init({ seed: 5, level: 'nope' }).level, 'normal');
 });
 
-test('minesweeper: view 不泄漏未翻开格子的雷和数字，对手只给进度', () => {
+test('minesweeper: 竞速 view 发自己整块雷区（含雷）和 acts，对手只给进度；合作不发未翻开格子的雷和数字', () => {
   const a = adapters.minesweeper, s = a.init({ seed: 5, level: 'easy' });
-  const v = a.view(s, 0);
-  for (const cell of v.cells) if (!cell.open) assert.deepEqual([cell.mine, cell.adjacent], [false, 0]);
-  assert.equal(v.cells.some((c) => c.mine), false);
+  const v = wire(a.view(s, 0));
+  assert.deepEqual(v.cells, wire(s.players[0].cells));
+  assert.equal(v.cells.filter((c) => c.mine).length, 10);
+  assert.equal(v.me.acts, 0);
   assert.deepEqual(Object.keys(v.rival).sort(), ['flags', 'lost', 'opened', 'total']);
-  assert.equal(JSON.stringify(v).includes('"cells":[{"open":true,"flagged":false,"adjacent":0,"mine":true}'), false);
+  const coop = a.view(a.init({ seed: 5, level: 'easy', mode: 'coop' }), 0);
+  for (const cell of coop.cells) if (!cell.open) assert.deepEqual([cell.mine, cell.adjacent], [false, 0]);
+  assert.equal(coop.cells.some((c) => c.mine), false);
+});
+
+test('minesweeper 竞速：客户端拿 view 在本地连点（插旗/翻开/快开），结果和服务端一模一样，acts 逐一累加', () => {
+  const a = adapters.minesweeper;
+  let s = a.init({ seed: 9, level: 'normal' });
+  const v = wire(a.view(s, 0));
+  const local = { rows: v.rows, cols: v.cols, mines: v.mines, cells: v.cells, exploded: v.exploded, started: true, phase: 'playing' };
+  const play = (type, index) => {
+    assert.equal({ flag: toggleFlag, reveal, chord }[type](local, index), true, `${type} ${index}`);
+    s = a.apply(s, 0, { type, index }).state;
+  };
+  const near = (i) => mineNeighbours(local, i);
+  // 把挨着已翻开数字的雷都插上旗，再对这些数字快开；最后翻几个安全格
+  for (let i = 0; i < local.cells.length; i++) {
+    const c = local.cells[i];
+    if (!c.open || !c.adjacent) continue;
+    for (const j of near(i)) if (local.cells[j].mine && !local.cells[j].flagged) play('flag', j);
+    if (near(i).some((j) => !local.cells[j].open && !local.cells[j].flagged)) play('chord', i);
+  }
+  for (let i = 0, n = 0; i < local.cells.length && n < 3; i++) if (!local.cells[i].open && !local.cells[i].mine && !local.cells[i].flagged) { play('reveal', i); n++; }
+  const server = wire(a.view(s, 0));
+  assert.ok(server.me.acts > 5);
+  assert.deepEqual(local.cells, server.cells);
 });
 
 test('minesweeper: 踩雷立刻判负，之后雷全部公开', () => {

@@ -30,6 +30,34 @@ async function joinRoom(page, game, code) {
   await page.locator('.online-join input').fill(code.toLowerCase());
   await page.locator('.online-join .online-secondary').click();
 }
+// 慢网：发给这一页的服务端消息在 hold 期间先扣住，由测试按顺序放行。（Playwright 的 routeWebSocket 和
+// Colyseus SDK 传 protocols 的方式不兼容，所以在页面里包一层 WebSocket：最先注册的 message 监听把事件拦下，放行时重发。）
+async function slowNet(page) {
+  await page.addInitScript(() => {
+    const Native = window.WebSocket;
+    const isState = (data) => (typeof data === 'string' ? data : new TextDecoder().decode(new Uint8Array(data))).includes('state');
+    const hold = window.__hold = {
+      on: false, queue: [],
+      states: () => hold.queue.filter((x) => x.state).length,
+      releaseOneState() { while (hold.queue.length) { const x = hold.queue.shift(); x.send(); if (x.state) return; } }
+    };
+    window.WebSocket = class extends Native {
+      constructor(...args) {
+        super(...args);
+        this.addEventListener('message', (event) => {
+          if (event.replay || !hold.on) return;
+          event.stopImmediatePropagation();
+          hold.queue.push({ state: isState(event.data), send: () => this.dispatchEvent(Object.assign(new MessageEvent('message', { data: event.data }), { replay: true })) });
+        });
+      }
+    };
+  });
+  return {
+    setHold: (on) => page.evaluate((v) => { window.__hold.on = v; }, on),
+    heldStates: () => page.evaluate(() => window.__hold.states()),
+    releaseOneState: () => page.evaluate(() => window.__hold.releaseOneState())
+  };
+}
 const stone = (page, at, side) => page.locator(`.board-cell[data-cell="${at}"] .board-piece.side-${side}`);
 
 test('五子棋：创建房间 → 房间码加入 → 轮流落子，非己方回合不能点，一方离开另一方获胜', async ({ browser }) => {
@@ -160,12 +188,61 @@ test('2048 竞速：开局一样，一方滑动，另一方的对手面板同步
   await expect.poll(async () => {
     for (const key of ['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp']) {
       await a.keyboard.press(key);
-      if ((await b.locator('.race-rival').innerText()).includes(' 1 步')) return true;
+      if (/ [1-9]\d* 步/.test(await b.locator('.race-rival').innerText())) return true;   // 对手面板 2 秒一刷，可能已经是好几步之后
     }
     return false;
   }, { timeout: 8000 }).toBe(true);
   await a.keyboard.press('z');                                              // 撤销键：提示，不改变局面
   await expect(a.locator('#score-text')).toContainText('你');
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});
+
+test('2048 竞速慢网：滑动和新块都在本地立刻算出，可以连滑；确认和对手走棋都不打断；对手面板 2 秒一刷', async ({ browser }) => {
+  test.setTimeout(30_000);
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  const { setHold, heldStates, releaseOneState } = await slowNet(a);
+
+  await openGame(a, 'g2048');
+  await goOnline(a);
+  await a.locator('.online-primary').click();
+  const code = (await a.locator('.online-code').innerText()).trim();
+  await joinRoom(b, 'g2048', code);
+  for (const page of [a, b]) await page.waitForFunction(() => window.__arcade.g2048.game?.state);
+  const slide = (page) => page.evaluate(() => ['left', 'right', 'up', 'down'].some((d) => window.__arcade.g2048.game.play(d)));
+  const mine = (page) => page.evaluate(() => {
+    const { game, session } = window.__arcade.g2048;
+    const tiles = (list) => list.map(({ r, c, v }) => `${r}${c}:${v}`).sort();
+    return { moves: game.state.moves, tiles: tiles(game.state.tiles), server: tiles(session.view.players[session.seat].tiles), rival: document.querySelector('.race-rival').innerText };
+  });
+
+  await setHold(true);
+  expect(await slide(b)).toBe(true);                                        // 对手先走，这条更新先到 A
+  await expect.poll(heldStates).toBe(1);
+  const start = await mine(a);
+  expect(await slide(a)).toBe(true);
+  expect(await slide(a)).toBe(true);                                         // 不等回包，连滑两下
+  const predicted = await mine(a);
+  expect(predicted.moves).toBe(2);                                           // 服务端一条都还没回，本地已经走了两步
+  expect(predicted.tiles.length).toBeGreaterThanOrEqual(start.tiles.length); // 新块也在本地出了（每步出一个，合并最多少一个）
+  expect(predicted.server).toEqual(start.server);
+  await expect.poll(heldStates).toBe(3);
+
+  for (let i = 0; i < 2; i++) {                                              // 对手那一步、我第一步的确认：本地盘面都不动
+    await releaseOneState();
+    expect((await mine(a)).tiles).toEqual(predicted.tiles);
+    expect((await mine(a)).moves).toBe(2);
+  }
+  await setHold(false);
+  await releaseOneState();                                                   // 第二步确认：服务端算的和本地一模一样
+  await expect.poll(async () => (await mine(a)).server).toEqual(predicted.tiles);
+  expect((await mine(a)).tiles).toEqual(predicted.tiles);
+
+  await expect.poll(async () => (await mine(a)).rival, { timeout: 3000 }).toContain(' 1 步');
+  expect(await slide(b)).toBe(true);
+  await a.waitForTimeout(500);
+  expect((await mine(a)).rival).toContain(' 1 步');                          // 对手面板不是每步都刷
+  await expect.poll(async () => (await mine(a)).rival, { timeout: 3000 }).toContain(' 2 步');
   expect([...a.errors, ...b.errors]).toEqual([]);
   await a.context().close(); await b.context().close();
 });
@@ -197,6 +274,60 @@ test('扫雷竞速：同一块雷区、起手展开一样；点击由服务端�
   await a.locator('.mine-cell:not(.open)').first().click();
   await expect.poll(async () => (await opened(a)) !== start || (await a.locator('.classic-status').innerText()).includes('地雷')).toBe(true);
   expect(await opened(b)).toBe(start);                                      // 对手的盘面不会因为我的点击而变
+  expect([...a.errors, ...b.errors]).toEqual([]);
+  await a.context().close(); await b.context().close();
+});
+
+test('扫雷竞速慢网：翻格、插旗在本地立刻生效；确认和对手的进度都不打断；踩雷当场判负', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  const { setHold, heldStates, releaseOneState } = await slowNet(a);
+  await openGame(a, 'minesweeper');
+  await goOnline(a);
+  await pickOption(a, '难度', '简单');
+  await a.locator('.online-primary').click();
+  const code = (await a.locator('.online-code').innerText()).trim();
+  await joinRoom(b, 'minesweeper', code);
+  for (const page of [a, b]) await page.waitForFunction(() => window.__arcade.classic.game?.state);
+  // 竞速的 view 里有整块雷区：挑一个没开的安全格、一个雷
+  const pick = (page) => page.evaluate(() => {
+    const cells = window.__arcade.classic.session.view.cells;
+    return { safe: cells.findIndex((c) => !c.open && !c.mine), mine: cells.findIndex((c) => c.mine) };
+  });
+  const board = (page) => page.evaluate(() => {
+    const { game, session } = window.__arcade.classic, pack = (cells) => cells.map((c) => `${+c.open}${+c.flagged}`).join('');
+    return { local: pack(game.state.cells), server: pack(session.view.cells), rival: document.querySelector('.race-rival').innerText };
+  });
+  const cell = (page, i) => page.locator(`.mine-cell[data-cell="${i}"]`);
+  const ta = await pick(a), tb = await pick(b);
+
+  await setHold(true);
+  await cell(b, tb.safe).click();                                           // 对手先翻一格，这条更新先到 A
+  await expect.poll(heldStates).toBe(1);
+  const rivalBefore = (await board(a)).rival;
+  await cell(a, ta.safe).click();
+  await cell(a, ta.mine).click({ button: 'right' });
+  await expect(cell(a, ta.safe)).toHaveClass(/open/);                       // 服务端一条都还没回，本地已经翻开、插上旗
+  await expect(cell(a, ta.mine)).toHaveClass(/flagged/);
+  await expect.poll(heldStates).toBe(3);
+  const predicted = (await board(a)).local;
+
+  await releaseOneState();                                                   // 对手的进度到了：只刷新进度，盘面不动
+  await expect.poll(async () => (await board(a)).rival).not.toBe(rivalBefore);
+  expect((await board(a)).local).toBe(predicted);
+  await releaseOneState();                                                   // 第一下的确认：服务端还没追上，盘面不动
+  expect((await board(a)).local).toBe(predicted);
+  await releaseOneState();                                                   // 第二下也确认：和服务端一模一样
+  await expect.poll(async () => (await board(a)).server).toBe(predicted);
+  expect((await board(a)).local).toBe(predicted);
+
+  await cell(a, ta.mine).click({ button: 'right' });                         // 拔旗再踩：还没回包就已经判负
+  await cell(a, ta.mine).click();
+  await expect(cell(a, ta.mine)).toHaveClass(/exploded/);
+  await expect(a.locator('.classic-status')).toContainText('碰到地雷了，对手获胜');
+  await setHold(false);
+  while (await heldStates()) await releaseOneState();
+  await expect(b.locator('.classic-status')).toContainText('对手踩雷了，你获胜');
+  await expect(a.locator('.classic-status')).toContainText('碰到地雷了，对手获胜');
   expect([...a.errors, ...b.errors]).toEqual([]);
   await a.context().close(); await b.context().close();
 });

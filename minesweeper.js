@@ -5,17 +5,19 @@ const node = (tag, cls, text) => {
   if (text !== undefined) n.textContent = text;
   return n;
 };
-// 联机：竞速是两人同一块雷区各扫各的；合作是两人轮流点同一块雷区，一起赢一起输。
-// 盘面和进度都来自服务端的 view（未翻开的格子里没有雷的信息），本地只负责画和把点击发出去；难度、玩法在创建房间时就定了。
+// 联机：竞速是两人同一块雷区各扫各的；合作是两人轮流点同一块雷区，一起赢一起输。难度、玩法在创建房间时就定了。
+// 合作：盘面来自服务端的 view（未翻开的格子里没有雷的信息），本地只负责画和把点击发出去。
+// 竞速：服务端把自己整块雷区（含雷）都发来，每一下先在本地算出来再发出去，不等回包；服务端追上后对一次。
 const onlinePhase = (view, online) => {
   if (!online.result.over) return 'playing';
   if (view.mode === 'coop') return view.reason === 'cleared' ? 'won' : 'lost';   // 有人离开（作废）也停在这里
   return online.result.winner === online.seat ? 'won' : 'lost';
 };
 const boardFromView = (view, online) => ({
-  rows: view.rows, cols: view.cols, mines: view.mines, cells: view.cells, exploded: view.exploded, started: true,
+  rows: view.rows, cols: view.cols, mines: view.mines, cells: view.cells.map((c) => ({ ...c })), exploded: view.exploded, started: true,
   phase: onlinePhase(view, online)
 });
+const sameCells = (a, b) => a.every((c, i) => c.open === b[i].open && c.flagged === b[i].flagged);
 export function mountMinesweeper(wrap, { onHud = () => {}, online = null, noGuess: savedNoGuess = false, onNoGuess = () => {} } = {}) {
   let alive = true, level = online ? online.view.level : 'easy', state, flagMode = false, noGuess = !online && savedNoGuess, startAt = 0, elapsed = 0;
   const root = node('div', 'classic-game minesweeper-game');
@@ -35,6 +37,9 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null, noGues
   const status = node('div', 'classic-status'); status.setAttribute('aria-live', 'polite');
   const rival = node('div', 'race-rival'), rivalText = node('div', ''), meter = node('div', 'rival-meter'), meterFill = node('i', '');
   const coop = online?.view.mode === 'coop';
+  // 旧服务端不发雷也不发 acts，那就还是等回包（本地拿不到雷，没法算）。
+  const local = Boolean(online) && !coop && online.view.me?.acts !== undefined;
+  let acts = online?.view.me?.acts ?? 0, round = online?.round ?? 0;   // acts：本地已经算过并发出去的操作数
   meter.append(meterFill); rival.append(rivalText, meter); rival.hidden = !online || coop;
   root.append(tools, stats, board, rival, status); wrap.replaceChildren(root);
   let buttons = [];
@@ -49,7 +54,7 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null, noGues
       stats.textContent = `⚑ 剩余 ${state.mines - flags}　 ·　 已开 ${opened}/${total}`;
       onHud(`${MINE_LEVELS[level].label} · 合作 · ${opened}/${total}`);
     } else if (online) {
-      const mine = online.view.me, other = online.view.rival;
+      const other = online.view.rival, mine = { total: online.view.me.total, opened: state.cells.filter(c => c.open && !c.mine).length };
       stats.textContent = `⚑ 剩余 ${state.mines - flags}　 ·　 我 ${mine.opened}/${mine.total}`;
       rivalText.textContent = `对手进度 ${other.opened}/${other.total}`;
       meterFill.style.width = `${Math.round(100 * other.opened / other.total)}%`;
@@ -70,6 +75,9 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null, noGues
     };
     const onlineStatus = () => {
       if (coop) return coopStatus();
+      // 本地已经算出输赢、服务端还没确认：踩雷一定是输；扫完了要看服务端那边对手是不是更早扫完。
+      if (!online.result.over && state.phase === 'lost') return '碰到地雷了，对手获胜。';
+      if (!online.result.over && state.phase === 'won') return '✦ 扫完了！等待确认……';
       const forfeit = online.result.reason === 'forfeit', reason = online.view.reason;
       if (state.phase === 'won') return forfeit ? '对手已离开 · 你获胜！' : reason === 'mine' ? '✦ 对手踩雷了，你获胜！' : '✦ 你先扫完了雷区，获胜！';
       if (state.phase === 'lost') return forfeit ? '你已离开本局 · 对手获胜' : reason === 'mine' ? '碰到地雷了，对手获胜。' : '对手先扫完了，这局你输了。';
@@ -88,7 +96,14 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null, noGues
   function action(i, mark = flagMode) {
     if (!alive) return;
     if (online) {
-      if (state.phase === 'playing') online.send({ type: mark ? 'flag' : state.cells[i].open ? 'chord' : 'reveal', index: i });
+      if (state.phase !== 'playing' || online.result.over) return;
+      const type = mark ? 'flag' : state.cells[i].open ? 'chord' : 'reveal';
+      if (local) {
+        if (!(mark ? toggleFlag(state, i) : type === 'chord' ? chord(state, i) : reveal(state, i))) return;
+        acts += 1;
+        render();
+      }
+      online.send({ type, index: i });
       return;
     }
     const started = state.started;
@@ -117,7 +132,21 @@ export function mountMinesweeper(wrap, { onHud = () => {}, online = null, noGues
   const timer = setInterval(() => {
     if (!online && state.started && state.phase === 'playing') { elapsed = performance.now() - startAt; render(); }
   }, 1000);
-  const off = online?.on('state', (payload) => { state = boardFromView(payload.view, online); render(); });
+  // 以服务端为准：开局/再来一局/结束、重连后服务端走得比本地远、全部确认后对不上、被拒或断线。
+  function resync() { state = boardFromView(online.view, online); acts = online.view.me?.acts ?? 0; render(); }
+  const rollback = () => { if (local && acts !== online.view.me.acts) resync(); };
+  const offs = online ? [
+    online.on('state', (payload) => {
+      const view = payload.view, server = view.me?.acts;
+      const fresh = payload.round !== round;
+      round = payload.round;
+      // 服务端还在确认本地已经算过的操作，或者只是对手走了：本地盘面不动，只刷新进度。
+      if (!local || fresh || online.result.over || server > acts || (server === acts && !sameCells(state.cells, view.cells))) resync();
+      else render();
+    }),
+    online.on('reject', rollback),
+    online.on('status', (status) => { if (status !== 'live') rollback(); })
+  ] : [];
   build();
-  return { restart() { if (!online) build(); }, destroy() { alive = false; off?.(); clearInterval(timer); wrap.replaceChildren(); }, get state() { return state; } };
+  return { restart() { if (!online) build(); }, destroy() { alive = false; for (const off of offs) off(); clearInterval(timer); wrap.replaceChildren(); }, get state() { return state; } };
 }
