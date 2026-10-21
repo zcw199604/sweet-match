@@ -14,8 +14,82 @@ const TRAY_Y = 112;
 const OX = (W - AREA.w) / 2;
 const OY = 176;
 const ADD_BTN = { x: 118, y: 580, w: 124, h: 40 };
-const TINTS = ['#9cc4ff', '#ffb8de', '#a6f0c5', '#ffe9a0', '#cdb4ff', '#98f0f3'];
+// 亚克力板的三种色：板面、高光、边缘
+const TINTS = [
+  ['#7fb2ff', '#d4e6ff', '#3f6fcc'], ['#ff9fd0', '#ffdcee', '#c4528f'], ['#7fe3ab', '#d6f9e4', '#2f9e63'],
+  ['#ffd86b', '#fff3c4', '#c39a1c'], ['#b89cff', '#e8dfff', '#6f4fd0'], ['#6fe0e6', '#d0f8fa', '#239aa1']
+];
 const SAVE = store('pao-screw');
+
+// 半透明亚克力板：投在下层的影子、底边一道厚度、斜向反光和内圈高光。板面保持半透明，下层的螺丝还能隐约看见。
+function drawPlate(ctx, x, y, w, h, tint, { shadow = true } = {}) {
+  const [base, light, edge] = TINTS[tint];
+  const r = Math.min(14, w / 2, h / 2);
+  ctx.save();
+  // 影子单独画（形状挪到画面外，只让影子落回来），不让板子本身叠两层颜色。
+  // 影子的偏移和模糊按设备像素算、不跟坐标变换走，所以乘上缩放；带旋转时不画。
+  if (shadow) {
+    const k = ctx.getTransform().a;
+    ctx.shadowColor = '#05081c66';
+    ctx.shadowBlur = 12 * k;
+    ctx.shadowOffsetX = 10000 * k;
+    ctx.shadowOffsetY = 7 * k;
+    roundRect(ctx, x - 10000, y, w, h, r);
+    ctx.fillStyle = '#000'; ctx.fill();
+    ctx.shadowColor = 'transparent';
+  }
+  // 厚度：只露出板面下沿的一条边
+  if (ctx.roundRect) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x - 2, y + h / 2, w + 4, h); ctx.clip();
+    ctx.beginPath();
+    ctx.roundRect(x, y + 4, w, h, r);
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fillStyle = `${edge}e0`; ctx.fill('evenodd');
+    ctx.restore();
+  }
+  // 板面
+  roundRect(ctx, x, y, w, h, r);
+  const g = ctx.createLinearGradient(x, y, x + w * 0.5, y + h);
+  g.addColorStop(0, `${light}e0`); g.addColorStop(0.5, `${base}c8`); g.addColorStop(1, `${base}b8`);
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = `${edge}dd`; ctx.stroke();
+  ctx.clip();
+  // 斜向反光
+  const sx = x + w * 0.22, lean = h * 0.55;
+  ctx.beginPath();
+  ctx.moveTo(sx, y); ctx.lineTo(sx + 16, y); ctx.lineTo(sx + 16 - lean, y + h); ctx.lineTo(sx - lean, y + h); ctx.closePath();
+  ctx.moveTo(sx + 24, y); ctx.lineTo(sx + 30, y); ctx.lineTo(sx + 30 - lean, y + h); ctx.lineTo(sx + 24 - lean, y + h); ctx.closePath();
+  ctx.fillStyle = '#ffffff24'; ctx.fill();
+  // 内圈高光和上沿亮条
+  roundRect(ctx, x + 2, y + 2, w - 4, h - 4, r - 2);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffffff8c'; ctx.stroke();
+  roundRect(ctx, x + 9, y + 4.5, w - 18, 4, 2);
+  ctx.fillStyle = '#ffffff70'; ctx.fill();
+  ctx.restore();
+}
+// 板上的螺丝孔：凹下去的一圈，下沿受光；螺丝拧走后就是一个透空的孔。
+function drawHole(ctx, x, y, empty) {
+  ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2);
+  const g = ctx.createRadialGradient(x, y - 3, 4, x, y, 14);
+  g.addColorStop(0, empty ? '#0b0f2488' : '#00000048'); g.addColorStop(1, empty ? '#0b0f2450' : '#00000020');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, 13.5, Math.PI * 0.15, Math.PI * 0.85);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffffff80'; ctx.stroke();
+}
+// 工作台底板上的一排排小孔，缓存成图案只画一次
+const pegs = new WeakMap();
+function pegboard(ctx) {
+  if (!pegs.has(ctx)) {
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = 20;
+    const g = tile.getContext('2d');
+    g.fillStyle = '#ffffff12';
+    g.beginPath(); g.arc(10, 10, 1.8, 0, Math.PI * 2); g.fill();
+    pegs.set(ctx, ctx.createPattern(tile, 'repeat'));
+  }
+  return pegs.get(ctx);
+}
 
 function drawScrew(ctx, x, y, color, { r = 11, spin = 0, dim = false, ring = false } = {}) {
   ctx.save();
@@ -198,19 +272,18 @@ export function mountScrew(wrap, { onHud = () => {}, onResult = null } = {}) {
     // 板子：按层画，螺丝跟着自己的板子画，上层半透明的板子会盖在下层螺丝上
     roundRect(ctx, OX - 10, OY - 10, AREA.w + 20, AREA.h + 20, 18);
     ctx.fillStyle = '#ffffff0c'; ctx.fill();
+    ctx.fillStyle = pegboard(ctx); ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = '#ffffff14'; ctx.stroke();
     const plates = state.plates.filter((p) => !vis.fallen.has(p.id)).sort((a, b) => a.z - b.z || a.id - b.id);
     const hintOn = hint !== null && now < hint.until && Math.sin(now / 110) > -0.2;
     for (const plate of plates) {
-      roundRect(ctx, OX + plate.x, OY + plate.y, plate.w, plate.h, 14);
-      ctx.fillStyle = `${TINTS[plate.tint]}c8`;
-      ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffffffb0'; ctx.stroke();
-      roundRect(ctx, OX + plate.x + 6, OY + plate.y + 5, plate.w - 12, 7, 4);
-      ctx.fillStyle = '#ffffff55'; ctx.fill();
+      drawPlate(ctx, OX + plate.x, OY + plate.y, plate.w, plate.h, plate.tint);
       for (const s of state.screws) {
-        if (s.plate !== plate.id || !vis.board.has(s.id)) continue;
-        const [x, y] = boardXY(s);
-        ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fillStyle = '#00000030'; ctx.fill();
+        if (s.plate !== plate.id) continue;
+        const [x, y] = boardXY(s), on = vis.board.has(s.id);
+        drawHole(ctx, x, y, !on);
+        if (!on) continue;
+        ctx.beginPath(); ctx.arc(x + 1, y + 2.5, 11, 0, Math.PI * 2); ctx.fillStyle = '#00000038'; ctx.fill();
         drawScrew(ctx, x, y, s.color, { r: 11, ring: hintOn && hint.id === s.id });
       }
     }
@@ -222,8 +295,8 @@ export function mountScrew(wrap, { onHud = () => {}, onResult = null } = {}) {
       ctx.globalAlpha = 1 - k;
       ctx.translate(OX + p.x + p.w / 2, OY + p.y + p.h / 2 + k * k * 420);
       ctx.rotate(f.spin * k * 0.9);
-      roundRect(ctx, -p.w / 2, -p.h / 2, p.w, p.h, 14);
-      ctx.fillStyle = `${TINTS[p.tint]}c8`; ctx.fill();
+      drawPlate(ctx, -p.w / 2, -p.h / 2, p.w, p.h, p.tint, { shadow: false });
+      for (const s of state.screws) if (s.plate === p.id) drawHole(ctx, s.x - p.x - p.w / 2, s.y - p.y - p.h / 2, true);
       ctx.restore();
     }
     // 飞行中的螺丝：边飞边转

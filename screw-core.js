@@ -38,19 +38,27 @@ export function createLevel(level, seed = levelSeed('screw', level)) {
   const shape = levelShape(level);
   const rand = rng(seed);
   const plates = [], screws = [];
+  // 上层板子要压住下层螺丝，不然各层摊开互不相挡，底下的螺丝开局就全拧得动。
+  // 每块板子试几个合法位置，挑盖住下层螺丝最多的（还没被盖过的算双倍，好让遮挡铺开）；关卡越高试得越多、压得越密。
+  const aim = Math.min(12, 2 * Math.max(1, level));
   for (let i = 0; i < shape.plates; i += 1) {
     const z = Math.floor((i * shape.layers) / shape.plates);
     const [w, h] = SHAPES[randInt(rand, SHAPES.length)];
-    for (let tries = 0; tries < 30; tries += 1) {
+    const below = screws.filter((s) => plates[s.plate].z < z);
+    let best = null;
+    for (let tries = 0, found = 0; tries < 30 && found < aim; tries += 1) {
       const plate = { id: plates.length, x: randInt(rand, AREA.w - w), y: randInt(rand, AREA.h - h), w, h, z, tint: randInt(rand, 6), fallen: false };
       const spots = screwSpots(plate);
       const want = Math.min(spots.length, 2 + randInt(rand, 2));
       const ok = spots.slice(0, want).filter(([sx, sy]) => screws.every((s) => Math.hypot(s.x - sx, s.y - sy) > 26));
       if (ok.length < Math.min(2, want)) continue;
-      plates.push(plate);
-      for (const [sx, sy] of ok) screws.push({ id: screws.length, plate: plate.id, x: sx, y: sy, color: -1, where: 'board' });
-      break;
+      found += 1;
+      const score = below.reduce((sum, s) => sum + (inside(plate, s.x, s.y) ? (plates.some((p) => p.z > plates[s.plate].z && inside(p, s.x, s.y)) ? 1 : 2) : 0), 0);
+      if (!best || score > best.score) best = { plate, ok, score };
     }
+    if (!best) continue;
+    plates.push(best.plate);
+    for (const [sx, sy] of best.ok) screws.push({ id: screws.length, plate: best.plate.id, x: sx, y: sy, color: -1, where: 'board' });
   }
   // 螺丝数凑成 3 的倍数：从螺丝最多的板子上去掉几颗（每块至少留一颗）
   while (screws.length % 3) {

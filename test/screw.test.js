@@ -67,3 +67,20 @@ test('every level can be cleared in its witness order without filling the holes'
     }
   }
 });
+
+test('upper plates press down on lower screws, more as levels climb', () => {
+  const coveredShare = (level) => {
+    let covered = 0, total = 0;
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const state = createLevel(level, seed);
+      for (const s of state.screws.filter((x) => state.plates[x.plate].z === 0)) {
+        total += 1;
+        if (coverOf(state, s).length) covered += 1;
+      }
+    }
+    return covered / total;
+  };
+  assert.ok(coveredShare(5) > 0.45);
+  assert.ok(coveredShare(10) > 0.6);
+  assert.ok(coveredShare(15) > 0.7);
+});
