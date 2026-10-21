@@ -7,6 +7,7 @@
 // the figures come from quest-art.js, static SVG parsed once and cloned.
 import { actOf, chooseReward, createQuest, enemyStep, finishMove, HEROES, intentText, PERKS, QUEST, resolveStep, setTarget, swapTiles, validSwaps } from './quest-core.js';
 import { foeSprite, heroSprite } from './quest-art.js';
+import { framePoint, frameRect } from './screen-frame.js';
 
 const STORE = { best: 'pao-quest-best' };
 const readCount = (key) => { try { return Math.max(0, Number(localStorage.getItem(key)) || 0); } catch { return 0; } };
@@ -192,10 +193,10 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   const play = (node, frames, options) => done(animate(node, frames, options));
   // Centre of a node in the wrap's coordinates (the fx layer covers the wrap).
   const at = (node) => {
-    const a = node.getBoundingClientRect(), b = wrap.getBoundingClientRect();
+    const a = frameRect(node), b = frameRect(wrap);
     return { x: a.left - b.left + a.width / 2, y: a.top - b.top + a.height / 2, w: a.width, h: a.height };
   };
-  const unit = () => wrap.getBoundingClientRect().width / 100;
+  const unit = () => frameRect(wrap).width / 100;
   function spawn(className, point, text) {
     const node = el('span', `qfx ${className}`, text);
     node.style.left = `${point.x}px`;
@@ -410,7 +411,7 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   // ---- the board ----
   // Every cleared tile pops, throws a few sparks, and sends a mote to the hero it belongs to.
   function popCells(step) {
-    const my = epoch, size = tiles[0].getBoundingClientRect().width;
+    const my = epoch, size = frameRect(tiles[0]).width;
     for (const group of step.groups) {
       const dest = at(heroCards[group.type].fig);
       group.cells.forEach(([r, c], k) => {
@@ -427,7 +428,7 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   function dropBoard(cleared) {
     const gone = new Set(cleared.map(([r, c]) => `${r},${c}`));
     paintBoard();
-    const pitch = tileAt(1, 0).getBoundingClientRect().top - tileAt(0, 0).getBoundingClientRect().top;
+    const pitch = frameRect(tileAt(1, 0)).top - frameRect(tileAt(0, 0)).top;
     for (let c = 0; c < QUEST.COLS; c += 1) {
       const kept = [];
       for (let r = 0; r < QUEST.ROWS; r += 1) if (!gone.has(`${r},${c}`)) kept.push(r);
@@ -623,7 +624,7 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
 
   // The wave walks in from the right; between stages the party marches on and the land scrolls by.
   function enterWave(my, march) {
-    const width = scene.getBoundingClientRect().width;
+    const width = frameRect(scene).width;
     const entering = enemyCards.map((view, k) => animate(view.card, [
       { transform: `translateX(${width * 0.55}px)`, opacity: 0 },
       { transform: 'translateX(0)', opacity: 1 }
@@ -746,12 +747,12 @@ export function mountQuest(wrap, { onHud = () => {}, onResult = null } = {}) {
   boardEl.addEventListener('pointerdown', (event) => {
     const cell = cellOf(event);
     if (!cell) return;
-    drag = { cell, x: event.clientX, y: event.clientY, swiped: false };
+    drag = { cell, ...framePoint(event.clientX, event.clientY), swiped: false };
   });
   boardEl.addEventListener('pointermove', (event) => {
     if (!drag || drag.swiped || busy) return;
-    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
-    const reach = tiles[0].getBoundingClientRect().width * 0.4;
+    const p = framePoint(event.clientX, event.clientY), dx = p.x - drag.x, dy = p.y - drag.y;
+    const reach = frameRect(tiles[0]).width * 0.4;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < reach) return;
     drag.swiped = true;
     const [r, c] = drag.cell;

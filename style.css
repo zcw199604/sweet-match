@@ -573,22 +573,24 @@ body.game-full #game #game-stage>.canvas-wrap[data-fit]{width:var(--fw);height:v
 body.game-full #game #game-stage>.classic-wrap{width:min(var(--fw),720px);overflow:auto}
 /* 棋盘按量好的尺寸定住，再 zoom 到最大（app.js 的 fitClassicBoard） */
 body.game-full #game #game-stage>.classic-wrap.full-sized>.classic-game>:is(.strategy-board,.aero-board,.mine-board,.junqi-board,.xiangqi-board){width:var(--bw)!important;height:var(--bh)!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;zoom:var(--bz)}
-@media(orientation:landscape){
-  body.game-full #game #game-stage>.classic-wrap.full-sized{width:var(--fw);height:var(--fh);max-width:none}
-  body.game-full #game #game-stage>.classic-wrap.full-sized>.classic-game{display:grid;grid-template-columns:auto minmax(0,1fr);grid-auto-rows:auto;align-content:center;align-items:center;column-gap:14px;row-gap:6px;width:100%;max-width:none;min-height:100%;margin:0;padding:0}
-  body.game-full #game #game-stage>.classic-wrap.full-sized>.classic-game>*{grid-column:2;margin:0;min-width:0}
-  body.game-full #game #game-stage>.classic-wrap.full-sized>.classic-game>:is(.strategy-board,.aero-board,.mine-board,.junqi-board,.xiangqi-board){grid-column:1;grid-row:1/span 12;align-self:center;margin:0}
-}
+/* 横竖屏用 body 上的类而不是 @media(orientation)：全屏里可以手动切方向，锁不了屏幕方向时是用 CSS 把舞台转 90° 模拟的，
+   这时视口方向和要排的方向不一样（app.js 的 applyTurn）。full-land：按横屏排；full-compact：手机尺寸（短边 ≤ 600）；full-rot：转了 90° */
+body.game-full.full-rot #game #game-stage{inset:auto;top:0;left:0;width:var(--vh);height:var(--vw);transform-origin:0 0;transform:translateX(var(--vw)) rotate(90deg)}
+body.game-full #game #game-stage .turn-button{order:1;font-weight:800}
+body:not(.game-full) .turn-button{display:none}
+body.game-full.full-land #game #game-stage>.classic-wrap.full-sized{width:var(--fw);height:var(--fh);max-width:none}
+body.game-full.full-land #game #game-stage>.classic-wrap.full-sized>.classic-game{display:grid;grid-template-columns:auto minmax(0,1fr);grid-auto-rows:auto;align-content:center;align-items:center;column-gap:14px;row-gap:6px;width:100%;max-width:none;min-height:100%;margin:0;padding:0}
+body.game-full.full-land #game #game-stage>.classic-wrap.full-sized>.classic-game>*{grid-column:2;margin:0;min-width:0}
+body.game-full.full-land #game #game-stage>.classic-wrap.full-sized>.classic-game>:is(.strategy-board,.aero-board,.mine-board,.junqi-board,.xiangqi-board){grid-column:1;grid-row:1/span 12;align-self:center;margin:0}
+/* 手机横着拿、却选了竖屏：各棋牌自己的横屏样式（棋盘左、面板右）还在生效，这里拉回上下排 */
+body.game-full.full-rot:not(.full-land) #game #game-stage>.classic-wrap>.classic-game{display:flex;flex-direction:column;align-items:center;max-width:none}
+body.game-full.full-rot:not(.full-land) #game #game-stage>.classic-wrap>.classic-game>*{grid-column:auto;grid-row:auto;max-width:100%}
 /* 手机横屏：高度金贵，游戏区占满整个高度，操作按钮和按钮栏竖着排在右边（「退出全屏」在最上面） */
-@media(orientation:landscape) and (max-height:600px){
-  body.game-full #game #game-stage{flex-direction:row;align-items:center;padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
-  body.game-full #game #game-stage>:is(.canvas-wrap,.classic-wrap,.embed-wrap){margin:0 auto}
-  body.game-full #game #game-stage>:is(.stage-top,.mobile-controls){width:auto;max-width:170px;align-self:stretch;flex-direction:column;flex-wrap:nowrap;justify-content:center;align-items:stretch;padding:0}
-  body.game-full #game #game-stage>.stage-top>div:first-child{flex:none}
-  body.game-full #game #game-stage>.stage-top #score-text{white-space:normal;font-size:12px}
-  body.game-full #game #game-stage>.mobile-controls button{flex:none}
-  /* 英雄三消横过来是左战场右棋盘，约 2:1 */
-  body.game-full #game #game-stage>.quest-wrap{width:min(var(--fw),calc(var(--fh) * 2))}
-}
-/* 宽屏（桌面、平板横放）上英雄三消同样是 2:1 的横版 */
-@media(orientation:landscape) and (min-width:801px){body.game-full #game #game-stage>.quest-wrap{width:min(var(--fw),calc(var(--fh) * 2))}}
+body.game-full.full-land.full-compact #game #game-stage{flex-direction:row;align-items:center;padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+body.game-full.full-land.full-compact #game #game-stage>:is(.canvas-wrap,.classic-wrap,.embed-wrap){margin:0 auto}
+body.game-full.full-land.full-compact #game #game-stage>:is(.stage-top,.mobile-controls){width:auto;max-width:170px;align-self:stretch;flex-direction:column;flex-wrap:nowrap;justify-content:center;align-items:stretch;padding:0}
+body.game-full.full-land.full-compact #game #game-stage>.stage-top>div:first-child{flex:none}
+body.game-full.full-land.full-compact #game #game-stage>.stage-top #score-text{white-space:normal;font-size:12px}
+body.game-full.full-land.full-compact #game #game-stage>.mobile-controls button{flex:none}
+/* 英雄三消在真的横屏里是左战场右棋盘，约 2:1（它自己的排版跟着视口走，模拟横屏时仍是竖版） */
+body.game-full.full-land:not(.full-rot) #game #game-stage>.quest-wrap{width:min(var(--fw),calc(var(--fh) * 2))}

@@ -7,6 +7,7 @@ import {
   drawStat, drawThruster, drawWell, glow, panel, resetArtCaches, roundRect, SHADES, withAlpha
 } from './art.js';
 import { initBoard, openBoard, reportScore } from './leaderboard.js';
+import { framePoint, frameRect } from './screen-frame.js';
 import { initActivity, markActive, trackActivity } from './activity.js';
 import { EMBED_GAMES, embedHost, mountEmbed } from './embed-games.js';
 import { initRecent, noteOpened, showRecent } from './recent.js';
@@ -199,8 +200,55 @@ function addFullButton(stage) {
   node.dataset.gameFull = '';
   fullButton(node, isFull());
   node.addEventListener('click', () => setGameFull(!isFull()));
-  actions.append(node);
+  // 全屏里切横竖屏（只在触屏设备上给；桌面转 90° 没有意义）
+  const turn = document.createElement('button');
+  turn.type = 'button';
+  turn.className = 'turn-button';
+  turn.dataset.gameTurn = '';
+  turn.hidden = !TOUCH;
+  turn.addEventListener('click', () => setTurn(turnedLand() ? 'portrait' : 'landscape'));
+  actions.append(node, turn);
+  turnButton();
   watchFull();
+}
+
+// ---- 全屏的横竖屏 ----
+// 默认跟着手机的方向（auto）；「转横屏 / 转竖屏」把方向定成另一种，退出全屏回到 auto。
+// 浏览器能锁屏幕方向（安卓 Chrome 全屏时）就真锁；锁不了（iPhone Safari 等）就把舞台用 CSS 转 90°（body.full-rot），
+// 舞台里的点击坐标由 screen-frame.js 转回来。body.full-land / full-compact 告诉样式按横屏 / 手机尺寸排。
+const TOUCH = Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+let fullTurn = 'auto', canLock = typeof screen.orientation?.lock === 'function', turnKey = '';
+const viewLand = () => window.innerWidth > window.innerHeight;
+const turnedLand = () => (fullTurn === 'auto' ? viewLand() : fullTurn === 'landscape');
+function turnButton() {
+  const node = $('[data-game-turn]');
+  if (node) node.textContent = turnedLand() ? '转竖屏' : '转横屏';
+}
+function setTurn(next) {
+  fullTurn = next;
+  if (canLock && document.fullscreenElement) {
+    const done = next === 'auto' ? Promise.resolve(screen.orientation.unlock?.()) : screen.orientation.lock(next);
+    // 锁不了（桌面、不支持的浏览器）就退回模拟
+    Promise.resolve(done).catch(() => { canLock = false; applyTurn(); });
+  }
+  applyTurn();
+}
+function applyTurn() {
+  const body = document.body, full = isFull(), land = full && turnedLand();
+  // 真锁方向时视口自己会转过来；模拟时视口方向和要的方向不一样就转 90°
+  const rot = full && !(canLock && document.fullscreenElement) && land !== viewLand();
+  const compact = full && Math.min(window.innerWidth, window.innerHeight) <= 600;
+  const key = `${full}${land}${rot}${compact}${window.innerWidth}x${window.innerHeight}`;
+  turnButton();
+  if (key === turnKey) return;
+  turnKey = key;
+  body.classList.toggle('full-land', land);
+  body.classList.toggle('full-compact', compact);
+  body.classList.toggle('full-rot', rot);
+  body.style.setProperty('--vw', `${window.innerWidth}px`);
+  body.style.setProperty('--vh', `${window.innerHeight}px`);
+  fitFull();
+  window.dispatchEvent(new Event('resize'));   // 画布游戏、泡噗按新的方向重新量一次
 }
 // 游戏区能用多大：舞台减去按钮栏、操作按钮这些，写成 --fw / --fh，各游戏按自己的宽高比取用。
 // 竖屏按钮在下面（减高度），手机横屏按钮在右边一列（减宽度）。
@@ -210,7 +258,7 @@ function fitFull() {
   const css = getComputedStyle(stage), row = css.flexDirection === 'row';
   const gap = parseFloat(row ? css.columnGap : css.rowGap) || 0;
   const others = [...stage.children].filter((node) => !node.matches('.canvas-wrap, .classic-wrap, .embed-wrap') && getComputedStyle(node).display !== 'none');
-  const used = others.reduce((sum, node) => { const box = node.getBoundingClientRect(); return sum + (row ? box.width : box.height) + gap; }, 0);
+  const used = others.reduce((sum, node) => { const box = frameRect(node); return sum + (row ? box.width : box.height) + gap; }, 0);
   const width = stage.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - (row ? used : 0);
   const height = stage.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom) - (row ? 0 : used);
   stage.style.setProperty('--fw', `${Math.floor(width)}px`);
@@ -235,12 +283,12 @@ function fitClassicBoard(fw, fh) {
   if (!isFull()) return;
   classicWatch?.observe(wrap, { childList: true, subtree: true });
   const board = wrap.querySelector(`.classic-game > :is(${CLASSIC_BOARDS})`);
-  const box = board?.getBoundingClientRect();
+  const box = board && frameRect(board);
   if (!box?.width || !box.height) return;
   fittedBoard = board;
   let roomW = fw, roomH = fh;
   if (fw > fh) roomW = fw - Math.min(300, Math.max(180, fw * 0.32)) - 14;   // 右边留一列给工具和状态
-  else roomH = fh - (board.parentElement.getBoundingClientRect().height - box.height);
+  else roomH = fh - (frameRect(board.parentElement).height - box.height);
   const zoom = Math.max(0.5, Math.min(3, roomW / box.width, roomH / box.height));
   wrap.style.setProperty('--bw', `${box.width}px`);
   wrap.style.setProperty('--bh', `${box.height}px`);
@@ -261,13 +309,16 @@ function setGameFull(on) {
   document.body.classList.toggle('game-full', on);
   const button = $('[data-game-full]');
   if (button) fullButton(button, on);
+  fullTurn = 'auto';
   if (on) {
     history.pushState({ gameFull: true }, '');
     try { Promise.resolve(document.documentElement.requestFullscreen?.()).catch(() => {}); } catch { /* 不支持就只铺满视口 */ }
   } else {
+    try { if (canLock && document.fullscreenElement) screen.orientation.unlock?.(); } catch { /* 没锁过 */ }
     if (history.state?.gameFull) { fullUnwinding = true; history.back(); }   // 用按钮退出：把进入时记的那一步撤掉
     try { if (document.fullscreenElement) Promise.resolve(document.exitFullscreen()).catch(() => {}); } catch { /* 同上 */ }
   }
+  applyTurn();
   fitFull();
   watchFull();
   window.dispatchEvent(new Event('resize'));   // 按容器宽度定画布分辨率的游戏（泡噗、抓大鹅……）重新量一次
@@ -986,7 +1037,7 @@ const surgeSideways = () => mode === 'surge' && phoneSideways.matches;
 const viewTop = () => (surgeSideways() ? SURGE_VIEW.TOP : 0);
 const viewHeight = () => (mode === 'blast' ? BLAST.HEIGHT : surgeSideways() ? SURGE_VIEW.BOTTOM - SURGE_VIEW.TOP : tallPop3() ? Math.round(POP3_TALL.TOP + POP3_TALL.GAP + POP3.H * tallScale()) : HEIGHT);
 function canvasPoint(canvas, event) {
-  const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * WIDTH / rect.width, y: (event.clientY - rect.top) * viewHeight() / rect.height + viewTop() };
+  const rect = frameRect(canvas), p = framePoint(event.clientX, event.clientY); return { x: (p.x - rect.left) * WIDTH / rect.width, y: (p.y - rect.top) * viewHeight() / rect.height + viewTop() };
 }
 function sendAction(player, action) {
   if (!state) return false;
@@ -1685,7 +1736,7 @@ loadBlastBest(); loadPop3Prefs();
 for (const type of ['pointermove', 'pointerup', 'pointercancel']) document.addEventListener(type, type === 'pointermove' ? pointerMove : pointerUp, { passive: false });
 document.addEventListener('keydown', keyboard); document.addEventListener('keyup', keyboard);
 window.addEventListener('blur', () => keys.clear());
-window.addEventListener('resize', resizeCanvas); window.addEventListener('resize', () => fitFull()); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
+window.addEventListener('resize', resizeCanvas); window.addEventListener('resize', () => { applyTurn(); fitFull(); }); window.addEventListener('beforeunload', () => { closeEvents(); rtc.peer?.close(); });
 // Read-only handle for end-to-end tests and debugging in the console.
 window.__arcade = { get state() { return state; }, get mode() { return mode; }, get theme() { return theme; }, get best() { return blastBest; }, get goose() { return goose; }, get quest() { return quest; }, get park() { return park; }, get pour() { return pour; }, get g2048() { return g2048; }, get suika() { return suika; }, get tetris() { return tetris; }, get skychef() { return skychef; }, get sudoku() { return sudoku; }, get classic() { return classic; }, get kit() { return kit; } };
 // The card handlers only exist once this module has run, so tests wait on this

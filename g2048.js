@@ -7,6 +7,7 @@ import { createFx, isG2048Theme, themeLook } from './g2048-art.js';
 import { getPref } from './prefs.js';
 import { rngFrom } from './rng-core.js';
 import { fitView } from './fit-view.js';
+import { framePoint } from './screen-frame.js';
 
 const LW = 360;
 const LH = 540;
@@ -208,12 +209,12 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     event.preventDefault();
     const p = toLogical(event);
     if (p.x >= BTN.x && p.x <= BTN.x + BTN.w && p.y >= BTN.y && p.y <= BTN.y + BTN.h) return takeBack();
-    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, done: false };
+    drag = { id: event.pointerId, ...framePoint(event.clientX, event.clientY), done: false };
     canvas.setPointerCapture?.(event.pointerId);
   }
   function onMove(event) {
     if (!drag || drag.id !== event.pointerId || drag.done) return;
-    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    const p = framePoint(event.clientX, event.clientY), dx = p.x - drag.x, dy = p.y - drag.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE) return;
     drag.done = true; // one swipe, one move: the finger has to lift before the next
     play(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));

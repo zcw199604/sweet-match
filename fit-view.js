@@ -3,6 +3,8 @@
 //   main（棋盘 / 游戏区）尽量放大；top / bottom（信息栏、按钮栏）保持原来的大小，
 //   竖屏摆在上下；横屏时游戏区在左、信息栏按顺序叠成一列放在右边（挨着舞台的按钮栏），个别栏可用 land: 'left' 放到左边。
 // 不在全屏时什么都不做：游戏直接画在画布上，和以前一样。
+import { framePoint, frameRect, toClient } from './screen-frame.js';
+
 // regions() 每帧调用，返回逻辑坐标里的矩形 [{ x, y, w, h, role: 'main' | 'top' | 'bottom', land?: 'left' | 'right' }]，
 // 不给或只给 main 以外的也行（没有 main 就把整张画布当 main）。
 const BAR = 0.9; // 信息栏的缩放上限：不比平时手机上看到的大
@@ -68,7 +70,7 @@ export function fitView(canvas, { width, height, regions = null, onChange = () =
   function sync() {
     if (regions && canvas.parentElement && !('fit' in canvas.parentElement.dataset)) canvas.parentElement.dataset.fit = '';
     const want = Boolean(regions) && isFull();
-    const box = canvas.getBoundingClientRect();
+    const box = frameRect(canvas);
     const changed = want !== active || (want && (Math.round(box.width) !== cssW || Math.round(box.height) !== cssH));
     if (!changed) return;
     active = want;
@@ -133,7 +135,8 @@ export function fitView(canvas, { width, height, regions = null, onChange = () =
     },
     // 页面坐标 → 逻辑坐标：落在哪块就按哪块换算，都不在就按最近的一块；role 指定时（拖动瞄准之类）一律按那块换算。
     point(clientX, clientY, role = '') {
-      const rect = canvas.getBoundingClientRect();
+      const rect = frameRect(canvas);
+      ({ x: clientX, y: clientY } = framePoint(clientX, clientY));
       if (!active) return { x: (clientX - rect.left) * width / rect.width, y: (clientY - rect.top) * height / rect.height };
       if (!placed.length) layout();
       const px = clientX - rect.left, py = clientY - rect.top;
@@ -147,11 +150,11 @@ export function fitView(canvas, { width, height, regions = null, onChange = () =
     },
     // 逻辑坐标 → 页面坐标（给测试点击用）。
     page(x, y) {
-      const rect = canvas.getBoundingClientRect();
-      if (!active) return { x: rect.left + x * rect.width / width, y: rect.top + y * rect.height / height };
+      const rect = frameRect(canvas);
+      if (!active) return toClient(rect.left + x * rect.width / width, rect.top + y * rect.height / height);
       if (!placed.length) layout();
       const hit = placed.find((p) => x >= p.src.x && x <= p.src.x + p.src.w && y >= p.src.y && y <= p.src.y + p.src.h) ?? placed.find((p) => p.src.role === 'main');
-      return { x: rect.left + hit.x + (x - hit.src.x) * hit.s, y: rect.top + hit.y + (y - hit.src.y) * hit.s };
+      return toClient(rect.left + hit.x + (x - hit.src.x) * hit.s, rect.top + hit.y + (y - hit.src.y) * hit.s);
     },
     destroy() { observer?.disconnect(); classWatch?.disconnect(); }
   };

@@ -6,6 +6,7 @@ import * as THREE from './vendor/three/three.module.min.js';
 import * as RAPIER from './vendor/rapier/rapier.mjs';
 import { clearGoose, createGoose, GOOSE, gooseCanPick, landGoose, pickGoose, tickGoose } from './goose-core.js';
 import { disposeTemplates, GOOSE_ITEMS, itemTemplate } from './goose-art.js';
+import { framePoint, frameRect, toClient } from './screen-frame.js';
 
 // The bowl is an upside-down cone: wide at the top (y = TOP), nearly a point at the bottom.
 // Shallow enough that the pile spreads across most of the bowl, deep enough to bury things.
@@ -356,8 +357,8 @@ export async function mountGoose(wrap, { mode = 'classic', onHud = () => {}, onR
   }
 
   function hitItem(event) {
-    const rect = canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    const rect = frameRect(canvas), p = framePoint(event.clientX, event.clientY);
+    const ndc = new THREE.Vector2(((p.x - rect.left) / rect.width) * 2 - 1, -((p.y - rect.top) / rect.height) * 2 + 1);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObjects(pileMeshes, false)[0];
@@ -523,10 +524,10 @@ export async function mountGoose(wrap, { mode = 'classic', onHud = () => {}, onR
     // at their centre would actually reach (the rest are hidden under others).
     debug: {
       screenOf(id) {
-        const item = items.get(id), rect = canvas.getBoundingClientRect();
+        const item = items.get(id), rect = frameRect(canvas);
         if (!item) return null;
         const p = item.mesh.position.clone().project(camera);
-        return { x: rect.left + (p.x + 1) / 2 * rect.width, y: rect.top + (1 - p.y) / 2 * rect.height };
+        return toClient(rect.left + (p.x + 1) / 2 * rect.width, rect.top + (1 - p.y) / 2 * rect.height);
       },
       tappable() {
         const still = (body) => { const v = body.linvel(); return Math.hypot(v.x, v.y, v.z) < 0.05; };
