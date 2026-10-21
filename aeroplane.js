@@ -176,7 +176,13 @@ export function mountAeroplane(wrap, { onHud = () => {}, random = Math.random, o
   restartButton.addEventListener('click', reset);
   modeSelect.addEventListener('change', () => { mode = modeSelect.value; reset(); });
   // 等服务端确认前不再接受第二次点击（连点会白白吃一条「还没轮到你」）；被拒绝时也要放开。
-  const offs = online ? [online.on('state', (payload) => { state = payload.view; selected = null; waiting = false; render(); }), online.on('reject', () => { waiting = false; render(); })] : [];
+  // 有人上下线、再来一局的提议也会推 state，局面没变（version 不变）就还在等确认，选中的飞机也留着。
+  let version = online?.state?.version;
+  const offs = online ? [online.on('state', (payload) => {
+    state = payload.view;
+    if (payload.version !== version) { version = payload.version; selected = null; waiting = false; }
+    render();
+  }), online.on('reject', () => { waiting = false; render(); }), online.on('status', () => { waiting = false; render(); })] : [];   // 断线重连后那一下可能没送到
   render();
   return { restart: reset, destroy() { alive = false; offs.forEach((off) => off()); cancel(); root.remove(); }, get state() { return state; } };
 }

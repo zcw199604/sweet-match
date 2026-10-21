@@ -142,7 +142,13 @@ export function mountJunqi(wrap, { onHud = () => {}, online = null } = {}) {
   aiButton.addEventListener('click', () => { if (alive && mode !== 'ai') { mode = 'ai'; restart(); } });
   duoButton.addEventListener('click', () => { if (alive && mode !== 'duo') { mode = 'duo'; restart(); } });
   restartButton.addEventListener('click', restart);
-  const off = online?.on('state', (payload) => { state = payload.view; selected = -1; render(); });
+  // 对手上下线、再来一局的提议也会推 state，局面没变（version 不变）就别冲掉正在选的棋子。
+  let version = online?.state?.version;
+  const off = online?.on('state', (payload) => {
+    state = payload.view;
+    if (payload.version !== version) { version = payload.version; selected = -1; }
+    render();
+  });
   render();
   return { restart, destroy() { alive = false; off?.(); clearTimer(); root.remove(); }, get state() { return state; } };
 }

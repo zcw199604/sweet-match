@@ -113,7 +113,9 @@ function mountBoard(id, wrap, {onHud=()=>{}, online=null}={}) {
     selected=null;route=[];render();
   });
   const orient=()=>{if(online&&(id==='draughts'||id==='jungle')) board.classList.toggle('flipped',online.seat===1);};
-  const off=online?.on('state',payload=>{state=payload.view;selected=null;route=[];orient();render();});
+  // 对手上下线、再来一局的提议也会推 state，局面没变（version 不变）就别冲掉正在选的棋子。
+  let version=online?.state?.version;
+  const off=online?.on('state',payload=>{state=payload.view;if(payload.version!==version){version=payload.version;selected=null;route=[];}orient();render();});
   render();
   return {restart:reset,destroy(){alive=false;off?.();clear();root.remove();},get state(){return state;}};
 }

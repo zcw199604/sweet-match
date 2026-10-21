@@ -150,9 +150,11 @@ export function mountXiangqi(wrap, { onHud = () => {}, online = null } = {}) {
     selected = null; targets = [];
     render();
   });
+  // 对手上下线、再来一局的提议也会推 state，局面没变（version 不变）就别冲掉正在选的棋子。
+  let version = online?.state?.version;
   const off = online?.on('state', (payload) => {
     state = createXiangqi({ fen: payload.view.fen });
-    selected = null; targets = [];
+    if (payload.version !== version) { version = payload.version; selected = null; targets = []; }
     board.classList.toggle('flipped', online.seat === 1);   // 换边后座位会变
     render();
   });

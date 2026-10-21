@@ -125,6 +125,45 @@ test('邀请链接：打开链接直接进到对应游戏的联机页并入座�
   await a.context().close(); await b.context().close();
 });
 
+// 对手刷新页面：服务端先推「对手掉线」再推「对手在线」，局面没变（version 不变），我选到一半的棋子不该被冲掉。
+async function rivalBlinks(me, rival) {
+  await me.evaluate(() => { window.__seen = []; window.__arcade.classic.session.on('state', (p) => window.__seen.push([p.version, p.seats.join()])); });
+  await rival.reload();
+  // 至少一条「对手掉线」、之后一条「都在线」，而且这期间局面一直没变
+  await expect.poll(() => me.evaluate(() => window.__seen.map(([, seats]) => seats.includes('offline') ? 'off' : 'on').join())).toMatch(/off.*on/);
+  const versions = await me.evaluate(() => window.__seen.map(([version]) => version));
+  expect(new Set(versions).size).toBe(1);
+}
+
+test('回合制：对手掉线又重连时，我正在选的棋子还在，可以直接走完（象棋 / 斗兽棋）', async ({ browser }) => {
+  const a = await player(browser, 'A'), b = await player(browser, 'B');
+  const code = await createRoom(a, 'xiangqi');
+  await joinRoom(b, 'xiangqi', code);
+  await expect(a.locator('.xiangqi-board')).toBeVisible();
+  await a.locator('[data-square="b2"]').click();                            // 红方选中炮，还没落
+  await expect(a.locator('[data-square="b2"]')).toHaveClass(/selected/);
+  await rivalBlinks(a, b);
+  await expect(a.locator('[data-square="b2"]')).toHaveClass(/selected/);
+  await a.locator('[data-square="e2"]').click();                            // 直接点落点就走完
+  await expect(b.locator('[data-square="e2"] .xiangqi-piece.red')).toBeVisible();
+  await expect(a.locator('.xiangqi-cell.selected')).toHaveCount(0);         // 局面变了：选中清掉
+  await a.context().close(); await b.context().close();
+
+  const c = await player(browser, 'C'), d = await player(browser, 'D');
+  const code2 = await createRoom(c, 'jungle');
+  await joinRoom(d, 'jungle', code2);
+  await expect(c.locator('.jungle-board')).toBeVisible();
+  await c.locator('.board-cell.movable').first().click();
+  await expect(c.locator('.board-cell.selected')).toHaveCount(1);
+  const target = await c.locator('.board-cell.target').first().getAttribute('data-cell');
+  await rivalBlinks(c, d);
+  await expect(c.locator('.board-cell.selected')).toHaveCount(1);
+  await c.locator(`.board-cell[data-cell="${target}"]`).click();
+  await expect(c.locator('.online-status, .board-status')).toContainText('等待对手');
+  expect([...a.errors, ...b.errors, ...c.errors, ...d.errors]).toEqual([]);
+  await c.context().close(); await d.context().close();
+});
+
 test('刷新页面后回到联机页，棋盘和对手的落子都还在', async ({ browser }) => {
   const a = await player(browser, 'A'), b = await player(browser, 'B');
   const code = await createRoom(a, 'reversi');

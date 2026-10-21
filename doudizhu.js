@@ -140,7 +140,13 @@ export function mountDoudizhu(wrap, { onHud = () => {}, online = null } = {}) {
     epoch += 1; if (timer !== null) clearTimeout(timer); timer = null;
     state = createGame(); selected.clear(); render(); schedule();
   }
-  const off = online?.on('state', (payload) => { state = payload.view; selected.clear(); render(); });
+  // 有人上下线、再来一局的提议也会推 state，局面没变（version 不变）就别冲掉选好的牌。
+  let version = online?.state?.version;
+  const off = online?.on('state', (payload) => {
+    state = payload.view;
+    if (payload.version !== version) { version = payload.version; selected.clear(); }
+    render();
+  });
   render();
   return {
     restart,
