@@ -201,7 +201,7 @@ test('沙画消消: tapping a lane puts its bucket on the belt, it sucks sand, a
   await open(page, 'sand');
   await expect.poll(() => kit(page, (k) => k.loading)).toBe(false);
   // 换成一个小局面：瓶底三粒红沙，第一列一个能装三粒的红桶
-  await kit(page, (k) => { const s = k.state; s.grid.fill(-1); for (const x of [3, 4, 5]) s.grid[43 * 36 + x] = 0; s.total = 3; s.absorbed = 0; s.lanes = [[{ color: 0, cap: 3, got: 0 }], [], []]; });
+  await kit(page, (k) => { const s = k.state; s.grid.fill(-1); for (const x of [3, 4, 5]) s.grid[s.grid.length - 1 - x] = 0; s.total = 3; s.absorbed = 0; s.lanes = [[{ color: 0, cap: 3, got: 0 }], [], []]; });
   const posted = page.waitForRequest((r) => r.url().includes('/api/scores') && r.method() === 'POST');
   await tapAt(page, await kit(page, (k) => k.locateLane(0)));
   expect(await kit(page, (k) => k.state.belt[0]?.color)).toBe(0);

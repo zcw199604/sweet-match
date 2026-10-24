@@ -97,6 +97,7 @@
 .art-pails i{width:30px;height:28px;clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);background:#f4efe6;border-top:6px solid}
 .art-pails .a{border-color:#f04b4b}.art-pails .b{border-color:#38c26b}.art-pails .c{border-color:#ff77c0}
 .recent-card[data-game=sand]{--c:#e09a4a}
+.kit-wrap[data-kit=sand] .game-canvas{background:radial-gradient(120% 90% at 50% 0%,#5b4180,#2e2252 55%,#160f2b)}
 
 .runfast .art{background:radial-gradient(130% 120% at 20% 8%,#e46b8f,#a23a6a 58%,#4e1a3c)}
 .recent-card[data-game=runfast]{--c:#e46b8f}
