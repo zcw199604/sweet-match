@@ -73,13 +73,6 @@ function drawBlock(ctx, x, y, s, type, alpha = 1) {
   ctx.fill();
   ctx.restore();
 }
-// A piece in its spawn rotation, centred on (cx, cy), for the hold and next boxes.
-function drawMini(ctx, type, cx, cy, s, alpha = 1) {
-  const cells = SHAPES[type][0];
-  const xs = cells.map(([x]) => x), ys = cells.map(([, y]) => y);
-  const w = Math.max(...xs) - Math.min(...xs) + 1, h = Math.max(...ys) - Math.min(...ys) + 1;
-  for (const [x, y] of cells) drawBlock(ctx, cx - (w * s) / 2 + (x - Math.min(...xs)) * s, cy - (h * s) / 2 + (y - Math.min(...ys)) * s, s, type, alpha);
-}
 
 export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult = null } = {}) {
   let alive = true;
@@ -92,6 +85,8 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
   let overAt = 0;
   let toast = null;
   let lastHud = '';
+  let dirty = true; // redraw on the next frame even if nothing in `view` moved (resize, full screen, a test advancing time)
+  let drawn = '';
   let flash = null; // { cells, t0 } the piece that just locked
   const sweeps = []; // { rows, t0 } cleared rows fading out
   const floaters = []; // call-outs rising over the well
@@ -116,7 +111,7 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     { x: 0, y: BTN.y - 6, w: LW, h: LH - BTN.y + 6, role: 'bottom' }
   ] });
 
-  const poke = () => { if (!raf && alive) { last = 0; raf = requestAnimationFrame(frame); } };
+  const poke = () => { dirty = true; if (!raf && alive) { last = 0; raf = requestAnimationFrame(frame); } };
   const say = (text) => { toast = { text, until: performance.now() + 1500 }; poke(); };
   const hud = () => {
     const text = `${core.score} 分 · 第 ${core.level} 级`;
@@ -277,7 +272,8 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     const p = toLogical(event);
     if (inside(p, PAUSE_BTN)) return press(`p:${event.pointerId}`, 'pause');
     if (inside(p, HOLD_BOX)) return act('hold');
-    const k = BTNS.findIndex((_, i) => inside(p, { x: btnX(i), y: BTN.y, w: BTN.w, h: BTN.h }));
+    // a thumb that lands in the gap between two buttons, or a little above or below one, still counts
+  const k = BTNS.findIndex((_, i) => inside(p, { x: btnX(i) - BTN.gap / 2, y: BTN.y - 8, w: BTN.w + BTN.gap, h: BTN.h + 20 }));
     if (k < 0) return;
     canvas.setPointerCapture?.(event.pointerId);
     press(`p:${event.pointerId}`, BTNS[k].id);
@@ -310,55 +306,106 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
   document.addEventListener('visibilitychange', onHide);
 
   // ---- drawing ----
-  function panel(x, y, w, h, label, value, accent) {
-    roundRect(ctx, x, y, w, h, 14);
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, '#ffffff2e');
-    g.addColorStop(1, '#ffffff12');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#ffffff33';
-    ctx.stroke();
+  // Most of the picture never changes and the rest changes a few times a second, so a phone that repaints all of it at
+  // 60–120 fps just runs hot. The well, the panels and the buttons are painted once into layers at the current pixel
+  // scale, blocks are stamped from one sprite per colour, and a frame is only drawn when something on it changed.
+  let unit = 0; // device pixels per logical pixel the layers were painted at
+  const layers = new Map();
+  function layer(key, w, h, paint) {
+    let c = layers.get(key);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = Math.ceil(w * unit);
+      c.height = Math.ceil(h * unit);
+      const g = c.getContext('2d');
+      g.scale(unit, unit);
+      paint(g);
+      layers.set(key, c);
+    }
+    return c;
+  }
+  const put = (c, x, y) => ctx.drawImage(c, x, y, c.width / unit, c.height / unit);
+  // A block from its sprite (1px of room around it for the lip and the edge line).
+  function stamp(type, x, y, s, alpha = 1) {
+    const c = layer(`b${type}${s}`, s + 2, s + 2, (g) => drawBlock(g, 1, 1, s, type));
+    if (alpha !== 1) ctx.globalAlpha = alpha;
+    put(c, x - 1, y - 1);
+    ctx.globalAlpha = 1;
+  }
+  // A piece in its spawn rotation, centred on (cx, cy), for the hold and next boxes.
+  function drawMini(type, cx, cy, s, alpha = 1) {
+    const cells = SHAPES[type][0];
+    const xs = cells.map(([x]) => x), ys = cells.map(([, y]) => y);
+    const w = Math.max(...xs) - Math.min(...xs) + 1, h = Math.max(...ys) - Math.min(...ys) + 1;
+    for (const [x, y] of cells) stamp(type, cx - (w * s) / 2 + (x - Math.min(...xs)) * s, cy - (h * s) / 2 + (y - Math.min(...ys)) * s, s, alpha);
+  }
+  function panel(g, x, y, w, h, label) {
+    roundRect(g, x, y, w, h, 14);
+    const grad = g.createLinearGradient(0, y, 0, y + h);
+    grad.addColorStop(0, '#ffffff2e');
+    grad.addColorStop(1, '#ffffff12');
+    g.fillStyle = grad;
+    g.fill();
+    g.lineWidth = 1.5;
+    g.strokeStyle = '#ffffff33';
+    g.stroke();
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = '#c9cffc';
+    g.font = '700 11px system-ui, sans-serif';
+    g.fillText(label, x + w / 2, y + 12);
+  }
+  function value(x, y, w, v, accent) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#c9cffc';
-    ctx.font = '700 11px system-ui, sans-serif';
-    ctx.fillText(label, x + w / 2, y + 12);
-    if (value !== null) {
-      ctx.fillStyle = accent;
-      ctx.font = '800 20px system-ui, sans-serif';
-      ctx.fillText(String(value), x + w / 2, y + 31);
-    }
+    ctx.fillStyle = accent;
+    ctx.font = '800 20px system-ui, sans-serif';
+    ctx.fillText(String(v), x + w / 2, y + 31);
   }
-  function drawWell() {
+  function drawWell(g) {
     const { x, y, w, h } = WELL;
-    ctx.save();
-    ctx.shadowColor = '#58d4de66';
-    ctx.shadowBlur = 20;
-    roundRect(ctx, x - 4, y - 4, w + 8, h + 8, 14);
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, '#1a1840');
-    g.addColorStop(1, '#0d0c24');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.restore();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#58d4de99';
-    roundRect(ctx, x - 4, y - 4, w + 8, h + 8, 14);
-    ctx.stroke();
-    ctx.strokeStyle = '#ffffff0d';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let c = 1; c < COLS; c += 1) { ctx.moveTo(x + c * CELL, y); ctx.lineTo(x + c * CELL, y + h); }
-    for (let r = 1; r < ROWS - HIDDEN; r += 1) { ctx.moveTo(x, y + r * CELL); ctx.lineTo(x + w, y + r * CELL); }
-    ctx.stroke();
+    g.save();
+    g.shadowColor = '#58d4de66';
+    g.shadowBlur = 20;
+    roundRect(g, x - 4, y - 4, w + 8, h + 8, 14);
+    const grad = g.createLinearGradient(0, y, 0, y + h);
+    grad.addColorStop(0, '#1a1840');
+    grad.addColorStop(1, '#0d0c24');
+    g.fillStyle = grad;
+    g.fill();
+    g.restore();
+    g.lineWidth = 2;
+    g.strokeStyle = '#58d4de99';
+    roundRect(g, x - 4, y - 4, w + 8, h + 8, 14);
+    g.stroke();
+    g.strokeStyle = '#ffffff0d';
+    g.lineWidth = 1;
+    g.beginPath();
+    for (let c = 1; c < COLS; c += 1) { g.moveTo(x + c * CELL, y); g.lineTo(x + c * CELL, y + h); }
+    for (let r = 1; r < ROWS - HIDDEN; r += 1) { g.moveTo(x, y + r * CELL); g.lineTo(x + w, y + r * CELL); }
+    g.stroke();
   }
+  // Everything that only changes with the difficulty (the next box is as tall as its preview count).
+  const nextH = () => 22 + DIFFS[level].preview * 38;
+  const backdrop = () => layer(`bg${level}`, LW, LH, (g) => {
+    panel(g, 12, 6, 108, 40, '分数');
+    panel(g, 128, 6, 108, 40, '最高');
+    panel(g, 244, 6, 104, 40, '等级');
+    drawWell(g);
+    panel(g, HOLD_BOX.x, HOLD_BOX.y, HOLD_BOX.w, HOLD_BOX.h, '暂存');
+    panel(g, 6, 130, 58, 56, '行数');
+    panel(g, NEXT_X, 58, 58, nextH(), '下一个');
+    g.fillStyle = '#8f96c9';
+    g.font = '600 11px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'alphabetic';
+    g.fillText('← → 移动 · ↑ 旋转 · ↓ 软降 · 空格 硬降 · C 暂存', LW / 2, 586);
+  });
   function drawStack() {
     for (let r = HIDDEN; r < ROWS; r += 1) {
       for (let c = 0; c < COLS; c += 1) {
         const type = core.board[r][c];
-        if (type) { const p = cellXY(c, r); drawBlock(ctx, p.x, p.y, CELL, type); }
+        if (type) { const p = cellXY(c, r); stamp(type, p.x, p.y, CELL); }
       }
     }
   }
@@ -367,21 +414,21 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     if (!piece) return;
     if (DIFFS[level].ghost && !core.over) {
       const gy = ghostY(core);
+      ctx.fillStyle = `${PAL[piece.type][0]}2e`;
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = `${PAL[piece.type][0]}99`;
       for (const [c, r] of cellsOf(piece.type, piece.rot, piece.x, gy)) {
         if (r < HIDDEN) continue;
         const p = cellXY(c, r);
         roundRect(ctx, p.x + 1.5, p.y + 1.5, CELL - 3, CELL - 3, 5);
-        ctx.fillStyle = `${PAL[piece.type][0]}2e`;
         ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = `${PAL[piece.type][0]}99`;
         ctx.stroke();
       }
     }
     for (const [c, r] of cellsOf(piece.type, piece.rot, piece.x, piece.y)) {
       if (r < HIDDEN) continue;
       const p = cellXY(c, r);
-      drawBlock(ctx, p.x, p.y, CELL, piece.type);
+      stamp(piece.type, p.x, p.y, CELL);
     }
   }
   function drawFx(now) {
@@ -428,34 +475,35 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
       ctx.restore();
     }
   }
+  // A button with 1px of room around it; `on` is the pressed-down look.
+  function paintButton(g, btn, on) {
+    const x = 1, y = 1;
+    roundRect(g, x, y + 3, BTN.w, BTN.h, 14);
+    g.fillStyle = on ? '#143f99' : '#1e55c4';
+    g.fill();
+    roundRect(g, x, y + (on ? 2 : 0), BTN.w, BTN.h - 3, 14);
+    const grad = g.createLinearGradient(0, y, 0, y + BTN.h);
+    grad.addColorStop(0, on ? '#4c88ee' : '#6aa4ff');
+    grad.addColorStop(1, on ? '#2d63d6' : '#3f7bff');
+    g.fillStyle = grad;
+    g.fill();
+    g.lineWidth = 1.5;
+    g.strokeStyle = '#ffffff55';
+    g.stroke();
+    g.fillStyle = '#fff';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = '800 22px system-ui, sans-serif';
+    g.fillText(btn.icon, x + BTN.w / 2, y + BTN.h / 2 - 2 + (on ? 2 : 0));
+  }
   function drawButton(btn, k) {
-    const x = btnX(k), y = BTN.y;
     const on = isHeld(btn.id);
-    roundRect(ctx, x, y + 3, BTN.w, BTN.h, 14);
-    ctx.fillStyle = on ? '#143f99' : '#1e55c4';
-    ctx.fill();
-    roundRect(ctx, x, y + (on ? 2 : 0), BTN.w, BTN.h - 3, 14);
-    const g = ctx.createLinearGradient(0, y, 0, y + BTN.h);
-    g.addColorStop(0, on ? '#4c88ee' : '#6aa4ff');
-    g.addColorStop(1, on ? '#2d63d6' : '#3f7bff');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#ffffff55';
-    ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '800 22px system-ui, sans-serif';
-    ctx.fillText(btn.icon, x + BTN.w / 2, y + BTN.h / 2 - 2 + (on ? 2 : 0));
+    put(layer(`k${k}${on}`, BTN.w + 2, BTN.h + 5, (g) => paintButton(g, btn, on)), btnX(k) - 1, BTN.y - 1);
   }
   function drawSide() {
     const rule = DIFFS[level];
-    // hold
-    panel(HOLD_BOX.x, HOLD_BOX.y, HOLD_BOX.w, HOLD_BOX.h, '暂存', null, '');
-    if (core.hold) drawMini(ctx, core.hold, HOLD_BOX.x + HOLD_BOX.w / 2, HOLD_BOX.y + 42, 11, core.holdUsed ? 0.4 : 1);
-    // lines
-    panel(6, 130, 58, 56, '行数', core.lines, '#58d4de');
+    if (core.hold) drawMini(core.hold, HOLD_BOX.x + HOLD_BOX.w / 2, HOLD_BOX.y + 42, 11, core.holdUsed ? 0.4 : 1);
+    value(6, 130, 58, core.lines, '#58d4de');
     // pause
     const pb = PAUSE_BTN;
     roundRect(ctx, pb.x, pb.y, pb.w, pb.h, 12);
@@ -469,12 +517,39 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(paused ? '▶ 继续' : '‖ 暂停', pb.x + pb.w / 2, pb.y + pb.h / 2);
-    // next
-    const list = previews(core, rule.preview);
-    const h = 22 + list.length * 38;
-    panel(NEXT_X, 58, 58, h, '下一个', null, '');
-    list.forEach((type, i) => drawMini(ctx, type, NEXT_X + 29, 58 + 38 + i * 38 - 6, 11));
+    previews(core, rule.preview).forEach((type, i) => drawMini(type, NEXT_X + 29, 58 + 38 + i * 38 - 6, 11));
   }
+  function draw(now) {
+    ctx = fit.begin();
+    if (fit.unit !== unit) { unit = fit.unit; layers.clear(); }
+    put(backdrop(), 0, 0);
+    value(12, 6, 108, core.score, '#ffd543');
+    value(128, 6, 108, Math.max(Number(best[level]) || 0, core.score), '#58d4de');
+    value(244, 6, 104, core.level, '#ff8fd0');
+    drawStack();
+    drawPiece();
+    drawFx(now);
+    drawSide();
+    BTNS.forEach(drawButton);
+    if (toast && toast.until > now) {
+      ctx.font = '800 14px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const width = ctx.measureText(toast.text).width + 28;
+      roundRect(ctx, WELL.x + (WELL.w - width) / 2, WELL.y + 60, width, 28, 14);
+      ctx.fillStyle = '#000c';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(toast.text, WELL.x + WELL.w / 2, WELL.y + 74);
+    }
+    fit.end();
+  }
+  // What the last drawn frame showed: the board only changes when a piece locks, and then the piece count moves on.
+  const view = (now) => {
+    const p = core.piece;
+    return [p ? `${p.type}${p.rot},${p.x},${p.y}` : '', core.pieces, core.lines, core.score, core.hold, core.holdUsed, paused, core.over,
+      BTNS.map((b) => (isHeld(b.id) ? 1 : 0)).join(''), toast && toast.until > now ? toast.text : ''].join('|');
+  };
   function frame(now) {
     raf = 0;
     if (!alive) return;
@@ -495,33 +570,9 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     }
     if (core.over && overlay.hidden && overAt && now - overAt > 600) finish();
 
-    ctx = fit.begin();
-    panel(12, 6, 108, 40, '分数', core.score, '#ffd543');
-    panel(128, 6, 108, 40, '最高', Math.max(Number(best[level]) || 0, core.score), '#58d4de');
-    panel(244, 6, 104, 40, '等级', core.level, '#ff8fd0');
-    drawWell();
-    drawStack();
-    drawPiece();
-    drawFx(now);
-    drawSide();
-    BTNS.forEach(drawButton);
-    ctx.fillStyle = '#8f96c9';
-    ctx.font = '600 11px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText('← → 移动 · ↑ 旋转 · ↓ 软降 · 空格 硬降 · C 暂存', LW / 2, 586);
-    if (toast && toast.until > now) {
-      ctx.font = '800 14px system-ui, sans-serif';
-      ctx.textBaseline = 'middle';
-      const width = ctx.measureText(toast.text).width + 28;
-      roundRect(ctx, WELL.x + (WELL.w - width) / 2, WELL.y + 60, width, 28, 14);
-      ctx.fillStyle = '#000c';
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.fillText(toast.text, WELL.x + WELL.w / 2, WELL.y + 74);
-    }
+    const shown = view(now);
+    if (dirty || shown !== drawn || flash || sweeps.length || floaters.length) { dirty = false; drawn = shown; draw(now); }
     const busy = playing() || flash || sweeps.length || floaters.length || (toast && toast.until > now) || (core.over && overlay.hidden);
-    fit.end();
     if (busy && alive) raf = requestAnimationFrame(frame);
   }
 
