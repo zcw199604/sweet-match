@@ -14,6 +14,7 @@ const LH = 600;
 const STORE = { best: 'pao-tetris-best', save: 'pao-tetris-save' };
 const readJson = (key) => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
 const writeJson = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ } };
+const touchFirst = () => Boolean(window.matchMedia?.('(pointer: coarse)').matches);
 const calm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -266,19 +267,62 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
   }
   const toLogical = (event) => fit.point(event.clientX, event.clientY);
   const inside = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  // ---- touch gestures ----
+  // Anywhere above the buttons: drag sideways and the piece follows the finger a column at a time, drag down and keep
+  // holding to soft drop, flick down to drop it, flick up to hold it, tap to turn it clockwise. Points are taken in the
+  // well's frame (role 'main'), so in full screen a drag that strays onto the bars does not jump.
+  const gestures = new Map(); // pointerId -> { x0, y0, t0, axis, cols, done, trail }
+  const SWIPE = { slop: 10, col: CELL * 0.9, flick: 0.5, up: CELL * 1.5, tapMs: 300, trailMs: 100 };
+  const wellPoint = (event) => fit.point(event.clientX, event.clientY, 'main');
+  function track(g, p, t) {
+    g.trail.push({ x: p.x, y: p.y, t });
+    while (g.trail.length > 2 && t - g.trail[0].t > SWIPE.trailMs) g.trail.shift();
+  }
+  function onMove(event) {
+    const g = gestures.get(event.pointerId);
+    if (!g || g.done || !playing()) return;
+    const p = wellPoint(event), dx = p.x - g.x0, dy = p.y - g.y0;
+    track(g, p, event.timeStamp);
+    if (!g.axis && Math.hypot(dx, dy) > SWIPE.slop) g.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    if (g.axis === 'x') {
+      const want = Math.trunc(dx / SWIPE.col);
+      while (g.cols !== want) {
+        const step = Math.sign(want - g.cols);
+        if (move(core, step)) { g.cols += step; continue; }
+        g.x0 = p.x - g.cols * SWIPE.col; // pinned against a wall or a block: turning back moves it at once
+        break;
+      }
+      poke();
+    } else if (g.axis === 'y') {
+      if (dy < -SWIPE.up) { g.done = true; act('hold'); } else if (dy > SWIPE.col) press(`g:${event.pointerId}`, 'down');
+    }
+  }
+  function gestureEnd(event) {
+    const g = gestures.get(event.pointerId);
+    gestures.delete(event.pointerId);
+    release(`g:${event.pointerId}`);
+    if (!g || g.done || event.type === 'pointercancel' || !playing()) return;
+    const p = wellPoint(event);
+    track(g, p, event.timeStamp);
+    const first = g.trail[0], vy = (p.y - first.y) / Math.max(1, event.timeStamp - first.t);
+    if (!g.axis) { if (event.timeStamp - g.t0 < SWIPE.tapMs) act('cw'); } else if (vy > SWIPE.flick && p.y - first.y > CELL / 2) act('hard');
+    else if (g.axis === 'y' && vy < -SWIPE.flick) act('hold');
+  }
   function onDown(event) {
     if (!alive || !overlay.hidden) return;
     event.preventDefault();
     const p = toLogical(event);
     if (inside(p, PAUSE_BTN)) return press(`p:${event.pointerId}`, 'pause');
     if (inside(p, HOLD_BOX)) return act('hold');
-    // a thumb that lands in the gap between two buttons, or a little above or below one, still counts
-  const k = BTNS.findIndex((_, i) => inside(p, { x: btnX(i) - BTN.gap / 2, y: BTN.y - 8, w: BTN.w + BTN.gap, h: BTN.h + 20 }));
-    if (k < 0) return;
     canvas.setPointerCapture?.(event.pointerId);
-    press(`p:${event.pointerId}`, BTNS[k].id);
+    // a thumb that lands in the gap between two buttons, or a little above or below one, still counts
+    const k = BTNS.findIndex((_, i) => inside(p, { x: btnX(i) - BTN.gap / 2, y: BTN.y - 8, w: BTN.w + BTN.gap, h: BTN.h + 20 }));
+    if (k >= 0) return press(`p:${event.pointerId}`, BTNS[k].id);
+    if (!playing()) return;
+    const w = wellPoint(event);
+    gestures.set(event.pointerId, { x0: w.x, y0: w.y, t0: event.timeStamp, axis: '', cols: 0, done: false, trail: [{ x: w.x, y: w.y, t: event.timeStamp }] });
   }
-  const onUp = (event) => release(`p:${event.pointerId}`);
+  const onUp = (event) => { release(`p:${event.pointerId}`); gestureEnd(event); };
   const KEYS = {
     ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowDown: 'down', s: 'down', S: 'down',
     ArrowUp: 'cw', w: 'cw', W: 'cw', x: 'cw', X: 'cw', z: 'ccw', Z: 'ccw', ' ': 'hard', c: 'hold', C: 'hold', Shift: 'hold',
@@ -297,6 +341,7 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
   const onBlur = () => down.clear();
   const onHide = () => { if (document.visibilityState === 'hidden') { pause(); persist(); } };
   canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onUp);
   window.addEventListener('keydown', onKey);
@@ -399,7 +444,7 @@ export function mountTetris(wrap, { diff = 'normal', onHud = () => {}, onResult 
     g.font = '600 11px system-ui, sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'alphabetic';
-    g.fillText('← → 移动 · ↑ 旋转 · ↓ 软降 · 空格 硬降 · C 暂存', LW / 2, 586);
+    g.fillText(touchFirst() ? '左右拖 移动 · 轻点 旋转 · 下拖 软降 · 下划 落底 · 上划 暂存' : '← → 移动 · ↑ 旋转 · ↓ 软降 · 空格 硬降 · C 暂存', LW / 2, 586);
   });
   function drawStack() {
     for (let r = HIDDEN; r < ROWS; r += 1) {

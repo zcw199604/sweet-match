@@ -996,6 +996,32 @@ test('俄罗斯方块: the on-screen buttons work, and a held direction keeps sl
   await expect.poll(async () => (await tetrisState(page)).rot).not.toBe(before);
 });
 
+test('俄罗斯方块: on the well, a tap turns, a sideways drag moves, a flick down drops and a flick up holds', async ({ page }) => {
+  await openTetris(page, { diff: 'normal', board: tetrisWell([]), piece: { type: 'T', rot: 0, x: 3, y: 0 }, queue: 'TOSZJLI' });
+  const box = await page.locator('.game-canvas').boundingBox();
+  const at = (x, y) => [box.x + box.width * (x / 360), box.y + box.height * (y / 600)];
+  const [cx, cy] = at(175, 300);
+  const start = (await tetrisState(page)).pieces;
+  await page.mouse.click(cx, cy);
+  await expect.poll(async () => (await tetrisState(page)).rot).toBe(1);
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(...at(175 + 66, 300), { steps: 8 }); // a column is 0.9 of a cell (22): 66 is three
+  await page.mouse.up();
+  expect((await tetrisState(page)).x).toBe(6);
+  expect((await tetrisState(page)).pieces).toBe(start); // a sideways drag never drops
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(...at(175, 380), { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(async () => (await tetrisState(page)).pieces).toBe(start + 1);
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(...at(175, 240), { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await tetrisState(page)).hold).toBe('T');
+});
+
 test('俄罗斯方块: pause stops the clock, resume carries on, and the game is kept when you leave', async ({ page }) => {
   await openTetris(page, { diff: 'normal', board: tetrisWell(['I.........']), piece: { type: 'T', rot: 0, x: 3, y: 0 }, queue: 'TOSZJLI', score: 500, lines: 3 });
   await page.keyboard.press('p');
