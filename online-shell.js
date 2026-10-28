@@ -89,12 +89,11 @@ export function mountOnlineShell(wrap, { game, onHud = () => {}, autoJoin = null
     });
     const join = el('div', 'online-join');
     const input = el('input');
-    Object.assign(input, { type: 'text', maxLength: 8, placeholder: '输入 5 位房间码', autocomplete: 'off', spellcheck: false });
-    input.setAttribute('autocapitalize', 'characters');
+    Object.assign(input, { type: 'text', inputMode: 'numeric', maxLength: 8, placeholder: '输入 6 位房间码', autocomplete: 'off', spellcheck: false });
     input.setAttribute('aria-label', '房间码');
     const go = () => {
       const code = normalizeCode(input.value);
-      if (!isCode(code)) return showLobby('房间码是 5 位字母和数字（没有 I、O、0、1）。', true);
+      if (!isCode(code)) return showLobby('房间码是 6 位数字。', true);
       connect((s) => s.join(code), '正在加入房间……');
     };
     input.addEventListener('keydown', (event) => { if (event.key === 'Enter') go(); });

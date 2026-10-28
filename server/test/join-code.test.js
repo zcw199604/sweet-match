@@ -6,10 +6,10 @@ import { HOST_KEY, until, watch, pair, startServer } from './helpers.js';
 const boot = async (t) => (await startServer(t)).url;
 const fails = async (promise) => { try { await promise; return null; } catch (e) { return e.message || String(e); } };
 
-test('房间码：服务端生成 5 位、不含易混字符，创建者读得到', async (t) => {
+test('房间码：服务端生成 6 位数字，创建者读得到', async (t) => {
   const url = await boot(t);
   const { seenA } = await pair(url, 'gomoku');
-  assert.match(seenA.state.code, /^[A-HJ-NP-Z2-9]{5}$/);
+  assert.match(seenA.state.code, /^\d{6}$/);
 });
 
 test('房间码：同时开很多房间，码都不重复', async (t) => {
@@ -33,7 +33,7 @@ test('加入：带对房间码能进；没有码、码不对、没有创建者�
   assert.notEqual(waiting, code);
 
   assert.ok(await fails(new Client(url).join('xiangqi', {})), '不带码应当失败');
-  assert.ok(await fails(new Client(url).join('xiangqi', { code: 'ZZZZZ' })), '错码应当失败');
+  assert.ok(await fails(new Client(url).join('xiangqi', { code: '000000' })), '错码应当失败');
   const guest = await new Client(url).join('xiangqi', { code: waiting });
   const seenGuest = watch(guest);
   await until(() => seenGuest.state && seen.state.seats.join() === 'online,online', { what: '客人入座' });

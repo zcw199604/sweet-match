@@ -40,7 +40,7 @@ const make = (extra = {}, sdkOptions) => {
   const session = new Session({ sdk, url: 'ws://x', game: 'gomoku', storage, wait: async () => {}, ...extra });
   return { session, log, storage };
 };
-const statePayload = (extra = {}) => ({ game: 'gomoku', code: 'ABCD2', version: 0, seat: 0, seats: ['online', 'empty'], view: { turn: 1 }, result: { over: false, winner: null }, ...extra });
+const statePayload = (extra = {}) => ({ game: 'gomoku', code: '123456', version: 0, seat: 0, seats: ['online', 'empty'], view: { turn: 1 }, result: { over: false, winner: null }, ...extra });
 
 test('resolveServerUrl: 线上页面只连线上服务；本机/局域网可以用 ?net= 或本机存储覆盖', () => {
   assert.equal(resolveServerUrl({ hostname: 'game.zcw.work' }), SERVER_DEFAULT);
@@ -53,12 +53,13 @@ test('resolveServerUrl: 线上页面只连线上服务；本机/局域网可以�
   assert.equal(resolveServerUrl({ hostname: 'localhost', search: '?net=javascript:alert(1)' }), 'ws://localhost:2567', '只认 ws/wss');
 });
 
-test('房间码：规整大小写和空格，只接受服务端字母表里的 5 位', () => {
-  assert.equal(normalizeCode(' ab-cd2 '), 'ABCD2');
+test('房间码：去掉空格和分隔符，只接受 6 位数字', () => {
+  assert.equal(normalizeCode(' 123-456 '), '123456');
   assert.equal(normalizeCode(null), '');
-  assert.equal(isCode('ABCD2'), true);
-  for (const bad of ['ABCD', 'ABCD22', 'ABCD0', 'ABCDI', 'ABCDO', 'ABCD1', 'abcd2', '']) assert.equal(isCode(bad), false, bad);
-  assert.equal(shareUrl('https://game.zcw.work', 'xiangqi', 'ABCD2'), 'https://game.zcw.work/?game=xiangqi&room=ABCD2');
+  assert.equal(isCode('123456'), true);
+  assert.equal(isCode('012345'), true);
+  for (const bad of ['12345', '1234567', 'ABCDEF', '12345A', '']) assert.equal(isCode(bad), false, bad);
+  assert.equal(shareUrl('https://game.zcw.work', 'xiangqi', '123456'), 'https://game.zcw.work/?game=xiangqi&room=123456');
 });
 
 test('randomKey：24 位十六进制，每次不同', () => {
@@ -106,7 +107,7 @@ test('create：带创建者密钥和选项，注册完 handler 就发 sync，状
   room.push('state', statePayload());
   room.push('state', statePayload({ version: 1, seats: ['online', 'online'] }));
   assert.deepEqual(events, [0, 1]);
-  assert.deepEqual([session.seat, session.code, session.full, session.view], [0, 'ABCD2', true, { turn: 1 }]);
+  assert.deepEqual([session.seat, session.code, session.full, session.view], [0, '123456', true, { turn: 1 }]);
 });
 
 test('sendNet / net：实时合作房间的包原样发出、原样收到；重连期间发不出去也不报错', async () => {
@@ -126,8 +127,8 @@ test('sendNet / net：实时合作房间的包原样发出、原样收到；重�
 
 test('join：房间码规整后再发', async () => {
   const { session, log } = make();
-  await session.join(' ab cd2 ');
-  assert.deepEqual(log.joined[0], { game: 'gomoku', options: { code: 'ABCD2' } });
+  await session.join(' 123 456 ');
+  assert.deepEqual(log.joined[0], { game: 'gomoku', options: { code: '123456' } });
 });
 
 test('send：连通时发 action；断线重连期间告诉玩家而不是悄悄吞掉', async () => {

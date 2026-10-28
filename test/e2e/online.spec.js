@@ -21,7 +21,7 @@ async function createRoom(page, game) {
   await goOnline(page);
   await page.locator('.online-primary').click();
   const code = (await page.locator('.online-code').innerText()).trim();
-  expect(code).toMatch(/^[A-HJ-NP-Z2-9]{5}$/);
+  expect(code).toMatch(/^\d{6}$/);
   return code;
 }
 async function joinRoom(page, game, code) {
@@ -98,7 +98,7 @@ test('邀请链接：打开链接直接进到对应游戏的联机页并入座�
   const a = await player(browser, 'A'), b = await player(browser, 'B');
   await createRoom(a, 'xiangqi');
   const link = await a.locator('.online-link').inputValue();
-  expect(link).toMatch(/\/\?game=xiangqi&room=[A-HJ-NP-Z2-9]{5}$/);
+  expect(link).toMatch(/\/\?game=xiangqi&room=\d{6}$/);
 
   await b.goto(link);                                                       // 不用点任何按钮
   await expect(b.locator('.xiangqi-board')).toBeVisible();
@@ -189,8 +189,8 @@ test('加入失败：格式不对、房间不存在、房间已满，都给出�
   await goOnline(c);
   await c.locator('.online-join input').fill('12');
   await c.locator('.online-join .online-secondary').click();
-  await expect(c.locator('.online-msg')).toContainText('5 位');
-  await c.locator('.online-join input').fill('ZZZZZ');
+  await expect(c.locator('.online-msg')).toContainText('6 位');
+  await c.locator('.online-join input').fill('000000');
   await c.locator('.online-join .online-secondary').click();
   await expect(c.locator('.online-msg')).toContainText('房间不存在');
 
@@ -675,7 +675,7 @@ test('泡噗 2 在线房间：房主建房选游戏，客人用房间码加入�
   await a.locator('#online-create').click();
   await expect(a.locator('#online-copy')).toBeVisible();
   const code = await a.locator('#online-code').inputValue();
-  expect(code).toMatch(/^[A-HJ-NP-Z2-9]{5}$/);
+  expect(code).toMatch(/^\d{6}$/);
   await expect(a.locator('#link-state')).toContainText('房主');
   await a.locator('#close-link').click();
   await a.locator('.arcade-card[data-mode="pop2"]').click();
@@ -706,12 +706,12 @@ test('山山兔在线房间：邀请链接直接加入；错误房间码有提�
   const a = await player(browser, 'A'), b = await player(browser, 'B');
   await b.goto('/'); await b.locator('body[data-ready]').waitFor();
   await b.locator('#open-link').click();
-  await b.locator('#online-code').fill('ZZZZZ');
+  await b.locator('#online-code').fill('000000');
   await b.locator('#online-join').click();
   await expect(b.locator('#online-info')).toContainText('房间不存在');
   await b.locator('#online-code').fill('12');
   await b.locator('#online-join').click();
-  await expect(b.locator('#online-info')).toContainText('5 位');
+  await expect(b.locator('#online-info')).toContainText('6 位');
 
   await a.goto('/'); await a.locator('body[data-ready]').waitFor();
   await a.locator('#open-link').click();

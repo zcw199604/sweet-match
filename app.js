@@ -490,7 +490,7 @@ async function coopConnect(role, run, busyText) {
 const createOnlineRoom = () => coopConnect('host', (s) => s.create(), '正在创建房间……');
 function joinOnlineRoom(code = $('#online-code').value) {
   const normalized = normalizeCode(code);
-  if (!isCode(normalized)) return setOnlineInfo('房间码是 5 位字母和数字（没有 I、O、0、1）。', true);
+  if (!isCode(normalized)) return setOnlineInfo('房间码是 6 位数字。', true);
   $('#online-code').value = normalized;
   return coopConnect('guest', (s) => s.join(normalized), '正在加入房间……');
 }
@@ -1744,13 +1744,13 @@ window.__arcade = { get state() { return state; }, get mode() { return mode; }, 
 document.body.dataset.ready = '1';
 const bootHash = location.hash;   // showScreen('home') 会把它改成 #home，先存下来
 showScreen('home'); cancelAnimationFrame(frameId); frameId = requestAnimationFrame(loop);
-// 邀请链接：/?game=xiangqi&room=ABCD2 → 直接进到那个游戏的联机页并加入房间。
+// 邀请链接：/?game=xiangqi&room=123456 → 直接进到那个游戏的联机页并加入房间。
 // 刷新页面：地址栏是 #game/xxx 且这个游戏有没打完的联机对局 → 回到那局（座位服务端替你留着 60 秒）。
 {
   const params = new URLSearchParams(location.search), game = params.get('game'), room = normalizeCode(params.get('room'));
   const resumed = /^#game\/([a-z0-9]+)$/.exec(bootHash)?.[1];
   const coop = normalizeCode(params.get('coop'));
-  if (isCode(coop)) {   // /?coop=ABCD2：泡噗 / 山山兔的在线房间邀请 → 打开联机窗口并直接加入
+  if (isCode(coop)) {   // /?coop=123456：泡噗 / 山山兔的在线房间邀请 → 打开联机窗口并直接加入
     history.replaceState(null, '', location.pathname);
     openLink(); joinOnlineRoom(coop);
   } else if (isOnlineGame(game) && isCode(room)) {

@@ -1,12 +1,11 @@
 import { randomInt } from 'node:crypto';
 import { Room } from '@colyseus/core';
 
-// 房间码：5 位，去掉容易看混的 I O 0 1。只在本进程内保证不重复（单进程部署）。
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// 房间码：6 位随机数字。只在本进程内保证不重复（单进程部署）。
 const codesInUse = new Set();
 function newCode() {
   for (;;) {
-    const code = Array.from({ length: 5 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
+    const code = String(randomInt(1_000_000)).padStart(6, '0');
     if (!codesInUse.has(code)) { codesInUse.add(code); return code; }
   }
 }

@@ -7,9 +7,9 @@ const STORE_KEY = 'pao-net-room';
 const CONSENTED = 4000;                       // room.leave(true) 的关闭码，服务端据此判断是主动退出
 const RETRY_MS = [500, 1000, 2000, 3000, 5000, 8000];
 
-// 和 server/arcade-room.js 的字母表一致：去掉 I O 0 1。
-export const normalizeCode = (text) => String(text ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-export const isCode = (code) => /^[A-HJ-NP-Z2-9]{5}$/.test(code);
+// 和 server/code-room.js 一致：6 位数字。
+export const normalizeCode = (text) => String(text ?? '').replace(/\D/g, '');
+export const isCode = (code) => /^\d{6}$/.test(code);
 
 const isLocalHost = (hostname) => /^(localhost|127\.0\.0\.1|\[::1\]|\d{1,3}(\.\d{1,3}){3}|[^.]+\.local)$/.test(hostname);
 const isSocketUrl = (value) => typeof value === 'string' && /^wss?:\/\/[^\s/]+/.test(value);

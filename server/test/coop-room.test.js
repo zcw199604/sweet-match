@@ -53,7 +53,7 @@ test('coop：发太快会被限速（突发上限之外的包被丢）', async (
 
 test('coop：没有房间码进不去；第三个人进不去', async (t) => {
   const { url, code } = await coop(t);
-  await assert.rejects(new Client(url).join('coop', { code: 'ZZZZZ' }));
+  await assert.rejects(new Client(url).join('coop', { code: '000000' }));
   await assert.rejects(new Client(url).join('coop', { code }));
 });
 
