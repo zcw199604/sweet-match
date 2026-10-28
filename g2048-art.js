@@ -603,26 +603,31 @@ export function createFx() {
       const t = (now - f.at) / f.life;
       if (t < 0 || t >= 1) continue;
       const fade = 1 - t;
+      // No shadowBlur in here: a blurred shadow under 'lighter' costs tens of milliseconds a frame on a
+      // phone. Glows are faked with wider, fainter copies underneath instead.
       if (f.kind === 'flash') {
-        const s = f.s * (1 + 0.25 * t);
-        ctx.globalAlpha = fade ** 2 * 0.9;
+        const s = f.s * (1 + 0.25 * t), a = fade ** 2 * 0.9;
+        ctx.fillStyle = f.col;
+        for (const [grow, k] of [[22, 0.22], [11, 0.4]]) {
+          ctx.globalAlpha = a * k;
+          roundRect(ctx, f.x - (s + grow) / 2, f.y - (s + grow) / 2, s + grow, s + grow, 12 + grow / 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = a;
         roundRect(ctx, f.x - s / 2, f.y - s / 2, s, s, 12);
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = f.col;
-        ctx.shadowBlur = 30;
         ctx.fill();
-        ctx.shadowBlur = 0;
       } else if (f.kind === 'ring') {
-        const k = 1 - (1 - t) ** 3;
-        ctx.globalAlpha = fade;
-        ctx.lineWidth = f.w * fade + 0.5;
+        const k = 1 - (1 - t) ** 3, width = f.w * fade + 0.5;
         ctx.strokeStyle = f.col;
-        ctx.shadowColor = f.col;
-        ctx.shadowBlur = 12;
         ctx.beginPath();
         ctx.arc(f.x, f.y, f.r0 + (f.r1 - f.r0) * k, 0, Math.PI * 2);
+        ctx.globalAlpha = fade * 0.25;
+        ctx.lineWidth = width * 3 + 6;
         ctx.stroke();
-        ctx.shadowBlur = 0;
+        ctx.globalAlpha = fade;
+        ctx.lineWidth = width;
+        ctx.stroke();
       } else if (f.kind === 'rays') {
         ctx.globalAlpha = fade * 0.75;
         ctx.fillStyle = f.col;
@@ -664,11 +669,14 @@ export function createFx() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       if (f.kind === 'text') {
+        const y = f.y - 34 * (1 - (1 - t) ** 2);
         ctx.font = '900 17px system-ui, sans-serif';
-        ctx.shadowColor = f.col;
-        ctx.shadowBlur = 10;
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = `${f.col}aa`;
+        ctx.strokeText(f.text, f.x, y);
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(f.text, f.x, f.y - 34 * (1 - (1 - t) ** 2));
+        ctx.fillText(f.text, f.x, y);
       } else {
         const pop = t < 0.15 ? 0.6 + (t / 0.15) * 0.55 : 1.15 - Math.min(0.15, (t - 0.15) * 0.6);
         ctx.save();
@@ -679,13 +687,14 @@ export function createFx() {
         g.addColorStop(0, '#2ef2ff');
         g.addColorStop(0.5, '#ffffff');
         g.addColorStop(1, '#ff3bd4');
-        ctx.shadowColor = '#ff3bd4';
-        ctx.shadowBlur = 20;
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = '#ff3bd466';
+        ctx.strokeText(f.text, 0, 0);
         ctx.fillStyle = g;
         ctx.fillText(f.text, 0, 0);
         ctx.restore();
       }
-      ctx.shadowBlur = 0;
     }
     ctx.restore();
   }

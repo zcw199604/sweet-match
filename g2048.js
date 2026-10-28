@@ -48,6 +48,14 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   let theme = 'candy';
   let look = themeLook(theme);
   const fx = createFx(); // sparks, rings and shakes; only the neon theme sets them off
+  // Glows, gradients and textures are slow to paint, so everything that does not change from frame to
+  // frame — the backdrop with the plaques, the well, each tile value, the undo button — is painted once
+  // into a sprite at the canvas's pixel scale and stamped from then on. A new theme, a new scale
+  // (full screen) or a late web font throws them away.
+  const sprites = new Map();
+  let unit = 0;
+  const onFonts = () => { sprites.clear(); poke(); };
+  document.fonts?.addEventListener?.('loadingdone', onFonts);
 
   const canvas = el('canvas', 'game-canvas');
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -63,6 +71,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     theme = id;
     look = themeLook(id);
     wrap.dataset.theme = id;
+    sprites.clear();
     fx.clear();
     if (rival) drawRival();
     poke();
@@ -236,22 +245,53 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   window.addEventListener('keydown', onKey);
 
   // ---- drawing ----
-  function panel(x, y, w, h, label, value, accent) {
-    const P = look.panel;
+  // A sprite covers the logical rect (x, y, w, h), painted at `unit` device pixels per logical pixel.
+  function sprite(key, x, y, w, h, paint) {
+    let s = sprites.get(key);
+    if (!s) {
+      s = document.createElement('canvas');
+      s.width = Math.ceil(w * unit);
+      s.height = Math.ceil(h * unit);
+      const c = s.getContext('2d');
+      c.setTransform(unit, 0, 0, unit, -x * unit, -y * unit);
+      paint(c);
+      sprites.set(key, s);
+    }
+    return s;
+  }
+  // Stamp a sprite with its top-left at logical (x, y). At natural size it lands on whole device pixels,
+  // as sharp as painting directly; scaled (a popping or trailing tile) it is simply stretched.
+  function stamp(s, x, y, k = 1) {
+    if (k !== 1) return ctx.drawImage(s, x, y, (s.width / unit) * k, (s.height / unit) * k);
+    const m = ctx.getTransform();
     ctx.save();
-    if (P.glow) { ctx.shadowColor = P.edge; ctx.shadowBlur = 14; }
-    roundRect(ctx, x, y, w, h, P.radius);
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(s, Math.round(m.a * x + m.e), Math.round(m.d * y + m.f));
+    ctx.restore();
+  }
+  // Room around a sprite for its glow. shadowBlur is in device pixels, so the fewer of those per
+  // logical pixel, the wider the glow reaches.
+  const halo = () => Math.ceil(6 + 40 / unit);
+
+  function plate(c, x, y, w, h) {
+    const P = look.panel;
+    c.save();
+    if (P.glow) { c.shadowColor = P.edge; c.shadowBlur = 14; }
+    roundRect(c, x, y, w, h, P.radius);
+    const g = c.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0, P.top);
     g.addColorStop(1, P.bottom);
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.restore();
+    c.fillStyle = g;
+    c.fill();
+    c.restore();
     if (P.edge) {
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = P.edge;
-      ctx.stroke();
+      c.lineWidth = 1.5;
+      c.strokeStyle = P.edge;
+      c.stroke();
     }
+  }
+  function panel(x, y, w, h, label, value, accent) {
+    const P = look.panel;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = P.label;
@@ -263,10 +303,11 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
   }
   const slots = Array.from({ length: 16 }, (_, i) => cellXY(Math.floor(i / 4), i % 4));
   function drawTile(cx, cy, v, scale = 1, alpha = 1) {
-    ctx.save();
+    const r = CELL / 2 + halo();
+    const s = sprite(`tile ${v}`, -r, -r, 2 * r, 2 * r, (c) => look.tile(c, 0, 0, v, CELL, 1));
     ctx.globalAlpha = alpha;
-    look.tile(ctx, cx, cy, v, CELL, scale);
-    ctx.restore();
+    stamp(s, cx - r * scale, cy - r * scale, scale);
+    ctx.globalAlpha = 1;
   }
   const centre = (r, c) => { const p = cellXY(r, c); return { x: p.x + CELL / 2, y: p.y + CELL / 2 }; };
   function drawTiles(now) {
@@ -298,31 +339,38 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     }
     if (anim && elapsed >= SLIDE() + POP()) anim = null;
   }
-  function drawButton() {
-    const off = !core.history.length || core.undosLeft <= 0;
+  // The button's face and label come from a sprite; only the undo-count badge is painted each frame.
+  function buttonFace(c, off) {
     const B = look.button, [top, bottom, base, ink] = off ? B.off : B.on;
-    ctx.save();
-    if (B.glow && !off) { ctx.shadowColor = top; ctx.shadowBlur = 16; }
-    roundRect(ctx, BTN.x, BTN.y + 3, BTN.w, BTN.h, B.radius);
-    ctx.fillStyle = base;
-    ctx.fill();
-    ctx.restore();
-    roundRect(ctx, BTN.x, BTN.y, BTN.w, BTN.h - 3, B.radius);
-    const g = ctx.createLinearGradient(0, BTN.y, 0, BTN.y + BTN.h);
+    c.save();
+    if (B.glow && !off) { c.shadowColor = top; c.shadowBlur = 16; }
+    roundRect(c, BTN.x, BTN.y + 3, BTN.w, BTN.h, B.radius);
+    c.fillStyle = base;
+    c.fill();
+    c.restore();
+    roundRect(c, BTN.x, BTN.y, BTN.w, BTN.h - 3, B.radius);
+    const g = c.createLinearGradient(0, BTN.y, 0, BTN.y + BTN.h);
     g.addColorStop(0, top);
     g.addColorStop(1, bottom);
-    ctx.fillStyle = g;
-    ctx.fill();
+    c.fillStyle = g;
+    c.fill();
     if (B.edge) {
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = B.edge;
-      ctx.stroke();
+      c.lineWidth = 1.5;
+      c.strokeStyle = B.edge;
+      c.stroke();
     }
-    ctx.fillStyle = ink;
+    c.fillStyle = ink;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `800 18px ${look.panel.font}`;
+    c.fillText('↶ 撤销', BTN.x + BTN.w / 2 - 6, BTN.y + BTN.h / 2 - 2);
+  }
+  function drawButton() {
+    const off = !core.history.length || core.undosLeft <= 0;
+    const B = look.button, m = halo();
+    stamp(sprite(`button ${off}`, BTN.x - m, BTN.y - m, BTN.w + 2 * m, BTN.h + 3 + 2 * m, (c) => buttonFace(c, off)), BTN.x - m, BTN.y - m);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `800 18px ${look.panel.font}`;
-    ctx.fillText('↶ 撤销', BTN.x + BTN.w / 2 - 6, BTN.y + BTN.h / 2 - 2);
     ctx.beginPath();
     ctx.arc(BTN.x + BTN.w - 9, BTN.y + 9, 11, 0, Math.PI * 2);
     ctx.fillStyle = off ? B.badgeOff : B.badge;
@@ -335,7 +383,12 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     raf = 0;
     if (!alive) return;
     ctx = fit.begin();
-    look.backdrop?.(ctx, LW, LH);
+    if (fit.unit !== unit) { unit = fit.unit; sprites.clear(); }
+    stamp(sprite('backdrop', 0, 0, LW, LH, (c) => {
+      look.backdrop?.(c, LW, LH);
+      plate(c, 12, 14, 164, 66);
+      plate(c, 184, 14, 164, 66);
+    }), 0, 0);
     panel(12, 14, 164, 66, '分数', core.score, look.panel.score);
     panel(184, 14, 164, 66, online ? '对手' : '最高', online ? (rival?.score ?? 0) : Math.max(best, core.score), look.panel.best);
     ctx.fillStyle = look.ink;
@@ -347,7 +400,8 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
     const jolt = fx.shake(now);
     ctx.save();
     ctx.translate(jolt.x, jolt.y);
-    look.well(ctx, BOARD, slots, CELL);
+    const m = halo();
+    stamp(sprite('well', BOARD.x - m, BOARD.y - m, BOARD.size + 2 * m, BOARD.size + 2 * m, (c) => look.well(c, BOARD, slots, CELL)), BOARD.x - m, BOARD.y - m);
     drawTiles(now);
     if (busy) fx.draw(ctx, now, LW, LH, BOARD);
     ctx.restore();
@@ -476,6 +530,7 @@ export function mountG2048(wrap, { onHud = () => {}, onResult = null, online = n
       for (const off of offs) off();
       clearTimeout(rivalTimer);
       document.removeEventListener('pao-g2048-theme', onTheme);
+      document.fonts?.removeEventListener?.('loadingdone', onFonts);
       rivalBox.remove();
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);
