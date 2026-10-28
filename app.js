@@ -804,9 +804,9 @@ function stopG2048() {
   g2048?.destroy();
   g2048 = null;
 }
-// 2048 的外观：糖果 / 经典 / 霓虹。只是显示设置，单人和联机的盘面都跟着换（g2048.js 监听 pao-g2048-theme）。
-const G2048_THEME_IDS = ['candy', 'classic', 'neon'];
-const G2048_THEME_LABEL = { candy: '糖果', classic: '经典', neon: '霓虹' };
+// 2048 的外观：糖果 / 经典 / 霓虹 / 像素 / 水墨 / 麻将。只是显示设置，单人和联机的盘面都跟着换（g2048.js 监听 pao-g2048-theme）。
+const G2048_THEME_IDS = ['candy', 'classic', 'neon', 'pixel', 'ink', 'mahjong'];
+const G2048_THEME_LABEL = { candy: '糖果', classic: '经典', neon: '霓虹', pixel: '像素', ink: '水墨', mahjong: '麻将' };
 const g2048ThemeLabel = (id) => `主题 · ${G2048_THEME_LABEL[id]}`;
 function buildG2048Stage(stage, meta) {
   stage.innerHTML = `<div class="stage-top"><div><span id="seat-text">${meta.label} · 单人</span><strong id="score-text">正在加载……</strong></div><div class="stage-actions"><button id="g2048-theme">${g2048ThemeLabel(getPref('g2048Theme'))}</button><button id="restart-game">重新开始</button></div></div><div class="canvas-wrap g2048-wrap"></div><p class="game-help">${meta.help}</p>`;

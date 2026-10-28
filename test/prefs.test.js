@@ -99,8 +99,9 @@ test('俄罗斯方块的难度是一项设置：只认简单 / 普通 / 困难�
   assert.equal(setPrefValue(state, 'tetrisLevel', 'expert'), state);
 });
 
-test('2048 的主题是一项设置：只认糖果 / 经典 / 霓虹，默认糖果', () => {
+test('2048 的主题是一项设置：只认糖果 / 经典 / 霓虹 / 像素 / 水墨 / 麻将，默认糖果', () => {
   assert.equal(prefValue(emptyPrefs(PID(1)), 'g2048Theme'), 'candy');
   assert.deepEqual(cleanPrefs({ g2048Theme: 'neon' }), { g2048Theme: 'neon' });
+  for (const id of ['pixel', 'ink', 'mahjong']) assert.deepEqual(cleanPrefs({ g2048Theme: id }), { g2048Theme: id });
   assert.deepEqual(cleanPrefs({ g2048Theme: 'pastel' }), {});
 });

@@ -1,14 +1,20 @@
-// 2048: the looks. Three themes share one layout (g2048.js owns where things go and when they move);
+// 2048: the looks. Six themes share one layout (g2048.js owns where things go and when they move);
 // a theme only decides how the backdrop, the well, a tile, the plaques and the undo button are painted.
 //   candy   — the house style: glossy candy tiles on deep indigo.
 //   classic — the original 2048 palette: beige well, flat tiles, brown digits, magenta past 2048.
 //   neon    — dark glass with glowing outlines, and every merge sets off sparks, rings and a shake (createFx).
+//   pixel   — an 8-bit arcade screen: notched blocks, hard bevels, monospace digits, scanlines.
+//   ink     — 水墨: rice paper and pigment washes; 2048 and up are a cinnabar seal.
+//   mahjong — 麻将: ivory tiles with a coloured back, in a wooden frame on green felt.
 // Nothing here keeps state except createFx; painters take the context and logical pixels.
 
 export const G2048_THEMES = [
   { id: 'candy', name: '糖果' },
   { id: 'classic', name: '经典' },
-  { id: 'neon', name: '霓虹' }
+  { id: 'neon', name: '霓虹' },
+  { id: 'pixel', name: '像素' },
+  { id: 'ink', name: '水墨' },
+  { id: 'mahjong', name: '麻将' }
 ];
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -225,6 +231,250 @@ function neonTile(ctx, cx, cy, v, cell, scale) {
   ctx.shadowBlur = 0;
 }
 
+// ---- pixel ----
+// An 8-bit arcade cabinet: blocks with cut corners and hard bevels, a monospace digit with a hard shadow,
+// scanlines over a dark screen. base, light, dark — as in candy, but nothing is smoothed.
+const PIXEL = {
+  2: ['#5fa8ff', '#b3d8ff', '#2d5fb0'], 4: ['#46c97a', '#a3ecbf', '#1f7d48'], 8: ['#f2c230', '#ffe68a', '#a87d00'],
+  16: ['#ff9334', '#ffc893', '#b55400'], 32: ['#ff5a4a', '#ffaaa1', '#a8231a'], 64: ['#e8336b', '#ff94b4', '#8f1240'],
+  128: ['#b04de8', '#dba6ff', '#6a1f99'], 256: ['#7055ff', '#b6a8ff', '#3a24a8'], 512: ['#2ec4c4', '#9cf0ee', '#137a7a'],
+  1024: ['#8bd450', '#cdf5a3', '#4a8a1e'], 2048: ['#ffd700', '#fff3a0', '#b38f00']
+};
+const PIXEL_BEYOND = ['#ff4fd8', '#ffb0f0', '#9a1a80'];
+const pixelPaint = (v) => PIXEL[v] ?? PIXEL_BEYOND;
+const PIXEL_FONT = '"Courier New", ui-monospace, Menlo, monospace';
+const PIXEL_DOTS = Array.from({ length: 28 }, (_, i) => ({ x: Math.floor(((i * 89.7) % 352) / 4) * 4, y: Math.floor(((i * 137.3) % 532) / 4) * 4, a: 0.15 + (i % 4) * 0.08 }));
+
+// A rectangle with each corner notched by one "pixel" p.
+function notched(ctx, x, y, w, h, p) {
+  ctx.beginPath();
+  ctx.moveTo(x + p, y);
+  ctx.lineTo(x + w - p, y);
+  ctx.lineTo(x + w - p, y + p);
+  ctx.lineTo(x + w, y + p);
+  ctx.lineTo(x + w, y + h - p);
+  ctx.lineTo(x + w - p, y + h - p);
+  ctx.lineTo(x + w - p, y + h);
+  ctx.lineTo(x + p, y + h);
+  ctx.lineTo(x + p, y + h - p);
+  ctx.lineTo(x, y + h - p);
+  ctx.lineTo(x, y + p);
+  ctx.lineTo(x + p, y + p);
+  ctx.closePath();
+}
+function pixelBackdrop(ctx, w, h) {
+  ctx.fillStyle = '#14102a';
+  ctx.fillRect(0, 0, w, h);
+  for (const d of PIXEL_DOTS) {
+    ctx.fillStyle = `rgba(169,156,255,${d.a})`;
+    ctx.fillRect(d.x, d.y, 4, 4);
+  }
+  ctx.fillStyle = '#00000038';
+  for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1);
+}
+function pixelWell(ctx, { x, y, size }, slots, cell) {
+  notched(ctx, x, y, size, size, 8);
+  ctx.fillStyle = '#3c3466';
+  ctx.fill();
+  notched(ctx, x + 4, y + 4, size - 8, size - 8, 4);
+  ctx.fillStyle = '#0a0818';
+  ctx.fill();
+  ctx.fillStyle = '#221c40';
+  for (const p of slots) {
+    notched(ctx, p.x, p.y, cell, cell, 4);
+    ctx.fill();
+  }
+}
+function pixelTile(ctx, cx, cy, v, cell, scale) {
+  const [base, light, dark] = pixelPaint(v);
+  const s = cell * scale, p = 4 * scale;
+  const x = cx - s / 2, y = cy - s / 2;
+  notched(ctx, x, y, s, s, p);
+  ctx.fillStyle = v >= 2048 ? '#fff3a0' : '#0a0818';
+  ctx.fill();
+  ctx.fillStyle = dark;
+  ctx.fillRect(x + p, y + p, s - 2 * p, s - 2 * p);
+  ctx.fillStyle = light;
+  ctx.fillRect(x + p, y + p, s - 3 * p, s - 3 * p);
+  ctx.fillStyle = base;
+  ctx.fillRect(x + 2 * p, y + 2 * p, s - 4 * p, s - 4 * p);
+  ctx.fillStyle = '#ffffff99'; // one bright pixel in the lit corner
+  ctx.fillRect(x + 2 * p, y + 2 * p, p, p);
+  ctx.font = `700 ${digitsSize(v, [32, 27, 21, 17]) * scale}px ${PIXEL_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = dark;
+  ctx.fillText(String(v), cx + 2 * scale, cy + 3 * scale);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(String(v), cx, cy + 1 * scale);
+}
+
+// ---- ink ----
+// 水墨: rice paper, a mounted double frame, and tiles washed in the old painters' pigments — pale ink,
+// malachite, indigo, ochre, gamboge, rouge — darkening to scorched ink; 2048 and up are a cinnabar seal.
+const INK = {
+  2: ['#e6dfcf', '#3b3631'], 4: ['#cfc7b6', '#2f2b27'], 8: ['#a9c4ad', '#22362a'], 16: ['#8fadc2', '#1d2f3d'],
+  32: ['#c99a76', '#3d2416'], 64: ['#e2b94f', '#4a3508'], 128: ['#b5525a', '#fbf3e2'], 256: ['#55504a', '#f6f1e4'],
+  512: ['#3d5a73', '#f6f1e4'], 1024: ['#24211e', '#f6f1e4'], 2048: ['#c0392b', '#fff6e6']
+};
+const INK_BEYOND = ['#7a1b1b', '#f2d27a'];
+const inkPaint = (v) => INK[v] ?? INK_BEYOND;
+const INK_FONT = '"Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif';
+// Fibres in the paper, fixed so the backdrop does not flicker.
+const FIBRES = Array.from({ length: 36 }, (_, i) => ({ x: (i * 83.9) % 360, y: (i * 127.1) % 540, len: 6 + (i % 5) * 3, a: ((i * 37) % 180) * (Math.PI / 180) }));
+
+function inkBackdrop(ctx, w, h) {
+  const g = ctx.createRadialGradient(w / 2, h * 0.45, h * 0.2, w / 2, h * 0.45, h * 0.75);
+  g.addColorStop(0, '#f6f0e1');
+  g.addColorStop(1, '#e4d9bf');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  ctx.lineWidth = 0.6;
+  ctx.strokeStyle = '#a8977326';
+  ctx.beginPath();
+  for (const f of FIBRES) {
+    ctx.moveTo(f.x, f.y);
+    ctx.lineTo(f.x + Math.cos(f.a) * f.len, f.y + Math.sin(f.a) * f.len);
+  }
+  ctx.stroke();
+}
+function inkWell(ctx, { x, y, size }, slots, cell) {
+  roundRect(ctx, x, y, size, size, 6);
+  ctx.fillStyle = '#ece3cd';
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#3a3530';
+  ctx.stroke();
+  roundRect(ctx, x + 4, y + 4, size - 8, size - 8, 4);
+  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = '#3a3530aa';
+  ctx.stroke();
+  for (const p of slots) {
+    roundRect(ctx, p.x, p.y, cell, cell, 4);
+    ctx.fillStyle = '#e1d6bb';
+    ctx.fill();
+  }
+}
+// A watercolour wash pools darker at its edges; a seal gets a paper-coloured inner frame instead.
+function inkTile(ctx, cx, cy, v, cell, scale) {
+  const [body, digit] = inkPaint(v);
+  const s = cell * scale;
+  const x = cx - s / 2, y = cy - s / 2;
+  const seal = v >= 2048;
+  roundRect(ctx, x, y, s, s, (seal ? 3 : 6) * scale);
+  ctx.fillStyle = body;
+  ctx.fill();
+  if (seal) {
+    roundRect(ctx, x + 5 * scale, y + 5 * scale, s - 10 * scale, s - 10 * scale, 2 * scale);
+    ctx.lineWidth = 2 * scale;
+    ctx.strokeStyle = digit;
+    ctx.stroke();
+  } else {
+    const edge = ctx.createRadialGradient(cx - s * 0.1, cy - s * 0.12, s * 0.15, cx, cy, s * 0.72);
+    edge.addColorStop(0, '#ffffff1f');
+    edge.addColorStop(0.7, '#00000000');
+    edge.addColorStop(1, '#1a141038');
+    ctx.fillStyle = edge;
+    ctx.fill();
+  }
+  ctx.font = `900 ${digitsSize(v, [36, 30, 24, 19]) * scale}px ${INK_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = digit;
+  ctx.fillText(String(v), cx, cy + 2 * scale);
+}
+
+// ---- mahjong ----
+// 麻将: ivory tiles with a coloured back showing underneath, set in a wooden frame on green felt.
+// The digit is engraved in the suit colours — blue, green, red — round and round; the back turns blue past 64,
+// gold for 2048 and red beyond.
+const MJ_INKS = ['#1f5fa8', '#1d7a44', '#c0262d'];
+const mjDigit = (v) => (v >= 2048 ? '#c0262d' : v === 1024 ? '#1a1a1a' : MJ_INKS[(log2(v) - 1) % 3]);
+const mjBack = (v) => (v > 2048 ? '#c0262d' : v === 2048 ? '#c9a227' : v >= 128 ? '#1f5fa8' : '#2e8b57');
+const MJ_FONT = '"Songti SC", "STSong", "Noto Serif SC", Georgia, serif';
+const FELT = Array.from({ length: 60 }, (_, i) => ({ x: (i * 61.3) % 360, y: (i * 113.9) % 540, a: 0.04 + (i % 4) * 0.02 }));
+
+function mahjongBackdrop(ctx, w, h) {
+  const g = ctx.createRadialGradient(w / 2, h * 0.45, 20, w / 2, h * 0.45, h * 0.8);
+  g.addColorStop(0, '#13774a');
+  g.addColorStop(1, '#0a3f27');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  for (const f of FELT) {
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`;
+    ctx.fillRect(f.x, f.y, 1.5, 1.5);
+  }
+}
+function mahjongWell(ctx, { x, y, size }, slots, cell) {
+  ctx.save();
+  ctx.shadowColor = '#00000066';
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetY = 4;
+  roundRect(ctx, x, y, size, size, 12);
+  const wood = ctx.createLinearGradient(x, y, x + size, y + size);
+  wood.addColorStop(0, '#9a6532');
+  wood.addColorStop(0.5, '#7a4b22');
+  wood.addColorStop(1, '#5e3a17');
+  ctx.fillStyle = wood;
+  ctx.fill();
+  ctx.restore();
+  // Grain: a few long, faint strokes across the frame.
+  ctx.save();
+  roundRect(ctx, x, y, size, size, 12);
+  ctx.clip();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#3a210c33';
+  ctx.beginPath();
+  for (let i = 0; i < 9; i += 1) {
+    const gy = y + 6 + i * (size / 9);
+    ctx.moveTo(x, gy);
+    ctx.bezierCurveTo(x + size * 0.3, gy - 5, x + size * 0.6, gy + 6, x + size, gy - 2);
+  }
+  ctx.stroke();
+  ctx.restore();
+  roundRect(ctx, x + 5, y + 5, size - 10, size - 10, 8);
+  ctx.fillStyle = '#0c4a2e';
+  ctx.fill();
+  for (const p of slots) {
+    roundRect(ctx, p.x, p.y, cell, cell, 7);
+    ctx.fillStyle = '#0a3d26';
+    ctx.fill();
+  }
+}
+function mahjongTile(ctx, cx, cy, v, cell, scale) {
+  const s = cell * scale, r = 8 * scale, depth = 5 * scale;
+  const x = cx - s / 2, y = cy - s / 2;
+  roundRect(ctx, x, y + depth, s, s - depth, r);
+  ctx.fillStyle = mjBack(v);
+  ctx.fill();
+  roundRect(ctx, x, y + depth * 0.4, s, s - depth, r);
+  ctx.fillStyle = '#f7f2e4';
+  ctx.fill();
+  roundRect(ctx, x, y, s, s - depth, r);
+  const face = ctx.createLinearGradient(0, y, 0, y + s - depth);
+  face.addColorStop(0, '#fffdf6');
+  face.addColorStop(1, '#ebe2cb');
+  ctx.fillStyle = face;
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#c9bc9a';
+  ctx.stroke();
+  if (v >= 2048) {
+    roundRect(ctx, x + 4 * scale, y + 4 * scale, s - 8 * scale, s - depth - 8 * scale, r * 0.6);
+    ctx.lineWidth = 2 * scale;
+    ctx.strokeStyle = mjBack(v);
+    ctx.stroke();
+  }
+  const ty = cy - depth / 2 + 1 * scale;
+  ctx.font = `900 ${digitsSize(v, [34, 28, 22, 18]) * scale}px ${MJ_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffffcc'; // engraved: a light lip under the cut
+  ctx.fillText(String(v), cx, ty + 1.2 * scale);
+  ctx.fillStyle = mjDigit(v);
+  ctx.fillText(String(v), cx, ty);
+}
+
 // ---- the table ----
 // panel: plaque fill top/bottom, edge, label colour, the two value colours.
 // button: [face top, face bottom, base, text] for on and off, the undo-count badge and the face's edge line.
@@ -261,6 +511,39 @@ const LOOKS = {
     button: { on: ['#ff3bd4', '#9b2cff', '#5a1499', '#fff'], off: ['#3a3260', '#2c2650', '#1c1838', '#8a83b0'], badge: '#2ef2ff', badgeOff: '#4a4470', badgeInk: '#0b0820', edge: '#ffffff55', radius: 14, glow: true },
     toast: ['#0b0820ee', '#2ef2ff'],
     pop: 0.32, trail: true, fx: true
+  },
+  pixel: {
+    backdrop: pixelBackdrop,
+    well: pixelWell,
+    tile: pixelTile,
+    swatch: (v) => [pixelPaint(v)[0], '#fff'],
+    panel: { top: '#221c40', bottom: '#221c40', edge: '#6a5acd', label: '#a99cff', score: '#ffd700', best: '#5fa8ff', radius: 0, font: PIXEL_FONT },
+    ink: '#a99cff', faint: '#6e64a8',
+    button: { on: ['#ff5a4a', '#e8336b', '#8f1240', '#fff'], off: ['#3c3466', '#332b5a', '#1d1838', '#8a83b0'], badge: '#ffd700', badgeOff: '#4a4470', badgeInk: '#14102a', edge: '#ffffff66', radius: 0 },
+    toast: ['#0a0818ee', '#ffd700'],
+    pop: 0.12, trail: false, fx: false
+  },
+  ink: {
+    backdrop: inkBackdrop,
+    well: inkWell,
+    tile: inkTile,
+    swatch: inkPaint,
+    panel: { top: '#ece3cd', bottom: '#e1d6bb', edge: '#3a3530', label: '#6b6359', score: '#c0392b', best: '#3d5a73', radius: 4, font: INK_FONT },
+    ink: '#4a443d', faint: '#8a8174',
+    button: { on: ['#3a3530', '#24211e', '#0f0d0c', '#f6f1e4'], off: ['#d8cfbb', '#cfc5af', '#b5ab95', '#8a8174'], badge: '#c0392b', badgeOff: '#a39886', badgeInk: '#fff', edge: null, radius: 4 },
+    toast: ['#24211eee', '#f6f1e4'],
+    pop: 0.14, trail: false, fx: false
+  },
+  mahjong: {
+    backdrop: mahjongBackdrop,
+    well: mahjongWell,
+    tile: mahjongTile,
+    swatch: (v) => (v >= 2048 ? [mjBack(v), '#fff'] : ['#f7f2e4', mjDigit(v)]),
+    panel: { top: '#9a6532', bottom: '#5e3a17', edge: '#c9a227', label: '#f3e3c0', score: '#ffd75e', best: '#fffdf6', radius: 10, font: MJ_FONT },
+    ink: '#d8ecd9', faint: '#8fbfa0',
+    button: { on: ['#e14a3f', '#c0262d', '#7d1419', '#fff'], off: ['#4f6e5c', '#3f5c4b', '#28402f', '#a9c4b1'], badge: '#ffd75e', badgeOff: '#6c8a77', badgeInk: '#5e3a17', edge: '#ffffff44', radius: 10 },
+    toast: ['#0a2e1cee', '#ffd75e'],
+    pop: 0.16, trail: false, fx: false
   }
 };
 export const themeLook = (id) => LOOKS[id] ?? LOOKS.candy;
