@@ -589,10 +589,17 @@ test('隐藏看板: 令牌错误回到登录，正确后按东八区展示玩家
   await expect(page.locator('#players tr.pick')).toHaveCount(2);
   await expect(page.locator('#timeline')).toContainText('21:58–22:20');
   await expect(page.locator('#timeline')).toContainText('抓大鹅 · 经典');
+  await expect(page.locator('#games .game .name')).toHaveText(['抓大鹅', '方块爆破']); // 按时长排，没人玩的收起来
+  await expect(page.locator('#games details.idle summary')).toContainText('款没人玩');
   await page.locator('#players tr.pick', { hasText: '小红' }).click();
+  await expect(page.locator('#scope .chip')).toContainText('只看：小红');
+  await expect(page.locator('#games .game .name')).toHaveText(['方块爆破']);
   await expect(page.locator('#timeline tr')).toHaveCount(2);
   await expect(page.locator('#timeline')).toContainText('9 分');
   await expect(page.locator('#heat i[title*="22:00"]').first()).toBeVisible();
+  await page.locator('#scope .chip').click();
+  await expect(page.locator('#scope .chip')).toHaveCount(0);
+  await expect(page.locator('#players tr.sel')).toHaveCount(0);
 });
 
 test('隐藏看板: 同一浏览器登录后首页有入口和各游戏时长，退出或令牌失效就消失', async ({ page }) => {

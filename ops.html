@@ -9,41 +9,109 @@
 @media (prefers-color-scheme:dark){:root{--bg:#171c28;--card:#202638;--ink:#e8ebf3;--mute:#8d96ab;--line:#2f3750;--accent:#4fc59a;--err:#e08a99}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-main{max-width:980px;margin:0 auto;padding:16px}
-h1{font-size:18px;margin:4px 0 12px}h2{font-size:14px;margin:0 0 10px;color:var(--mute);font-weight:600}
-section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
-.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+main{max-width:1120px;margin:0 auto;padding:0 16px 24px}
+h1{font-size:18px;margin:0;white-space:nowrap}h1 small{font-size:12px;font-weight:400;color:var(--mute);margin-left:6px}
+h2{font-size:15px;margin:0}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;min-width:0}
+.head{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}.head small{color:var(--mute);font-size:12px}
 button,input{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 12px}
 button{cursor:pointer}button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 input{min-width:0;flex:1 1 220px}
-.err{color:var(--err);margin:6px 0 0}.err:empty{display:none}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.cards div{border:1px solid var(--line);border-radius:10px;padding:10px}.cards b{display:block;font-size:20px}.cards span{color:var(--mute);font-size:12px}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
-th{color:var(--mute);font-weight:600;font-size:12px}
-.scroll{overflow-x:auto}tr.pick{cursor:pointer}tr.pick:hover,tr.sel{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+a{color:var(--mute)}
+.err{color:var(--err);margin:0 0 10px}.err:empty{display:none}
+.hide{display:none}
 .mono{font-family:ui-monospace,Menlo,monospace;color:var(--mute);font-size:12px}
-.row{display:grid;grid-template-columns:96px 1fr 72px;gap:8px;align-items:center;margin:4px 0}
-.track{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.track i{display:block;height:100%;background:var(--accent)}
-.heat{display:grid;grid-template-columns:84px repeat(24,minmax(10px,1fr));gap:2px;align-items:center;font-size:11px;color:var(--mute);min-width:520px}
-.heat i{display:block;height:18px;border-radius:3px;background:var(--accent)}.heat .h{text-align:center}
-.hide{display:none}.grow{flex:1}
+.muted{color:var(--mute)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* 登录 */
+#login{max-width:420px;margin:12vh auto 0}#login h1{margin-bottom:12px}
+#login form{display:flex;gap:8px}
+
+/* 顶栏：滚动时固定，筛选范围始终可见 */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px 16px;margin:0 -16px 12px;padding:10px 16px;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.filters{flex:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.nav{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;padding:2px;background:var(--card)}
+.seg button{border:0;border-radius:7px;padding:4px 12px}
+.chip{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:999px;padding:3px 10px}
+.chip b{margin-left:6px}
+
+/* 概览数字 */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.kpis div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpis b{display:block;font-size:22px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpis span{color:var(--mute);font-size:12px}
+
+.split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:12px;align-items:start}
+
+/* 游戏排行 */
+.game{display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:8px;row-gap:3px;align-items:center;margin-bottom:10px}
+.game .rank{grid-row:span 2;align-self:start;color:var(--mute);font-variant-numeric:tabular-nums}
+.game .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.game .meta{color:var(--mute);font-size:12px;text-align:right;white-space:nowrap}
+.track{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.track i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.more{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-top:4px}
+.more button{padding:3px 10px;font-size:12px}
+details.idle summary{cursor:pointer;color:var(--mute);font-size:12px}details.idle p{color:var(--mute);font-size:12px;margin:6px 0 0}
+
+/* 热力图 */
+.scroll{overflow-x:auto}
+.heat{display:grid;grid-template-columns:76px repeat(24,minmax(11px,1fr)) 60px;gap:2px;align-items:center;font-size:11px;color:var(--mute);min-width:480px}
+.heat i{display:block;height:18px;border-radius:3px;background:color-mix(in srgb,var(--line) 55%,transparent)}
+.heat .h{text-align:center}.heat .we{color:var(--accent)}.heat .tot{text-align:right;font-variant-numeric:tabular-nums}
+.legend{display:flex;align-items:center;gap:3px;margin-top:10px;font-size:11px;color:var(--mute)}
+.legend i{width:14px;height:12px;border-radius:3px}.legend span{margin:0 4px}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mute);font-weight:600;font-size:12px}th.num,td.num{text-align:right}
+th.sort{cursor:pointer;user-select:none}th.sort:hover,th.on{color:var(--ink)}
+tr.pick{cursor:pointer}tr.pick:hover,tr.sel{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.empty{color:var(--mute);margin:0}
+
+/* 时间线按天分组 */
+details.day{border-top:1px solid var(--line)}details.day:first-of-type{border-top:0}
+details.day summary{cursor:pointer;display:flex;gap:10px;align-items:baseline;padding:8px 0;list-style:none}
+details.day summary::-webkit-details-marker{display:none}
+details.day summary::before{content:"▸";color:var(--mute);font-size:12px;width:10px;transition:transform .15s}
+details.day[open] summary::before{transform:rotate(90deg)}
+details.day summary span{color:var(--mute);font-size:12px}
+details.day table{margin-bottom:8px}
+
+@media (max-width:860px){.split{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){
+  .top{flex-wrap:wrap}.top h1{flex:1}.top h1 small{display:none}
+  .filters{order:3;flex-basis:100%}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis b{font-size:19px}
+  #players .mono{display:none}
+}
 </style>
 </head>
 <body>
 <main>
-  <h1>游玩记录 <span class="mono">· 时间均为东八区</span></h1>
   <section id="login">
-    <form class="bar" id="login-form"><input id="token" type="password" autocomplete="off" placeholder="访问令牌 ADMIN_TOKEN"/><button class="on">进入</button></form>
+    <h1>游玩记录</h1>
+    <form id="login-form"><input id="token" type="password" autocomplete="off" placeholder="访问令牌 ADMIN_TOKEN"/><button class="on">进入</button></form>
     <p class="err" id="login-error"></p>
   </section>
   <div id="panel" class="hide">
-    <section><div class="bar"><div class="bar" id="ranges"></div><span class="grow"></span><a class="mono" href="./#home">回首页</a><button type="button" id="logout">退出登录</button></div><p class="err" id="error"></p></section>
-    <section><div class="cards" id="cards"></div></section>
-    <section><h2>各游戏时长</h2><div id="games"></div></section>
-    <section><h2>玩家（点一行只看这个人）</h2><div class="scroll"><table id="players"></table></div></section>
-    <section><h2 id="heat-title">时段热力图</h2><div class="scroll"><div class="heat" id="heat"></div></div></section>
-    <section><h2 id="line-title">时间线</h2><div class="scroll"><table id="timeline"></table></div></section>
+    <header class="top">
+      <h1>游玩记录<small>时间均为东八区</small></h1>
+      <div class="filters"><div class="seg" id="ranges"></div><span id="scope"></span></div>
+      <div class="nav"><a href="./#home">回首页</a><button type="button" id="logout">退出登录</button></div>
+    </header>
+    <p class="err" id="error"></p>
+    <div class="kpis" id="cards"></div>
+    <div class="split">
+      <section><div class="head"><h2>游戏排行</h2><small>按时长</small></div><div id="games"></div></section>
+      <div>
+        <section><div class="head"><h2>时段热力图</h2><small>每格 = 某天的某个小时</small></div><div class="scroll"><div class="heat" id="heat"></div></div><div class="legend" id="legend"></div></section>
+        <section><div class="head"><h2>玩家</h2><small>点一行只看这个人，再点取消</small></div><div class="scroll"><table id="players"></table></div></section>
+      </div>
+    </div>
+    <section><div class="head"><h2>时间线</h2><small>按天分组，点日期展开</small></div><div id="timeline"></div></section>
   </div>
 </main>
 <script type="module">
@@ -52,12 +120,27 @@ import { GAMES } from './leaderboard-core.js';
 
 const DAY = 86400000, KEY = 'pao-ops-token';
 const RANGES = [['今天', 1], ['近 7 天', 7], ['近 30 天', 30]];
+const TOP_GAMES = 10, OPEN_DAYS = 2;
 const $ = (s) => document.querySelector(s);
 const el = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 const gameTitle = (id) => GAMES.find((g) => g.id === id)?.title ?? id;
-let token = '', days = 7, sessions = [], selected = null;
+const weekday = (date) => '日一二三四五六'[new Date(`${date}T00:00:00Z`).getUTCDay()];
+const dayLabel = (date) => `${date.slice(5)} 周${weekday(date)}`;
+const sumMs = (list) => list.reduce((sum, s) => sum + s.active_ms, 0);
+const percent = (part, whole) => { const p = whole ? (part / whole) * 100 : 0; return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`; };
+const ago = (ms) => {
+  const minutes = Math.floor((Date.now() - ms) / 60000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  return minutes < 1440 ? `${Math.floor(minutes / 60)} 小时前` : `${Math.floor(minutes / 1440)} 天前`;
+};
+// 热力图颜色：有时长的格子从浅绿到深绿，空格子是浅灰。
+const shade = (f) => `color-mix(in srgb, var(--accent) ${Math.round(22 + 78 * f)}%, var(--line))`;
+let token = '', days = 7, sessions = [], selected = null, sortKey = 'total', allGames = false;
 // 存在 localStorage：同一浏览器的首页也能读到，给管理员显示入口和各游戏时长（见 ops-home.js）。
 try { token = localStorage.getItem(KEY) ?? ''; } catch { /* 隐私模式 */ }
+
+$('#legend').append(el('span', '少'), ...[0, 0.25, 0.5, 0.75, 1].map((f) => { const i = el('i'); i.style.background = shade(f); return i; }), el('span', '多 · 浅灰 = 没人玩'));
 
 async function load() {
   const today = cnDayStart(Date.now());
@@ -71,56 +154,135 @@ async function load() {
   render();
 }
 
+const select = (pid) => { selected = pid; render(); };
+
+// 选中玩家后整页（概览、排行、热力图、时间线）都只算这个人；顶栏的标签说明当前范围。
 function render() {
   const players = summarizePlayers(sessions);
   if (selected && !players.some((p) => p.pid === selected)) selected = null;
-  const scoped = selected ? sessions.filter((s) => s.pid === selected) : sessions;
-  const total = scoped.reduce((sum, s) => sum + s.active_ms, 0);
+  const me = selected ? players.find((p) => p.pid === selected) : null;
+  const scoped = me ? sessions.filter((s) => s.pid === selected) : sessions;
+  const total = sumMs(scoped);
+  renderTop(me);
+  renderCards(scoped, total, me);
+  renderGames(scoped, total, me);
+  renderPlayers(players);
+  renderHeat(scoped);
+  renderTimeline(scoped, me);
+}
 
+function renderTop(me) {
   $('#ranges').replaceChildren(...RANGES.map(([label, n]) => { const b = el('button', label, n === days ? 'on' : ''); b.type = 'button'; b.onclick = () => { days = n; refresh(); }; return b; }));
-  $('#cards').replaceChildren(...[[players.length + ' 人', '玩家'], [scoped.length + ' 段', '游玩次数'], [formatDuration(total), '总时长']].map(([v, l]) => { const d = el('div'); d.append(el('b', v), el('span', l)); return d; }));
+  if (!me) { $('#scope').replaceChildren(el('span', '全部玩家', 'muted')); return; }
+  const chip = el('button', `只看：${me.name}`, 'chip'); chip.type = 'button'; chip.title = '回到全部玩家';
+  chip.append(el('b', '×')); chip.onclick = () => select(null);
+  $('#scope').replaceChildren(chip);
+}
 
-  const byGame = {};
-  for (const s of scoped) byGame[gameOf(s.board)] = (byGame[gameOf(s.board)] ?? 0) + s.active_ms;
-  const max = Math.max(1, ...Object.values(byGame));
-  $('#games').replaceChildren(...GAMES.map(({ id, title }) => {
-    const row = el('div', undefined, 'row'), track = el('div', undefined, 'track'), bar = el('i');
-    bar.style.width = `${((byGame[id] ?? 0) / max) * 100}%`; track.append(bar);
-    row.append(el('span', title), track, el('span', formatDuration(byGame[id] ?? 0))); return row;
+function renderCards(scoped, total, me) {
+  const people = new Set(scoped.map((s) => s.pid)).size;
+  const cards = me
+    ? [[String(new Set(scoped.map((s) => gameOf(s.board))).size), '玩过的游戏'], [String(scoped.length), '游玩次数'], [formatDuration(total), '总时长'], [formatDuration(scoped.length ? total / scoped.length : 0), '平均每次']]
+    : [[String(people), '活跃玩家'], [String(scoped.length), '游玩次数'], [formatDuration(total), '总时长'], [formatDuration(people ? total / people : 0), '人均时长']];
+  $('#cards').replaceChildren(...cards.map(([v, l]) => { const d = el('div'); d.append(el('b', v), el('span', l)); return d; }));
+}
+
+function renderGames(scoped, total, me) {
+  const stats = new Map();
+  for (const s of scoped) {
+    const id = gameOf(s.board);
+    const g = stats.get(id) ?? stats.set(id, { id, ms: 0, count: 0, pids: new Set() }).get(id);
+    g.ms += s.active_ms; g.count += 1; g.pids.add(s.pid);
+  }
+  const ranked = [...stats.values()].sort((a, b) => b.ms - a.ms || b.count - a.count);
+  const max = Math.max(1, ranked[0]?.ms ?? 0);
+  const rows = (allGames ? ranked : ranked.slice(0, TOP_GAMES)).map((g, i) => {
+    const row = el('div', undefined, 'game'), track = el('div', undefined, 'track'), bar = el('i');
+    bar.style.width = `${(g.ms / max) * 100}%`; track.append(bar);
+    const meta = [...(me ? [] : [`${g.pids.size} 人`]), `${g.count} 次`, percent(g.ms, total)].join(' · ');
+    row.append(el('span', String(i + 1), 'rank'), el('span', gameTitle(g.id), 'name'), el('span', formatDuration(g.ms), 'num'), track, el('span', meta, 'meta'));
+    return row;
+  });
+  if (!ranked.length) rows.push(el('p', '这段时间没有记录', 'empty'));
+
+  const more = el('div', undefined, 'more');
+  if (ranked.length > TOP_GAMES) {
+    const b = el('button', allGames ? '收起' : `展开其余 ${ranked.length - TOP_GAMES} 款`); b.type = 'button';
+    b.onclick = () => { allGames = !allGames; render(); };
+    more.append(b);
+  }
+  const idle = GAMES.filter((g) => !stats.has(g.id));
+  if (idle.length) {
+    const box = el('details', undefined, 'idle');
+    box.append(el('summary', `${idle.length} 款没人玩`), el('p', idle.map((g) => g.title).join('、')));
+    more.append(box);
+  }
+  $('#games').replaceChildren(...rows, more);
+}
+
+function renderPlayers(players) {
+  const table = $('#players');
+  if (!players.length) { table.replaceChildren(el('caption', '这段时间没有记录')); return; }
+  const head = el('tr');
+  head.append(...[['昵称'], ['总时长', 'total'], ['次数', 'count'], ['最近在线', 'lastAt'], ['最常玩']].map(([label, key]) => {
+    if (!key) return el('th', label);
+    const th = el('th', key === sortKey ? `${label} ↓` : label, `sort${key === sortKey ? ' on' : ''}${key === 'lastAt' ? '' : ' num'}`);
+    th.onclick = () => { sortKey = key; render(); };
+    return th;
   }));
-
-  const table = $('#players'), head = el('tr');
-  head.append(...['昵称', '总时长', '次数', '最近在线', '最常玩'].map((t) => el('th', t)));
-  table.replaceChildren(head, ...players.map((p) => {
+  const sorted = [...players].sort((a, b) => b[sortKey] - a[sortKey] || b.total - a.total);
+  table.replaceChildren(head, ...sorted.map((p) => {
     const tr = el('tr', undefined, `pick${p.pid === selected ? ' sel' : ''}`);
     const top = Object.entries(p.byGame).sort((a, b) => b[1] - a[1])[0]?.[0];
     const name = el('td', p.name); name.append(el('span', ` ${p.pid.slice(0, 6)}`, 'mono'));
-    tr.append(name, el('td', formatDuration(p.total)), el('td', String(p.count)), el('td', `${cnDate(p.lastAt).slice(5)} ${cnTime(p.lastAt)}`), el('td', top ? gameTitle(top) : ''));
-    tr.onclick = () => { selected = p.pid === selected ? null : p.pid; render(); };
+    const last = el('td', ago(p.lastAt)); last.title = `${cnDate(p.lastAt)} ${cnTime(p.lastAt)}`;
+    tr.append(name, el('td', formatDuration(p.total), 'num'), el('td', String(p.count), 'num'), last, el('td', top ? gameTitle(top) : ''));
+    tr.onclick = () => select(p.pid === selected ? null : p.pid);
     return tr;
   }));
-  if (!players.length) table.replaceChildren(el('caption', '这段时间没有记录'));
+}
 
-  const who = selected ? players.find((p) => p.pid === selected)?.name : '全部玩家';
-  $('#heat-title').textContent = `时段热力图 · ${who}（格子越深，该小时玩得越久）`;
+function renderHeat(scoped) {
   const rows = heatmap(scoped), peak = Math.max(1, ...rows.flatMap((r) => r.hours));
-  const heat = $('#heat'), cells = [el('span'), ...Array.from({ length: 24 }, (_, h) => el('span', h % 3 === 0 ? String(h) : '', 'h'))];
+  const cells = [el('span'), ...Array.from({ length: 24 }, (_, h) => el('span', h % 3 === 0 ? String(h) : '', 'h')), el('span', '当天合计', 'tot')];
   for (const { date, hours } of rows) {
-    cells.push(el('span', date.slice(5)));
-    hours.forEach((ms, h) => { const c = el('i'); c.style.opacity = ms ? Math.max(0.12, ms / peak) : 0.06; c.title = `${date} ${String(h).padStart(2, '0')}:00 · ${formatDuration(ms)}`; cells.push(c); });
+    const w = weekday(date);
+    cells.push(el('span', dayLabel(date), w === '六' || w === '日' ? 'we' : ''));
+    hours.forEach((ms, h) => {
+      const c = el('i');
+      if (ms) c.style.background = shade(ms / peak);
+      c.title = `${date} 周${w} ${String(h).padStart(2, '0')}:00 · ${formatDuration(ms)}`;
+      cells.push(c);
+    });
+    cells.push(el('span', formatDuration(hours.reduce((a, b) => a + b, 0)), 'tot'));
   }
-  heat.replaceChildren(...cells);
+  $('#heat').replaceChildren(...(rows.length ? cells : [el('p', '这段时间没有记录', 'empty')]));
+}
 
-  $('#line-title').textContent = `时间线 · ${who}${scoped.length > 200 ? '（最近 200 段）' : ''}`;
-  const line = $('#timeline'), lh = el('tr');
-  lh.append(...(selected ? ['日期', '时间', '游戏', '时长'] : ['日期', '时间', '玩家', '游戏', '时长']).map((t) => el('th', t)));
-  line.replaceChildren(lh, ...[...scoped].reverse().slice(0, 200).map((s) => {
-    const tr = el('tr');
-    const cols = [cnDate(s.start_at), `${cnTime(s.start_at)}–${cnTime(s.last_at)}`];
-    if (!selected) cols.push(s.name);
-    cols.push(boardTitle(s.board, GAMES), formatDuration(s.active_ms));
-    tr.append(...cols.map((t) => el('td', t))); return tr;
-  }));
+// 按东八区开始日期分组，新的在前；只预先展开最近几天，其余点开时再建表，记录多时也不卡。
+function renderTimeline(scoped, me) {
+  const byDay = new Map();
+  for (const s of [...scoped].reverse()) { const date = cnDate(s.start_at); (byDay.get(date) ?? byDay.set(date, []).get(date)).push(s); }
+  const groups = [...byDay].map(([date, list], i) => {
+    const box = el('details', undefined, 'day'), summary = el('summary');
+    summary.append(el('b', dayLabel(date)), el('span', `${list.length} 次 · ${formatDuration(sumMs(list))}`));
+    box.append(summary);
+    const fill = () => {
+      if (box.querySelector('table')) return;
+      const table = el('table'), head = el('tr');
+      head.append(...['时间', ...(me ? [] : ['玩家']), '游戏'].map((t) => el('th', t)), el('th', '时长', 'num'));
+      table.append(head, ...list.map((s) => {
+        const tr = el('tr');
+        tr.append(...[`${cnTime(s.start_at)}–${cnTime(s.last_at)}`, ...(me ? [] : [s.name]), boardTitle(s.board, GAMES)].map((t) => el('td', t)), el('td', formatDuration(s.active_ms), 'num'));
+        return tr;
+      }));
+      const wrap = el('div', undefined, 'scroll'); wrap.append(table); box.append(wrap);
+    };
+    box.addEventListener('toggle', () => { if (box.open) fill(); });
+    if (i < OPEN_DAYS) { box.open = true; fill(); }
+    return box;
+  });
+  $('#timeline').replaceChildren(...(groups.length ? groups : [el('p', '这段时间没有记录', 'empty')]));
 }
 
 async function refresh() {
