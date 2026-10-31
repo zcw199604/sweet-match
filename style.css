@@ -602,3 +602,38 @@ body.game-full.full-land.full-compact #game #game-stage>.stage-top #score-text{w
 body.game-full.full-land.full-compact #game #game-stage>.mobile-controls button{flex:none}
 /* 英雄三消在真的横屏里是左战场右棋盘，约 2:1（它自己的排版跟着视口走，模拟横屏时仍是竖版） */
 body.game-full.full-land:not(.full-rot) #game #game-stage>.quest-wrap{width:min(var(--fw),calc(var(--fh) * 2))}
+
+.art-klotski{position:absolute;left:50%;top:50%;width:132px;height:156px;margin:-78px 0 0 -66px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(5,1fr);gap:3px;padding:6px;border-radius:11px;background:#2a2238;box-shadow:0 14px 26px #00000045,inset 0 0 0 1px #ffffff1a}
+.art-klotski i{display:block;border-radius:4px;background:linear-gradient(180deg,#9cc4ff,#3d8bff);box-shadow:inset 0 0 0 1px #ffffff55,inset 0 6px 6px #ffffff2e}
+.art-klotski i.big{grid-area:1/2/3/4;display:grid;place-items:center;font:800 11px/1 Manrope,system-ui,sans-serif;color:#5a3200;background:linear-gradient(180deg,#ffe08a,#e8a020);box-shadow:inset 0 0 0 1px #fff8,inset 0 7px 8px #fff5,0 4px 10px #0004}
+.art-klotski i.h{background:linear-gradient(180deg,#93e8b3,#38c26b)}
+.art-klotski i.s{background:linear-gradient(180deg,#cdb4ff,#9b6bff)}
+
+.art-snake{position:absolute;left:50%;top:50%;width:136px;height:136px;margin:-68px 0 0 -68px;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(6,1fr);gap:2px;padding:7px;border-radius:12px;background:#0f1a2b;box-shadow:0 14px 26px #00000045,inset 0 0 0 1px #ffffff12}
+.art-snake i{border-radius:4px;background:linear-gradient(180deg,#8ff5c0,#2fbf7f);box-shadow:inset 0 0 0 1px #ffffff44,inset 0 4px 4px #ffffff33}
+.art-snake i:nth-child(1){grid-area:5/2}.art-snake i:nth-child(2){grid-area:5/3}.art-snake i:nth-child(3){grid-area:5/4}.art-snake i:nth-child(4){grid-area:4/4}.art-snake i:nth-child(5){grid-area:3/4}
+.art-snake i.h{grid-area:3/5;background:linear-gradient(180deg,#c9ffe3,#43e08f);box-shadow:0 0 12px #43e08f99,inset 0 0 0 1px #ffffff77}
+.art-snake i.h::after{content:'';position:absolute;width:5px;height:5px;border-radius:50%;background:#0b2b1d;box-shadow:9px 0 0 #0b2b1d}
+.art-snake i.f{grid-area:2/2;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffd0d8,#ff5d80 60%,#a81b3c);box-shadow:0 0 12px #ff5d8088}
+.art-bricks{position:absolute;left:50%;top:50%;width:156px;height:126px;margin:-63px 0 0 -78px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,20px);gap:5px;padding:16px 12px;border-radius:12px;background:#0d1424;box-shadow:0 14px 26px #00000045,inset 0 0 0 1px #ffffff12;align-content:start}
+.art-bricks i:not(.pad):not(.ball){height:20px;border-radius:4px;background:linear-gradient(180deg,#ffd27a,#e8a020);box-shadow:inset 0 0 0 1px #ffffff55,inset 0 5px 4px #ffffff44}
+.art-bricks i:not(.pad):not(.ball):nth-child(2n){background:linear-gradient(180deg,#9cc4ff,#3d8bff)}
+.art-bricks i:not(.pad):not(.ball):nth-child(3n){background:linear-gradient(180deg,#ffb1c4,#ff5d80)}
+.art-bricks .pad{position:absolute;left:50%;bottom:12px;width:58px;height:8px;margin-left:-29px;border-radius:4px;background:linear-gradient(180deg,#eff8ff,#7cc8f0);box-shadow:0 0 10px #7cc8f088}
+.art-bricks .ball{position:absolute;left:50%;bottom:34px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#bfeaff 55%,#5aa7d8);box-shadow:0 0 10px #bfeaff}
+.art-bubbles{position:absolute;left:50%;top:50%;width:160px;height:130px;margin:-65px 0 0 -80px}
+.art-bubbles i{position:absolute;width:42px;height:42px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffffd9,transparent 44%),linear-gradient(150deg,#ffffff4d,transparent 46%,#00000030);box-shadow:0 8px 14px #00000035,inset 0 0 0 2px #ffffff5c;background-color:var(--pink)}
+.art-bubbles i:nth-child(1){left:6px;top:0;background-color:var(--pink)}
+.art-bubbles i:nth-child(2){left:46px;top:22px;background-color:var(--yellow)}
+.art-bubbles i:nth-child(3){left:88px;top:0;background-color:var(--cyan)}
+.art-bubbles i:nth-child(4){left:118px;top:26px;background-color:var(--violet)}
+.art-bubbles i:nth-child(5){left:26px;top:52px;background-color:var(--cyan)}
+.art-bubbles i:nth-child(6){left:68px;top:68px;background-color:var(--pink)}
+.art-bubbles i:nth-child(7){left:104px;top:58px;background-color:var(--yellow)}
+.art-bubbles b{position:absolute;left:50%;bottom:0;width:10px;height:26px;margin-left:-5px;border-radius:5px;background:linear-gradient(180deg,#8d93b8,#3a3f5c);box-shadow:0 0 0 1px #ffffff33}
+.art-bubbles b::after{content:'';position:absolute;left:50%;top:-12px;width:24px;height:24px;margin-left:-12px;border-radius:50%;background:radial-gradient(circle at 34% 28%,#fff,#ff9ab5 55%,#c22b52);box-shadow:0 0 12px #ff5d8066}
+
+.art-snake i.h::after{left:7px;top:7px}
+@media(max-width:800px){.art-klotski{width:120px;height:136px;margin:-68px 0 0 -60px;gap:2px;padding:5px}}
+
+.art-snake i.h{position:relative}

@@ -255,8 +255,92 @@ test('围棋: a tap places a stone and the computer answers; two passes in 双�
   await expect(page.locator('.kit-card')).toContainText('胜');
 });
 
+
+test('华容道: dragging a block costs one move, undo takes it back, and clearing posts the level', async ({ page }) => {
+  await open(page, 'klotski');
+  const move = await kit(page, (k) => k.legal()[0]);
+  const p = await kit(page, (k, id) => k.locate(id), move.id);
+  const cell = await kit(page, (k) => k.cell);
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  await page.mouse.move(p.x + move.dc * cell, p.y + move.dr * cell, { steps: 10 });
+  await page.mouse.up();
+  expect(await kit(page, (k) => k.state.moves)).toBe(1);
+  await page.locator('[data-kit-action="undo"]').click();
+  expect(await kit(page, (k) => k.state.moves)).toBe(0);
+  const posted = page.waitForRequest((r) => r.url().includes('/api/scores') && r.method() === 'POST');
+  await kit(page, (k) => k.winNow());
+  await expect(page.locator('.kit-card')).toContainText('第 1 关完成');
+  expect((await posted).postDataJSON()).toMatchObject({ board: 'klotski', value: 1 });
+  await page.locator('.kit-again').click();
+  await expect(page.locator('#score-text')).toContainText('第 2 关');
+});
+
+test('贪吃蛇: a swipe turns the snake, food grows it, and clearing posts the level', async ({ page }) => {
+  await open(page, 'snake');
+  await kit(page, (k) => k.pause());
+  const head = await kit(page, (k) => k.state.snake[0]);
+  const box = await page.locator('.kit-wrap .game-canvas').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 70, { steps: 8 });
+  await page.mouse.up();
+  await kit(page, (k) => k.stepNow(1));
+  expect(await kit(page, (k) => k.state.snake[0][0])).toBe(head[0] - 1);
+  expect(await kit(page, (k) => k.feedAhead())).not.toBe(null);
+  await kit(page, (k) => k.stepNow(1));
+  expect(await kit(page, (k) => k.state.eaten)).toBe(1);
+  const posted = page.waitForRequest((r) => r.url().includes('/api/scores') && r.method() === 'POST');
+  await kit(page, (k) => k.winNow());
+  await expect(page.locator('.kit-card')).toContainText('第 1 关完成');
+  expect((await posted).postDataJSON()).toMatchObject({ board: 'snake', value: 1 });
+  await page.locator('.kit-again').click();
+  await expect(page.locator('#score-text')).toContainText('第 2 关');
+  await page.locator('#back-home').click();
+  await page.locator('.arcade-card[data-mode="snake"]').click();
+  await expect(page.locator('#score-text')).toContainText('第 2 关');
+});
+
+test('打砖块: the paddle follows the pointer, a cleared level advances, and a lost run posts the score', async ({ page }) => {
+  await open(page, 'breakout');
+  const box = await page.locator('.kit-wrap .game-canvas').boundingBox();
+  await page.mouse.move(box.x + box.width * 0.22, box.y + box.height * 0.92);
+  await expect.poll(() => kit(page, (k) => k.state.paddle.x)).toBeLessThan(140);
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.92);
+  expect(await kit(page, (k) => k.state.status)).toBe('playing');
+  await kit(page, (k) => k.clearNow());
+  await expect(page.locator('.kit-card')).toContainText('第 1 关完成');
+  await page.locator('.kit-again').click();
+  await expect(page.locator('#score-text')).toContainText('第 2 关');
+  const score = await kit(page, (k) => k.state.score);
+  expect(score).toBeGreaterThan(0);
+  const posted = page.waitForRequest((r) => r.url().includes('/api/scores') && r.method() === 'POST');
+  await kit(page, (k) => k.loseNow());
+  await expect(page.locator('.kit-card')).toContainText('三条命用完了');
+  const body = (await posted).postDataJSON();
+  expect(body.board).toBe('breakout');
+  expect(body.value).toBeGreaterThan(0);
+});
+
+test('泡泡龙: aiming and shooting sticks a bubble, swap changes the next ball, and clearing posts the level', async ({ page }) => {
+  await open(page, 'bubble');
+  await kit(page, (k) => k.aim(180, 300));
+  await kit(page, (k) => k.shootNow());
+  expect(await kit(page, (k) => k.state.shots)).toBe(1);
+  expect(await kit(page, (k) => k.state.flying)).toBe(null);
+  const beforeSwap = await kit(page, (k) => [k.state.shooter.current, k.state.shooter.next]);
+  await kit(page, (k) => k.swap());
+  expect(await kit(page, (k) => [k.state.shooter.current, k.state.shooter.next])).toEqual([beforeSwap[1], beforeSwap[0]]);
+  const posted = page.waitForRequest((r) => r.url().includes('/api/scores') && r.method() === 'POST');
+  await kit(page, (k) => k.winNow());
+  await expect(page.locator('.kit-card')).toContainText('第 1 关完成');
+  expect((await posted).postDataJSON()).toMatchObject({ board: 'bubble', value: 1 });
+  await page.locator('.kit-again').click();
+  await expect(page.locator('#score-text')).toContainText('第 2 关');
+});
+
 // 每款新游戏：画布和顶栏按钮都在一屏里，不用滚动，也不会横向撑出页面。
-const NEW_GAMES = ['arrows', 'screw', 'sand', 'runfast', 'hexsort', 'mahjong', 'nonogram', 'solitaire', 'sokoban', 'tiaoqi', 'weiqi', 'sheep', 'yarn'];
+const NEW_GAMES = ['arrows', 'screw', 'sand', 'runfast', 'hexsort', 'mahjong', 'nonogram', 'solitaire', 'sokoban', 'tiaoqi', 'weiqi', 'sheep', 'yarn', 'klotski', 'snake', 'breakout', 'bubble'];
 for (const id of NEW_GAMES) {
   test(`${id}: the whole board and the header buttons fit on one screen`, async ({ page }) => {
     const errors = [];

@@ -58,6 +58,10 @@ const MODE_META = {
   runfast: { label: 'ARCADE 26', title: '跑得快', help: '你和两个电脑各拿 16 张牌（去掉大小王、三张 2 只留 ♠2、去掉一张 A），谁先出完谁赢。牌点从小到大是 3 4 5 … K A 2。第一局拿到 ♠3 的人先出，第一手要带上 ♠3；之后由上一局的赢家先出。能出的牌型：单张、对子、连对（两对起）、三带二、顺子（五张起，2 不能进顺子）、飞机（两组以上连续的三张，每组带两张）、炸弹（四张同点，能压任何非炸弹）；最后一手可以三带一、只出三张，飞机也可以少带。有大必压：压得过上家就必须出，不能「不要」。下家报单（只剩一张）时，你出单张只能出手里最大的。点手牌选中，再点「出牌」；「提示」会帮你选一手。一局结束，没出完的人按剩下的张数扣分，一张都没出过的翻倍；每打出一个炸弹，另两家各给 10 分。总分保存在这台设备上，「重新开始」清零。' },
   tiaoqi: { label: 'ARCADE 32', title: '中国跳棋', help: '六角星形的棋盘上，每人 10 颗棋子从自己的角出发，谁先把棋子全部走进正对面的角谁赢。点自己的棋子，能去的孔会亮起黄点，再点一个就走过去。一步可以挪到相邻的空孔；也可以隔着紧挨着的一颗棋子（谁的都行）跳到正对面的空孔，能连着跳就一直跳下去，一次走得很远——但走和跳不能混在一起。防堵角规则：对面的角已经被棋子占满，只要里面有你的棋子也算你赢。顶栏可以换玩法：对一个电脑、对两个电脑（三人局）、或者两个人同屏轮流；「悔棋」退回到你上一次落子之前。对电脑的战绩记在这台设备上。' },
   weiqi: { label: 'ARCADE 33', title: '围棋 9×9', help: '9 路小棋盘的围棋，黑先白后，点交叉点落子。一块棋四周的气（相邻的空点）全被对方堵住就被提掉；不能下到自己没气、又提不掉对方的地方（自杀），也不能下出以前出现过的局面（打劫要先在别处找劫材）。双方连续「停一手」就进入数子：电脑会先把它猜的死子打上叉，点一块棋可以改它的死活，再点「确认数子」；要是还想接着下，点「继续下」。按中国规则数子：棋子加围住的空点，白方贴 7.5 子，多的一方赢。「悔棋」对电脑时退回到你上一步之前。顶栏可以选执黑或执白对电脑、或者两个人同屏轮流，电脑有简单、普通、困难三档（越难想得越久）。对电脑的战绩记在这台设备上。' },
+  snake: { label: 'ARCADE 37', title: '贪吃蛇', help: '网格上蛇一直往前爬，滑一下屏幕（或方向键 / WASD）转向，吃到果子就变长，长到这一关要求的长度就过关。撞到边、障碍墙或者自己的身体会少一条命，三条命用完本关重来。第 7 关起出现障碍墙，第 21 关起边缘会穿到另一边。每关的棋盘、障碍和速度都随关卡变化：棋盘从 12×12 长到 20×20，速度从每秒约 6 格加到 12 格。进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  breakout: { label: 'ARCADE 38', title: '打砖块', help: '左右滑动（或按 ← → / A D）移动挡板，点一下发球，球在墙之间弹、把砖打掉。砖上的数字是它要打几下，越硬的颜色越深；全部打光就过关。一共 12 关，越往后砖越硬、球越快。掉下来的道具接住能加宽挡板，或者把球分成三个。球掉出画面少一条命，三条命用完本局结束；每过一关多送一条命（最多三条），分数一直累加。榜单按一局的总分排名。' },
+  bubble: { label: 'ARCADE 39', title: '泡泡龙', help: '拖动瞄准、松手发射，彩球碰到墙上或别的球就粘住；三个以上同色连在一起会一起爆开，挂在上面的球也会掉下来。打空了才会把顶上压下来一排新的球（打中就不压），压到底就输。右边的球是下一颗，点它可以和手里这颗交换。每关颜色和行数都更多，一共 24 关；开局按一组至少三个发色，保证每个颜色都清得掉。进度保存在这台设备上，榜单记录通过的最高关卡。' },
+  klotski: { label: 'ARCADE 36', title: '华容道', help: '4×5 的棋盘上挤着曹操、四位将军和四个小卒，每次只能把一块棋滑进相邻的空格（按住棋块拖动，横竖都能走，斜着不行）。把 2×2 的曹操挪到棋盘最下方正中的出口就过关，一共 39 关，按最少步数从少到多排。每拖动一次算一步，松手才计数；步数不超过盘面上标的最少步数就是三星，多三成以内两星。卡住了点「撤销」退回上一步，或者重新开始。进程保存在这台设备上，榜单记录通过的最高关卡。' },
   goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
 // 抓大鹅, 方块爆破, 三消勇者团, 挪车接客, 倒水排序, 2048 and 数独 are solo games: no seats, no snapshots, no co-op toggle.
@@ -89,7 +93,11 @@ const KIT_GAMES = {
   sand: { load: () => import('./sand.js'), mount: 'mountSand', canvas: true, board: true, buttons: { slot: '加一格' } },
   runfast: { load: () => import('./runfast.js'), mount: 'mountRunfast', canvas: true, seat: '人机' },
   tiaoqi: { load: () => import('./tiaoqi.js'), mount: 'mountTiaoqi', canvas: true, seat: '对弈', buttons: { mode: '换玩法', undo: '悔棋' } },
-  weiqi: { load: () => import('./weiqi.js'), mount: 'mountWeiqi', canvas: true, seat: '对弈', buttons: { mode: '换玩法', level: '电脑难度' } }
+  weiqi: { load: () => import('./weiqi.js'), mount: 'mountWeiqi', canvas: true, seat: '对弈', buttons: { mode: '换玩法', level: '电脑难度' } },
+  klotski: { load: () => import('./klotski.js'), mount: 'mountKlotski', canvas: true, board: true, buttons: { undo: '撤销' } },
+  snake: { load: () => import('./snake.js'), mount: 'mountSnake', canvas: true, board: true },
+  breakout: { load: () => import('./breakout.js'), mount: 'mountBreakout', canvas: true, board: true },
+  bubble: { load: () => import('./bubble.js'), mount: 'mountBubble', canvas: true, board: true }
 };
 const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'skychef', 'sudoku', ...Object.keys(CLASSIC_GAMES), ...Object.keys(EMBED_GAMES), ...Object.keys(KIT_GAMES)];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
@@ -335,6 +343,8 @@ function showScreen(id) {
   if (id !== 'game') { stopGoose(); stopQuest(); stopPark(); stopPour(); stopG2048(); stopSuika(); stopTetris(); stopSkychef(); stopSudoku(); stopClassic(); stopKit(); clearModeTabs(); }
   $$('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
   document.body.classList.toggle('playing', id === 'game');
+  // 离开游戏时把 body 上的模式标记清掉，否则首页的 [data-mode] 选择器会同时命中 body 和卡片。
+  if (id !== 'game') delete document.body.dataset.mode;
   // The home page may have been scrolled to reach a card; the board must start in view.
   window.scrollTo(0, 0);
   const route = () => {

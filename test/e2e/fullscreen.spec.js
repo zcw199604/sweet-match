@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { localStorage.setItem('pao-pw', 'e2eTestPass1'); localStorage.setItem('pao-name', '测试员'); });
 });
-const GAMES = ['gomoku', 'aeroplane', 'reversi', 'draughts', 'jungle', 'minesweeper', 'doudizhu', 'junqi', 'xiangqi', 'pop2', 'pop3', 'surge', 'blast', 'quest', 'park', 'pour', 'g2048', 'suika', 'skychef', 'tetris', 'sudoku', 'soulforge', 'achroma', 'arrows', 'sheep', 'nonogram', 'mahjong', 'solitaire', 'hexsort', 'sokoban', 'screw', 'yarn', 'sand', 'runfast', 'tiaoqi', 'weiqi', 'goose'];
+const GAMES = ['gomoku', 'aeroplane', 'reversi', 'draughts', 'jungle', 'minesweeper', 'doudizhu', 'junqi', 'xiangqi', 'pop2', 'pop3', 'surge', 'blast', 'quest', 'park', 'pour', 'g2048', 'suika', 'skychef', 'tetris', 'sudoku', 'soulforge', 'achroma', 'arrows', 'sheep', 'nonogram', 'mahjong', 'solitaire', 'hexsort', 'sokoban', 'screw', 'yarn', 'sand', 'runfast', 'tiaoqi', 'weiqi', 'goose', 'klotski', 'snake', 'breakout', 'bubble'];
 const EMBEDDED = ['soulforge', 'achroma'];
 const AREA = '#game-stage > :is(.canvas-wrap, .classic-wrap, .embed-wrap)';
 async function open(page, id) {

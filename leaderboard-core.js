@@ -52,7 +52,15 @@ export const BOARDS = {
   sand: { game: 'sand', label: '最高关卡', order: 'desc', unit: '关', scale: 1, min: 1, max: 9_999 },
   'sudoku-easy': { game: 'sudoku', label: '简单', order: 'asc', unit: '秒', scale: 10, min: 100, max: 108_000 },
   'sudoku-normal': { game: 'sudoku', label: '普通', order: 'asc', unit: '秒', scale: 10, min: 150, max: 108_000 },
-  'sudoku-hard': { game: 'sudoku', label: '困难', order: 'asc', unit: '秒', scale: 10, min: 200, max: 108_000 }
+  'sudoku-hard': { game: 'sudoku', label: '困难', order: 'asc', unit: '秒', scale: 10, min: 200, max: 108_000 },
+  // 华容道：39 个经典布局，按最少步数排。榜单记通过的最高关卡。
+  klotski: { game: 'klotski', label: '最高关卡', order: 'desc', unit: '关', scale: 1, min: 1, max: 39 },
+  // 贪吃蛇：30 关，记通过的最高关卡。
+  snake: { game: 'snake', label: '最高关卡', order: 'desc', unit: '关', scale: 1, min: 1, max: 30 },
+  // 打砖块：一局 12 关的累计分数，十万级封顶挡乱填。
+  breakout: { game: 'breakout', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 500_000 },
+  // 泡泡龙：24 关，记通过的最高关卡。
+  bubble: { game: 'bubble', label: '最高关卡', order: 'desc', unit: '关', scale: 1, min: 1, max: 24 }
 };
 export const GAMES = [
   { id: 'pop2', title: '泡噗 2' },
@@ -90,6 +98,10 @@ export const GAMES = [
   { id: 'reversi', title: '黑白棋' },
   { id: 'draughts', title: '国际跳棋' },
   { id: 'jungle', title: '斗兽棋' },
+  { id: 'klotski', title: '华容道' },
+  { id: 'snake', title: '贪吃蛇' },
+  { id: 'breakout', title: '打砖块' },
+  { id: 'bubble', title: '泡泡龙' },
   { id: 'soulforge', title: '灵魂锻炉' },
   { id: 'achroma', title: 'Achroma' }
 ];

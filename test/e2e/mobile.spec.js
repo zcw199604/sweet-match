@@ -25,7 +25,7 @@ async function open(page, mode) {
 
 test('home page fits narrow screens and exposes every arcade card', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.arcade-card')).toHaveCount(38);
+  await expect(page.locator('.arcade-card')).toHaveCount(42);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
 });
@@ -50,6 +50,8 @@ async function expectWholeBoards(page, modes) {
 }
 
 test('each game shows its whole board and controls without scrolling', async ({ page }) => {
+  // 八款游戏一个个开，单靠默认的 20 秒不够（慢一点的机器上光开首页就要两秒）。
+  test.setTimeout(45_000);
   await expectWholeBoards(page, ['pop2', 'pop3', 'surge', 'blast', 'park', 'pour', 'g2048', 'sudoku']);
 });
 

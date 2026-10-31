@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './test/e2e',
-  timeout: 15_000,
+  timeout: 20_000,
   retries: 0,
   reporter: [['list']],
   // http.server's default listen backlog is 5; 抓大鹅 fetches several modules at once,
