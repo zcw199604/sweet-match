@@ -1,6 +1,6 @@
 // 数独鸭的音效：全部用 Web Audio 现场合成，不带音频文件，也不引新依赖。
 // 浏览器要求声音由用户手势开启：第一次点画布时 unlock() 建好 / 唤醒 AudioContext，之前的声音直接跳过。
-// 音色：放鸭是一声橡皮鸭「嘎」加落水声；打叉是轻轻的木头「嗒」；冲突是两只鸭低声吵架；
+// 音色：放鸭是「啵」地冒出来再「嘎」一声；打叉是轻轻的木头「嗒」；冲突是两只鸭低声吵架；
 // 提示是两下风铃；通关时每行鸭子跳起来各叫一声（越往下音越高），最后一段小号角。
 
 let ctx = null;
@@ -72,13 +72,14 @@ function quack(at, pitch = 1, gain = 0.22) {
   tone(at, { f0: 520 * pitch, f1: 360 * pitch, dur: 0.17, type: 'sawtooth', gain, filter: { from: 900 * pitch, to: 1500 * pitch, q: 4 } });
   tone(at + 0.01, { f0: 1040 * pitch, f1: 760 * pitch, dur: 0.12, type: 'square', gain: gain * 0.25, filter: { from: 1800 * pitch, q: 6 } });
 }
-function splash(at, gain = 0.16) {
-  hiss(at, { dur: 0.22, from: 2600, to: 650, q: 1.2, gain });
-  tone(at + 0.02, { f0: 320, f1: 820, dur: 0.09, gain: gain * 0.8 });
+function pop(at, gain = 0.16) {
+  hiss(at, { dur: 0.12, from: 900, to: 3000, q: 1.4, gain: gain * 0.7 });
+  tone(at, { f0: 260, f1: 980, dur: 0.1, gain });
 }
 
 const VOICES = {
-  place: (t) => { quack(t, 1 + (Math.random() - 0.5) * 0.12); splash(t + 0.24); },
+  // 放鸭：「啵」地冒出来（白烟），紧接着「嘎」一声，帽子落下时轻轻一磕
+  place: (t) => { pop(t); quack(t + 0.15, 1 + (Math.random() - 0.5) * 0.12); tone(t + 0.36, { f0: 900, f1: 700, dur: 0.05, type: 'triangle', gain: 0.07 }); },
   pickup: (t) => tone(t, { f0: 480, f1: 920, dur: 0.12, gain: 0.14 }),
   cross: (t) => { tone(t, { f0: 1700, f1: 1250, dur: 0.045, type: 'triangle', gain: 0.1 }); hiss(t, { dur: 0.03, from: 3500, gain: 0.05, type: 'highpass' }); },
   erase: (t) => tone(t, { f0: 950, f1: 620, dur: 0.06, type: 'triangle', gain: 0.08 }),

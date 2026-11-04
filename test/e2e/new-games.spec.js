@@ -339,13 +339,27 @@ test('泡泡龙: aiming and shooting sticks a bubble, swap changes the next ball
   await expect(page.locator('#score-text')).toContainText('第 2 关');
 });
 
-test('数独鸭: taps cycle cross → duck → empty, long-press drops a duck, dragging crosses a row, undo, solving posts the time, and canvas buttons work', async ({ page }) => {
+test('数独鸭: double-tap drops or lifts a duck in one step, taps cycle cross → duck → empty, long-press drops a duck, dragging crosses a row, undo, solving posts the time, and canvas buttons work', async ({ page }) => {
   await open(page, 'duck');
   expect(await kit(page, (k) => k.board)).toBe('duck-easy');
   expect(await kit(page, (k) => k.state.size)).toBe(6);
+  // 双击：直接放鸭，算一次操作；再双击这只鸭是拿走它（不会变成 ✕）
+  const cell5 = await kit(page, (k) => k.locate(5));
+  await page.mouse.dblclick(cell5.x, cell5.y);
+  expect(await kit(page, (k) => k.state.marks[5])).toBe(2);
+  await page.waitForTimeout(400);
+  await page.mouse.dblclick(cell5.x, cell5.y);
+  expect(await kit(page, (k) => k.state.marks[5])).toBe(0);
+  await kit(page, (k) => k.undo());
+  expect(await kit(page, (k) => k.state.marks[5])).toBe(2);
+  await kit(page, (k) => k.undo());
+  expect(await kit(page, (k) => k.state.marks[5])).toBe(0);
+  // 隔开的两下点按：各算一次（✕，再变鸭）
   const cell0 = await kit(page, (k) => k.locate(0));
+  await page.waitForTimeout(400);
   await tapAt(page, cell0);
   expect(await kit(page, (k) => k.state.marks[0])).toBe(1);
+  await page.waitForTimeout(400);
   await tapAt(page, cell0);
   expect(await kit(page, (k) => k.state.marks[0])).toBe(2);
   // 长按：直接放鸭，再长按拿走；松手后不会再当成一次点按
@@ -355,6 +369,7 @@ test('数独鸭: taps cycle cross → duck → empty, long-press drops a duck, d
   await page.mouse.down(); await page.waitForTimeout(600); await page.mouse.up();
   expect(await kit(page, (k) => k.state.marks[3])).toBe(0);
   // 轻微抖动不算拖动：还是一次点按
+  await page.waitForTimeout(400);
   await page.mouse.move(cell3.x, cell3.y); await page.mouse.down(); await page.mouse.move(cell3.x + 2, cell3.y + 1); await page.mouse.up();
   expect(await kit(page, (k) => k.state.marks[3])).toBe(1);
   await kit(page, (k) => k.undo());

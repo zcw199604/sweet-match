@@ -7,10 +7,14 @@
 //   拖动：一路打 ✕（从 ✕ 上开始拖就是一路擦掉）；手指要明显移动才算拖，手抖不会误打；
 //   按下时这一格缩一下、整行整列提亮，免得手指挡住看不清按的是哪格；放鸭 / 冲突时轻震（支持震动的手机）。
 // 电脑上右键直接放 / 拿鸭。左上角是色弱模式（每种颜色加一个形状符号），右上角是音效开关，点标题换难度。
-// 音效见 duck-sound.js；动画：开局色块波浪弹出、落鸭溅水、冲突发抖、闲时眨眼、通关跳跃和彩纸。
+// 鸭子是会动的：眼珠四处瞟（指针 / 手指在棋盘上时盯着它看）、隔几秒眨眼、头一起一伏、帽子流苏来回晃，
+// 平时按约 20 帧 / 秒刷新省电。放鸭（双击 / 长按 / 右键都一样）：冒一圈白烟，鸭头弹出来「嘎」一声，学士帽从天而降扣在头上。
+// 双击算一次操作（撤销一下就回到空格）；双击一只鸭是把它拿走，不会变成 ✕。
+// 音效见 duck-sound.js；其他动画：开局色块波浪弹出、拿鸭时帽子飞走、冲突皱眉发抖、通关跳起来抛帽子再眯眼笑、彩纸。
 import { CROSS, DUCK, EMPTY, LEVELS, conflicts, covered, createGame, cycle, ducksOf, hintStep, setMark } from './duck-core.js';
 import { calm, canvasGame, easeOut, inRect, postScore, roundRect, store, text } from './kit.js';
 import { duckSound } from './duck-sound.js';
+import { drawDuckHead, idlePose } from './duck-art.js';
 
 const W = 360;
 const H = 544;
@@ -24,6 +28,7 @@ const LINE = '#dfe3f0';
 const PALETTE = ['#a9d88f', '#e8bf4f', '#fda96c', '#69bce6', '#e07b7b', '#b39ae8', '#5fcfbf', '#f39cc0', '#c9a27e', '#9aa9c9'];
 const SHAPES = ['circle', 'triangle', 'square', 'diamond', 'star', 'heart', 'plus', 'ring', 'hex', 'bar'];
 const LONG_PRESS = 350;
+const DOUBLE_TAP = 320;
 const easeBack = (t) => 1 + 2.4 * (t - 1) ** 3 + 1.4 * (t - 1) ** 2;
 const clamp01 = (t) => Math.max(0, Math.min(1, t));
 
@@ -37,113 +42,8 @@ const TOOLS = ['undo', 'clear', 'hint', 'auto'].map((key, k) => ({ key, rect: { 
 const TOOL_LABEL = { undo: '撤销', clear: '清空', hint: '提示', auto: '自动✕' };
 const TOAST_Y = BOARD.y + BOARD.h - 28;
 
-// ---- 小黄鸭：朝左的侧身，(x, y) 是格子中心，s 是格子边长；sticker 时外面描一圈白边，放在任何颜色上都清楚 ----
-export function drawDuck(ctx, x, y, s, { lift = 0, sx = 1, sy = 1, tilt = 0, blink = false, alpha = 1, angry = false, shadow = true, sticker = true } = {}) {
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  if (shadow) {
-    const k = Math.max(0.35, 1 - lift / s);
-    ctx.beginPath();
-    ctx.ellipse(x, y + s * 0.3, s * 0.3 * k, s * 0.07 * k, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#2b2f4530';
-    ctx.fill();
-  }
-  // 以脚底为原点压扁 / 拉长，再整体抬高
-  ctx.translate(x, y + s * 0.28 - lift);
-  ctx.rotate(tilt);
-  ctx.scale(sx, sy);
-  ctx.translate(0, -s * 0.28);
-  const u = (v) => v * s;
-  const bodyPath = () => {
-    ctx.beginPath();
-    ctx.moveTo(u(0.28), u(0.02));
-    ctx.quadraticCurveTo(u(0.40), u(-0.04), u(0.42), u(-0.13));
-    ctx.quadraticCurveTo(u(0.47), u(0.06), u(0.34), u(0.16));
-    ctx.closePath();
-    ctx.moveTo(u(0.38), u(0.10));
-    ctx.ellipse(u(0.05), u(0.10), u(0.33), u(0.2), 0, 0, Math.PI * 2);
-  };
-  const headPath = () => { ctx.beginPath(); ctx.arc(u(-0.12), u(-0.13), u(0.19), 0, Math.PI * 2); };
-  const beakPath = () => { ctx.beginPath(); ctx.ellipse(u(-0.32), u(-0.09), u(0.11), u(0.055), 0.08, 0, Math.PI * 2); };
-  ctx.lineJoin = 'round';
-  if (sticker) {
-    ctx.lineWidth = u(0.17);
-    ctx.strokeStyle = '#ffffff';
-    bodyPath(); ctx.stroke();
-    headPath(); ctx.stroke();
-    beakPath(); ctx.stroke();
-  }
-  // 先用粗描边画出外轮廓，再填色盖住内侧，身子和头的轮廓就连成一整只
-  ctx.lineWidth = u(0.07);
-  ctx.strokeStyle = '#d18a12';
-  bodyPath(); ctx.stroke();
-  headPath(); ctx.stroke();
-  const g = ctx.createLinearGradient(0, u(-0.32), 0, u(0.3));
-  g.addColorStop(0, '#fff7c2');
-  g.addColorStop(0.42, '#ffd84a');
-  g.addColorStop(1, '#f5a524');
-  ctx.fillStyle = g;
-  bodyPath(); ctx.fill();
-  headPath(); ctx.fill();
-  // 呆毛
-  ctx.beginPath();
-  ctx.moveTo(u(-0.13), u(-0.31));
-  ctx.quadraticCurveTo(u(-0.1), u(-0.42), u(-0.02), u(-0.39));
-  ctx.lineWidth = u(0.035);
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#e8a419';
-  ctx.stroke();
-  // 翅膀
-  ctx.beginPath();
-  ctx.ellipse(u(0.11), u(0.1), u(0.15), u(0.085), -0.35, 0, Math.PI * 2);
-  ctx.fillStyle = '#f7b62a';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(u(0.09), u(0.07), u(0.09), u(0.035), -0.35, Math.PI, Math.PI * 2);
-  ctx.strokeStyle = '#ffe58a';
-  ctx.lineWidth = u(0.025);
-  ctx.stroke();
-  // 头顶高光
-  ctx.beginPath();
-  ctx.ellipse(u(-0.07), u(-0.24), u(0.075), u(0.035), -0.2, 0, Math.PI * 2);
-  ctx.fillStyle = '#fffbe6cc';
-  ctx.fill();
-  // 嘴
-  beakPath();
-  ctx.fillStyle = '#ff8a2a';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(u(-0.42), u(-0.085));
-  ctx.quadraticCurveTo(u(-0.33), u(-0.07), u(-0.24), u(-0.09));
-  ctx.strokeStyle = '#d65a12';
-  ctx.lineWidth = u(0.02);
-  ctx.stroke();
-  // 腮红
-  ctx.beginPath();
-  ctx.ellipse(u(-0.07), u(-0.06), u(0.045), u(0.028), 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#ff8fa3aa';
-  ctx.fill();
-  // 眼睛
-  ctx.fillStyle = '#2b1d0e';
-  ctx.beginPath();
-  ctx.ellipse(u(-0.17), u(-0.17), u(0.034), blink ? u(0.007) : u(0.044), 0, 0, Math.PI * 2);
-  ctx.fill();
-  if (!blink) {
-    ctx.beginPath();
-    ctx.arc(u(-0.182), u(-0.188), u(0.013), 0, Math.PI * 2);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
-  }
-  if (angry) {
-    ctx.beginPath();
-    ctx.moveTo(u(-0.23), u(-0.26));
-    ctx.lineTo(u(-0.12), u(-0.23));
-    ctx.strokeStyle = '#7a2d14';
-    ctx.lineWidth = u(0.03);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
+// 鸭子的样子在 duck-art.js：正脸白鸭头 + 学士帽，这里只按时间算动作。
+const drawDuck = drawDuckHead;
 
 // 色弱模式的形状符号：以 (x, y) 为中心、半径 r。
 function drawShape(ctx, kind, x, y, r) {
@@ -260,7 +160,9 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
   let winAt = 0;
   let hint = null; // { focus:Set, why, t0 }
   let confetti = [];
-  const fx = new Map(); // 格子 → { kind: 'drop' | 'leave' | 'pop' | 'idle' | 'shake', t0 }
+  const fx = new Map(); // 格子 → { kind: 'summon' | 'leave' | 'pop' | 'shake', t0 }
+  let pointer = null; // 指针 / 手指最后停在哪：鸭子会盯着它看
+  let lastTap = null; // 上一次点按：{ cell, t, from, group }，用来认双击
   const motion = () => !calm();
   const buzz = (pattern) => { if (touch) try { navigator.vibrate?.(pattern); } catch { /* 不支持就算了 */ } };
 
@@ -318,10 +220,10 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
     if (!startedAt) startedAt = performance.now();
     hint = null;
     if (value === DUCK) {
-      effect(i, 'drop', 520);
+      effect(i, 'summon', 640);
       // 新放的鸭和谁打架了：双方一起抖一下
       for (const j of conflicts(game)) if (j !== i && !before.has(j)) effect(j, 'shake', 360);
-    } else if (prev === DUCK) effect(i, 'leave', 260);
+    } else if (prev === DUCK) effect(i, 'leave', 320);
     else if (value === CROSS) effect(i, 'pop', 200);
     if (!hush) {
       if (value === DUCK) {
@@ -352,6 +254,7 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
     touch = event.pointerType === 'touch';
     sfx.unlock();
     const p = shell.point(event);
+    pointer = { x: p.x, y: p.y, t: performance.now() };
     if (inRect(p, SOUND)) return toggleSound();
     if (inRect(p, BLIND)) return toggleBlind();
     if (inRect(p, TITLE)) return nextLevel();
@@ -381,8 +284,9 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
     else if (drag.mode === 'erase' && cur === CROSS) apply(i, EMPTY, drag.group);
   }
   shell.on('pointermove', (event) => {
-    if (!drag || drag.right || drag.long || game.done) return;
     const p = shell.point(event);
+    pointer = { x: p.x, y: p.y, t: performance.now() };
+    if (!drag || drag.right || drag.long || game.done) return;
     if (!drag.mode) {
       // 手指一按下总会抖几像素：明显移动了才当成拖动
       if (Math.hypot(p.x - drag.from.x, p.y - drag.from.y) < Math.max(8, lay.cell * 0.32)) return;
@@ -407,12 +311,28 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
     drag = null;
     clearTimeout(d.timer);
     if (!d.mode && !d.long && event.type === 'pointerup' && !game.done) {
-      const cur = game.marks[d.start];
-      apply(d.start, d.right ? (cur === DUCK ? EMPTY : DUCK) : cycle(cur), d.group);
+      const cur = game.marks[d.start], now = performance.now();
+      if (d.right) apply(d.start, cur === DUCK ? EMPTY : DUCK, d.group);
+      else {
+        // 双击：和上一下并成一次操作（撤销一下就回到双击之前）；双击一只鸭是把它拿走，第二下不再打 ✕
+        const dbl = lastTap && lastTap.cell === d.start && now - lastTap.t < DOUBLE_TAP && undo.at(-1) === lastTap.group;
+        if (dbl) {
+          const first = lastTap;
+          lastTap = null;
+          if (first.from !== DUCK) apply(d.start, cycle(cur), first.group);
+          persist();
+          hud();
+          shell.poke();
+          return;
+        }
+        apply(d.start, cycle(cur), d.group);
+        lastTap = { cell: d.start, t: now, from: cur, group: d.group };
+      }
     }
     commit(d.group);
   };
   shell.on('pointerup', endDrag);
+  shell.on('pointerleave', () => { pointer = null; });
   shell.on('pointercancel', endDrag);
   shell.on('contextmenu', (event) => event.preventDefault());
   function back() {
@@ -420,8 +340,8 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
     const group = undo.pop();
     if (!group) return shell.toast('没有可以撤销的了', 1000, TOAST_Y);
     for (const [i, prev] of [...group].reverse()) {
-      if (prev === DUCK) effect(i, 'drop', 520);
-      else if (game.marks[i] === DUCK) effect(i, 'leave', 260);
+      if (prev === DUCK) effect(i, 'summon', 640);
+      else if (game.marks[i] === DUCK) effect(i, 'leave', 320);
       game.marks[i] = prev;
     }
     hint = null;
@@ -449,8 +369,8 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
     if (step.cells.some((i) => game.marks[i] === DUCK)) sfx.play('place', { delay: 0.12 });
     const group = step.cells.map((i) => [i, before[i]]);
     for (const i of step.cells) {
-      if (game.marks[i] === DUCK) effect(i, 'drop', 520);
-      else if (before[i] === DUCK) effect(i, 'leave', 260);
+      if (game.marks[i] === DUCK) effect(i, 'summon', 640);
+      else if (before[i] === DUCK) effect(i, 'leave', 320);
       else if (game.marks[i] === CROSS) effect(i, 'pop', 200);
     }
     if (!startedAt) startedAt = performance.now();
@@ -509,13 +429,10 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
     }, wave + 500);
   }
 
-  // ---- 闲着时：随机一只鸭眨眼歪头 ----
+  // ---- 动图：棋盘上有鸭子时按约 20 帧 / 秒刷新，让它们眨眼、瞟眼、晃流苏（系统要求减少动态效果时不动） ----
   const idle = setInterval(() => {
-    if (!motion() || !shell.alive || game.done || drag) return;
-    const ducks = ducksOf(game).filter((i) => !fx.has(i));
-    if (!ducks.length || Math.random() < 0.35) return;
-    effect(ducks[Math.floor(Math.random() * ducks.length)], 'idle', 620);
-  }, 1700);
+    if (motion() && shell.alive && !document.hidden && ducksOf(game).length) shell.poke();
+  }, 50);
   const timer = setInterval(() => { if (startedAt && !game.done) { hud(); shell.poke(); } }, 1000);
 
   // ---- 绘制 ----
@@ -769,10 +686,12 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
       const { x, y } = centre(i);
       const f = fx.get(i);
       const t = f ? now - f.t0 : 0;
+      const size = cell * 0.96;
       if (marks[i] !== DUCK) {
-        if (f?.kind === 'leave' && t < 260) {
-          const p = t / 260;
-          drawDuck(ctx, x, y, cell * 0.86, { alpha: 1 - p, sx: 1 - p * 0.6, sy: 1 - p * 0.6, lift: p * cell * 0.3 });
+        // 拿走：帽子先飞起来，头闭着眼缩小消失
+        if (f?.kind === 'leave' && t < 320) {
+          const p = t / 320;
+          drawDuck(ctx, x, y, size, { alpha: 1 - p, sx: 1 - p * 0.5, sy: 1 - p * 0.5, blink: true, shadow: false, hat: { dy: -p * 0.8, tilt: p * 0.9, alpha: 1 - p } });
         }
         continue;
       }
@@ -789,52 +708,71 @@ export function mountDuck(wrap, { onHud = () => {}, onResult = null, onButtons =
         ctx.stroke();
         ctx.restore();
       }
-      const o = { angry };
-      if (f?.kind === 'drop' && t < 520) {
-        const p = t / 520;
-        if (p < 0.5) { o.lift = (1 - (p / 0.5) ** 2) * cell * 0.75; o.sx = 0.9; o.sy = 1.12; o.alpha = Math.min(1, p * 5); }
-        else if (p < 0.7) { const q = (p - 0.5) / 0.2; o.sx = 1 + 0.18 * Math.sin(q * Math.PI); o.sy = 1 - 0.2 * Math.sin(q * Math.PI); }
-        else { const q = (p - 0.7) / 0.3; o.lift = Math.sin(q * Math.PI) * cell * 0.08; }
-        if (p > 0.48) splash(ctx, x, y + cell * 0.28, cell, (p - 0.48) / 0.52);
+      // 平时：发呆的样子（眨眼、瞟眼、呼吸、流苏晃）；指针在附近就盯着它看
+      const toward = lookAt(x, y, now);
+      const pose = motion() ? idlePose(i * 7 + 3, now, toward) : { look: toward ?? { x: 0, y: 0.2 } };
+      const o = { angry, look: pose.look, blink: pose.blink, sx: pose.sx ?? 1, sy: pose.sy ?? 1, tassel: pose.tassel ?? 0, hat: pose.hat ?? null };
+      if (angry) { o.blink = false; o.look = { x: 0, y: 0.4 }; }
+      if (f?.kind === 'summon' && t < 640) {
+        // 放鸭：一圈白烟里弹出来（压扁再回弹），张嘴「嘎」，学士帽从上面掉下来扣上、晃两下，再闪几颗星
+        const p = t / 640;
+        const k = p < 0.3 ? easeOut(p / 0.3) * 1.14 : p < 0.55 ? 1.14 - 0.2 * Math.sin(((p - 0.3) / 0.25) * Math.PI / 2) : 0.94 + 0.06 * easeOut((p - 0.55) / 0.45);
+        const wob = p > 0.3 && p < 0.75 ? Math.sin(((p - 0.3) / 0.45) * Math.PI * 2) * 0.07 : 0;
+        o.sx = k * (1 + wob);
+        o.sy = k * (1 - wob);
+        o.open = p > 0.25 && p < 0.7 ? Math.sin(((p - 0.25) / 0.45) * Math.PI) : 0;
+        o.blink = p < 0.22;
+        const h = clamp01((p - 0.22) / 0.4);
+        o.hat = { dy: -0.6 * (1 - easeOut(h)), tilt: Math.sin(h * Math.PI * 3) * 0.3 * (1 - h), alpha: h > 0 ? 1 : 0 };
+        o.tassel = Math.sin(t / 55) * 0.6 * (1 - p);
+        o.shadow = p > 0.2;
+        puff(ctx, x, y + cell * 0.08, cell, clamp01(p / 0.55));
+        if (p > 0.55) sparkle(ctx, x, y - cell * 0.32, cell, (p - 0.55) / 0.45);
       } else if (f?.kind === 'shake' && t < 360) {
         o.tilt = Math.sin(t / 22) * 0.18 * (1 - t / 360);
-      } else if (f?.kind === 'idle' && t < 620) {
-        o.blink = t > 180 && t < 320;
-        o.tilt = Math.sin((t / 620) * Math.PI * 2) * 0.12;
+        o.open = 0.5;
       }
-      if (done && winAt && motion()) {
-        const r = Math.floor(i / n), q = (now - winAt - r * 80) / 460;
-        if (q > 0 && q < 1) { o.lift = Math.sin(q * Math.PI) * cell * 0.5; o.sy = 1 + Math.sin(q * Math.PI) * 0.08; o.sx = 1 - Math.sin(q * Math.PI) * 0.05; }
-        else if (q >= 1) { o.lift = Math.abs(Math.sin((now - winAt) / 260 + r)) * cell * 0.06; o.blink = ((now - winAt) / 900 + i) % 3 < 0.1; }
-        if (q > 0.35 && q < 1) sparkle(ctx, x, y - cell * 0.35, cell, (q - 0.35) / 0.65);
+      if (done && winAt) {
+        // 通关：一行行跳起来、把帽子抛上天、张嘴叫，落地后眯眼笑
+        const r = Math.floor(i / n), q = motion() ? (now - winAt - r * 80) / 460 : 1;
+        if (q > 0 && q < 1) {
+          const j = Math.sin(q * Math.PI);
+          o.lift = j * cell * 0.5;
+          o.sy *= 1 + j * 0.08;
+          o.sx *= 1 - j * 0.05;
+          o.open = j;
+          o.hat = { dy: -j * 0.5, tilt: j * 0.5 * (r % 2 ? 1 : -1) };
+          o.tassel = j * 1.2;
+          if (q > 0.35) sparkle(ctx, x, y - cell * 0.35, cell, (q - 0.35) / 0.65);
+        } else if (q >= 1) {
+          o.happy = true;
+          if (motion()) o.lift = Math.abs(Math.sin((now - winAt) / 260 + r)) * cell * 0.06;
+        }
       }
-      drawDuck(ctx, x, y, cell * (n >= 10 ? 0.92 : 0.86), o);
+      drawDuck(ctx, x, y, size, o);
     }
     if (bad.size) shell.poke(120);
-    for (const [i, f] of fx) if (now - f.t0 > 700) fx.delete(i);
+    for (const [i, f] of fx) if (now - f.t0 > 800) fx.delete(i);
   }
-  function splash(ctx, x, y, cell, p) {
+  // 放鸭时的一圈白烟
+  function puff(ctx, x, y, cell, p) {
+    if (p >= 1) return;
     ctx.save();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(1.2, cell * 0.04);
-    for (const d of [0, 0.25]) {
-      const q = clamp01((p - d) / (1 - d));
-      if (q <= 0) continue;
-      ctx.globalAlpha = (1 - q) * 0.95;
-      ctx.beginPath();
-      ctx.ellipse(x, y, cell * (0.25 + q * 0.3), cell * (0.07 + q * 0.09), 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
     ctx.fillStyle = '#ffffff';
-    for (let k = 0; k < 5; k += 1) {
-      const a = Math.PI * (0.15 + k * 0.175), dist = cell * 0.42 * easeOut(p);
-      const dx = Math.cos(a) * dist, dy = -Math.sin(a) * cell * 0.4 * Math.sin(p * Math.PI);
-      ctx.globalAlpha = 1 - p;
+    ctx.globalAlpha = (1 - p) * 0.95;
+    for (let k = 0; k < 7; k += 1) {
+      const a = (k / 7) * Math.PI * 2 + 0.3, d = cell * (0.15 + 0.32 * easeOut(p));
       ctx.beginPath();
-      ctx.arc(x - dx, y + dy, Math.max(1.2, cell * 0.045 * (1 - p * 0.5)), 0, Math.PI * 2);
+      ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.75, cell * 0.1 * (1 - p) + 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
+  }
+  // 指针最近 2.5 秒内动过：从这只鸭看过去的方向（离得越远眼珠转得越到边）
+  function lookAt(x, y, now) {
+    if (!pointer || now - pointer.t > 2500) return null;
+    const dx = pointer.x - x, dy = pointer.y - y, d = Math.hypot(dx, dy) + lay.cell * 0.6;
+    return { x: dx / d, y: dy / d };
   }
   function sparkle(ctx, x, y, cell, p) {
     ctx.save();
