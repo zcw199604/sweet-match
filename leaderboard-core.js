@@ -60,7 +60,11 @@ export const BOARDS = {
   // 打砖块：一局 12 关的累计分数，十万级封顶挡乱填。
   breakout: { game: 'breakout', label: '', order: 'desc', unit: '分', scale: 1, min: 1, max: 500_000 },
   // 泡泡龙：24 关，记通过的最高关卡。
-  bubble: { game: 'bubble', label: '最高关卡', order: 'desc', unit: '关', scale: 1, min: 1, max: 24 }
+  bubble: { game: 'bubble', label: '最高关卡', order: 'desc', unit: '关', scale: 1, min: 1, max: 24 },
+  // 数独鸭：三档随机题，按用时排（单位 0.1 秒）。
+  'duck-easy': { game: 'duck', label: '6×6', order: 'asc', unit: '秒', scale: 10, min: 30, max: 108_000 },
+  'duck-normal': { game: 'duck', label: '8×8', order: 'asc', unit: '秒', scale: 10, min: 50, max: 108_000 },
+  'duck-hard': { game: 'duck', label: '10×10', order: 'asc', unit: '秒', scale: 10, min: 80, max: 108_000 }
 };
 export const GAMES = [
   { id: 'pop2', title: '泡噗 2' },
@@ -102,6 +106,7 @@ export const GAMES = [
   { id: 'snake', title: '贪吃蛇' },
   { id: 'breakout', title: '打砖块' },
   { id: 'bubble', title: '泡泡龙' },
+  { id: 'duck', title: '数独鸭' },
   { id: 'soulforge', title: '灵魂锻炉' },
   { id: 'achroma', title: 'Achroma' }
 ];

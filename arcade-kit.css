@@ -118,3 +118,10 @@
 .art-go i.b{background:radial-gradient(circle at 35% 35%,#8b90a8,#4a4f63 45%,#111320)}
 .art-go i.w{background:radial-gradient(circle at 35% 35%,#fff,#f4f2ec 50%,#b9b4a6)}
 .recent-card[data-game=weiqi]{--c:#3a6a5a}
+
+/* 数独鸭（ARCADE 40）：池塘蓝的卡面和画布，卡面是一块 4×4 的小木筏。 */
+.duck .art{background:radial-gradient(125% 125% at 20% 8%,#5fd0e4,#2392b5 58%,#0f557a)}
+.art-duck{position:absolute;left:50%;top:50%;width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:12px;border:5px solid #fff8ec;background:#fff8ec;box-shadow:0 10px 18px #06324a80}
+.kit-wrap[data-kit=duck] .game-canvas{background:radial-gradient(120% 90% at 50% 0%,#4cc2d9,#1f86a8 55%,#0f4d6e)}
+.recent-card[data-game=duck]{--c:#ffc93c}
+@media(max-width:800px){.art-duck{width:116px;height:116px;margin:-58px 0 0 -58px}}

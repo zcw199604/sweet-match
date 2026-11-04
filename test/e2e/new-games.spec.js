@@ -339,8 +339,39 @@ test('泡泡龙: aiming and shooting sticks a bubble, swap changes the next ball
   await expect(page.locator('#score-text')).toContainText('第 2 关');
 });
 
+test('数独鸭: taps cycle cross → duck → empty, dragging crosses a row, undo, solving posts the time, and hints are flagged', async ({ page }) => {
+  await open(page, 'duck');
+  expect(await kit(page, (k) => k.board)).toBe('duck-easy');
+  expect(await kit(page, (k) => k.state.size)).toBe(6);
+  const cell0 = await kit(page, (k) => k.locate(0));
+  await tapAt(page, cell0);
+  expect(await kit(page, (k) => k.state.marks[0])).toBe(1);
+  await tapAt(page, cell0);
+  expect(await kit(page, (k) => k.state.marks[0])).toBe(2);
+  const a = await kit(page, (k) => k.locate(12)), b = await kit(page, (k) => k.locate(17));
+  await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 8 }); await page.mouse.up();
+  expect(await kit(page, (k) => k.state.marks.slice(12, 18))).toEqual([1, 1, 1, 1, 1, 1]);
+  await kit(page, (k) => k.undo());
+  expect(await kit(page, (k) => k.state.marks.slice(12, 18))).toEqual([0, 0, 0, 0, 0, 0]);
+  await kit(page, (k) => k.undo());
+  expect(await kit(page, (k) => k.state.marks[0])).toBe(1);
+  const posted = page.waitForRequest((r) => r.url().includes('/api/scores') && r.method() === 'POST');
+  await kit(page, (k) => k.solve());
+  await expect(page.locator('.kit-card')).toContainText('鸭鸭全部就位');
+  expect((await posted).postDataJSON()).toMatchObject({ board: 'duck-easy' });
+  await page.locator('.kit-again', { hasText: '再来一题' }).click();
+  expect(await kit(page, (k) => k.state.marks.every((v) => v === 0))).toBe(true);
+  await page.locator('[data-kit-action="hint"]').click();
+  expect(await kit(page, (k) => k.state.hinted)).toBe(true);
+  expect(await kit(page, (k) => k.state.marks.some((v) => v !== 0))).toBe(true);
+  await expect(page.locator('#score-text')).toContainText('用过提示');
+  await page.locator('[data-kit-action="level"]').click();
+  await expect(page.locator('[data-kit-action="level"]')).toContainText('普通');
+  expect(await kit(page, (k) => k.state.size)).toBe(8);
+});
+
 // 每款新游戏：画布和顶栏按钮都在一屏里，不用滚动，也不会横向撑出页面。
-const NEW_GAMES = ['arrows', 'screw', 'sand', 'runfast', 'hexsort', 'mahjong', 'nonogram', 'solitaire', 'sokoban', 'tiaoqi', 'weiqi', 'sheep', 'yarn', 'klotski', 'snake', 'breakout', 'bubble'];
+const NEW_GAMES = ['arrows', 'screw', 'sand', 'runfast', 'hexsort', 'mahjong', 'nonogram', 'solitaire', 'sokoban', 'tiaoqi', 'weiqi', 'sheep', 'yarn', 'klotski', 'snake', 'breakout', 'bubble', 'duck'];
 for (const id of NEW_GAMES) {
   test(`${id}: the whole board and the header buttons fit on one screen`, async ({ page }) => {
     const errors = [];
