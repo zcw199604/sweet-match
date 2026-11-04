@@ -339,7 +339,7 @@ test('泡泡龙: aiming and shooting sticks a bubble, swap changes the next ball
   await expect(page.locator('#score-text')).toContainText('第 2 关');
 });
 
-test('数独鸭: taps cycle cross → duck → empty, dragging crosses a row, undo, solving posts the time, and hints are flagged', async ({ page }) => {
+test('数独鸭: taps cycle cross → duck → empty, long-press drops a duck, dragging crosses a row, undo, solving posts the time, and canvas buttons work', async ({ page }) => {
   await open(page, 'duck');
   expect(await kit(page, (k) => k.board)).toBe('duck-easy');
   expect(await kit(page, (k) => k.state.size)).toBe(6);
@@ -348,9 +348,24 @@ test('数独鸭: taps cycle cross → duck → empty, dragging crosses a row, un
   expect(await kit(page, (k) => k.state.marks[0])).toBe(1);
   await tapAt(page, cell0);
   expect(await kit(page, (k) => k.state.marks[0])).toBe(2);
+  // 长按：直接放鸭，再长按拿走；松手后不会再当成一次点按
+  const cell3 = await kit(page, (k) => k.locate(3));
+  await page.mouse.move(cell3.x, cell3.y); await page.mouse.down(); await page.waitForTimeout(600); await page.mouse.up();
+  expect(await kit(page, (k) => k.state.marks[3])).toBe(2);
+  await page.mouse.down(); await page.waitForTimeout(600); await page.mouse.up();
+  expect(await kit(page, (k) => k.state.marks[3])).toBe(0);
+  // 轻微抖动不算拖动：还是一次点按
+  await page.mouse.move(cell3.x, cell3.y); await page.mouse.down(); await page.mouse.move(cell3.x + 2, cell3.y + 1); await page.mouse.up();
+  expect(await kit(page, (k) => k.state.marks[3])).toBe(1);
+  await kit(page, (k) => k.undo());
+  await kit(page, (k) => k.undo());
+  await kit(page, (k) => k.undo());
+  expect(await kit(page, (k) => k.state.marks[3])).toBe(0);
   const a = await kit(page, (k) => k.locate(12)), b = await kit(page, (k) => k.locate(17));
   await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 8 }); await page.mouse.up();
   expect(await kit(page, (k) => k.state.marks.slice(12, 18))).toEqual([1, 1, 1, 1, 1, 1]);
+  // 点和拖都出了声：放鸭、打叉
+  expect(await kit(page, (k) => k.sounds)).toEqual(expect.arrayContaining(['cross', 'place']));
   await kit(page, (k) => k.undo());
   expect(await kit(page, (k) => k.state.marks.slice(12, 18))).toEqual([0, 0, 0, 0, 0, 0]);
   await kit(page, (k) => k.undo());
@@ -361,13 +376,32 @@ test('数独鸭: taps cycle cross → duck → empty, dragging crosses a row, un
   expect((await posted).postDataJSON()).toMatchObject({ board: 'duck-easy' });
   await page.locator('.kit-again', { hasText: '再来一题' }).click();
   expect(await kit(page, (k) => k.state.marks.every((v) => v === 0))).toBe(true);
-  await page.locator('[data-kit-action="hint"]').click();
+  await tapAt(page, await kit(page, (k) => k.locateButton('hint')));
   expect(await kit(page, (k) => k.state.hinted)).toBe(true);
   expect(await kit(page, (k) => k.state.marks.some((v) => v !== 0))).toBe(true);
   await expect(page.locator('#score-text')).toContainText('用过提示');
+  expect(await kit(page, (k) => k.sounds)).toEqual(expect.arrayContaining(['win', 'deal', 'hint']));
+  // 静音：点右上角的小喇叭，之后不再出声，设置留在本机
+  expect(await kit(page, (k) => k.soundOn)).toBe(true);
+  await tapAt(page, await kit(page, (k) => k.locateSound()));
+  expect(await kit(page, (k) => k.soundOn)).toBe(false);
+  const heard = await kit(page, (k) => k.sounds.length);
+  await tapAt(page, await kit(page, (k) => k.locate(35)));
+  expect(await kit(page, (k) => k.sounds.length)).toBe(heard);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('pao-duck')).sound)).toBe(false);
+  // 色弱模式开关、底部的撤销 / 清空按钮
+  await tapAt(page, await kit(page, (k) => k.locateButton('blind')));
+  expect(await kit(page, (k) => k.blind)).toBe(true);
+  await tapAt(page, await kit(page, (k) => k.locateButton('clear')));
+  expect(await kit(page, (k) => k.state.marks.every((v) => v === 0))).toBe(true);
+  await tapAt(page, await kit(page, (k) => k.locateButton('undo')));
+  expect(await kit(page, (k) => k.state.marks.some((v) => v !== 0))).toBe(true);
+  // 换难度：顶栏按钮和画布里的标题都行
   await page.locator('[data-kit-action="level"]').click();
   await expect(page.locator('[data-kit-action="level"]')).toContainText('普通');
   expect(await kit(page, (k) => k.state.size)).toBe(8);
+  await tapAt(page, await kit(page, (k) => k.locateButton('title')));
+  expect(await kit(page, (k) => k.state.size)).toBe(10);
 });
 
 // 每款新游戏：画布和顶栏按钮都在一屏里，不用滚动，也不会横向撑出页面。
