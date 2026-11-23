@@ -637,3 +637,22 @@ body.game-full.full-land:not(.full-rot) #game #game-stage>.quest-wrap{width:min(
 @media(max-width:800px){.art-klotski{width:120px;height:136px;margin:-68px 0 0 -60px;gap:2px;padding:5px}}
 
 .art-snake i.h{position:relative}
+
+/* ---- 猫撫でシミュレーター（ARCADE 42，源码模块 petcat/，靠 Shadow DOM 装进舞台）----
+   卡片直接借用游戏自己的贴图：猫本体是 petcat/assets/kuro.avif、手是 petcat/assets/hand-slim.avif，
+   两张都是透明底的裁剪块，所以底下一层铺亚麻布纹就够。 */
+.petcat .art{background:radial-gradient(120% 120% at 24% 8%,#fbf5ec,#e8d7bf 56%,#cdb99c)}
+.art-linen{position:absolute;inset:0;background:repeating-linear-gradient(46deg,#0000000d 0 2px,transparent 2px 6px),repeating-linear-gradient(-38deg,#ffffff1f 0 2px,transparent 2px 7px)}
+.art-cat-body{position:absolute;left:50%;top:46%;width:250px;height:106px;margin:-53px 0 0 -125px;background:url(./petcat/assets/kuro.avif) center/contain no-repeat;filter:drop-shadow(0 8px 12px #4533272e)}
+.art-cat-hand{position:absolute;right:2px;bottom:-18px;width:96px;height:150px;background:url(./petcat/assets/hand-slim.avif) center bottom/contain no-repeat;filter:drop-shadow(0 8px 12px #45332733)}
+@media(max-width:800px){.petcat .art{height:155px}.art-cat-body{width:216px;height:92px;margin:-46px 0 0 -108px}.art-cat-hand{width:82px;height:128px;bottom:-16px}}
+
+/* 摸猫模拟器的舞台：整站是固定比例的横构图，给它一条满宽的平台，别再裹 720px 的棋盘宽度 */
+.classic-wrap.petcat-wrap{width:100%;max-width:1180px;overflow:visible}
+/* 摸猫模拟器按「留给画面的高度」算宽度：普通模式让出街机厅顶栏和自带工具条，全屏时铺满 */
+body[data-mode=petcat] .petcat-room{--petcat-h:clamp(240px,calc(100svh - 449px),720px)}
+body.game-full[data-mode=petcat] .petcat-room{--petcat-h:calc(100svh - 96px)}
+/* 全屏时 .classic-wrap 默认被限到 min(--fw, 720px)，猫是横构图，得放开宽度 */
+body.game-full #game #game-stage>.classic-wrap.petcat-wrap{width:min(var(--fw),calc(var(--petcat-h) * 1.62246));max-width:none}
+body[data-mode=petcat] .stage{padding:14px 14px 8px}
+body[data-mode=petcat] .game-help{margin-top:6px}

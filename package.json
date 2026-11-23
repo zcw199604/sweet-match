@@ -11,8 +11,7 @@
     "gen:pour": "node scripts/gen-pour-levels.js",
     "gen:sokoban": "node scripts/gen-sokoban.js",
     "build:monopoly": "node scripts/build-monopoly.js",
-    "pet": "node scripts/serve-pet-cat.mjs",
-    "extract:pet": "node scripts/extract-pet-cat.mjs"
+    "sync:petcat": "node scripts/sync-petcat.mjs"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.20.0",

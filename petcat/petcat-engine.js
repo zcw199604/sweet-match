@@ -1,12 +1,18 @@
-(()=>{'use strict';
+// 生成物：node scripts/sync-petcat.mjs 从原站打包页还原并适配。不要手改，改脚本再跑。
+import { buildNapFactor, computeView, pointerToStage } from './petcat-core.js';
+
+/**
+ * 把整只猫装进一个 Shadow DOM 里跑。
+ * env.doc / env.page 是门面：所有 DOM 查询落在 Shadow DOM，事件监听记在 page 上，卸载时统一摘掉。
+ * 参数叫 env 而不是 ctx，因为原页面正文里已经有一个 ctx（canvas 2d context）。
+ */
+export function bootPetcat(env) {
+'use strict';
+const { directory, doc, page } = env;
+let alive = true;
 const {CoatSurface}=(()=>{
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
-const napFactor=new Float64Array(512);
-for(let i=0;i<256;i++){
-const fibre=i/127.5-1;
-napFactor[i]=-6.885+3.06+8.16*fibre;
-napFactor[256+i]=-6.885-3.06-8.16*fibre-3.825*Math.max(fibre,0);
-}
+const napFactor=buildNapFactor();
 const surfaceTile=12;
 function alphaCoverage(pixels,width,height){
 const cols=Math.ceil(width/surfaceTile),rows=Math.ceil(height/surfaceTile),stride=cols+1;
@@ -180,7 +186,7 @@ canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true
 canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.initGL();if(this.img)this.upload();});
 }else{
 this.ctx=canvas.getContext('2d');
-this.output=document.createElement('canvas');
+this.output=doc.createElement('canvas');
 this.outCtx=this.output.getContext('2d');
 }
 }
@@ -209,7 +215,7 @@ setImage(img,rasterWidth,longCoat,shortCoat=false){
 this.img=img;this.stillFrame=null;
 const imgW=img.naturalWidth || img.width,imgH=img.naturalHeight || img.height;
 const w=this.sw=Math.min(imgW,this.gl?970:rasterWidth),h=this.sh=Math.round(w*imgH/imgW);
-const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+const canvas=doc.createElement('canvas');canvas.width=w;canvas.height=h;
 const cx=canvas.getContext('2d',{willReadFrequently:true});cx.drawImage(img,0,0,w,h);
 const data=this.src=cx.getImageData(0,0,w,h).data;
 const strand=this.strand=new Uint8Array(w*h),luma=new Uint8Array(w*h);
@@ -362,7 +368,7 @@ const aspect=935/1517;
 const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 class CoatOutline{
 constructor(surface){
-const w=280,h=Math.round(w*surface.sh/surface.sw),cn=document.createElement('canvas');
+const w=280,h=Math.round(w*surface.sh/surface.sw),cn=doc.createElement('canvas');
 cn.width=w;cn.height=h;const g=cn.getContext('2d',{willReadFrequently:true});
 const alpha=radius=>{
 g.clearRect(0,0,w,h);g.filter='blur('+radius+'px)';g.drawImage(surface.img,0,0,w,h);
@@ -499,7 +505,7 @@ for(const n of this.nodes){n.u=n.x;n.v=n.y;n.angle=n.rest;n.turnRate=0;n.widthSc
 }
 setPhoto(image,maxRadius=.041){
 this.image=image;
-const c=document.createElement('canvas');c.width=image.width;c.height=image.height;
+const c=doc.createElement('canvas');c.width=image.width;c.height=image.height;
 const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(image,0,0);
 const pixels=g.getImageData(0,0,c.width,c.height),data=pixels.data;
 for(const n of this.nodes){
@@ -814,7 +820,7 @@ previous=row;
 }
 class TailPhoto{
 constructor(){
-this.photo=document.createElement('canvas');this.ink=this.photo.getContext('2d');
+this.photo=doc.createElement('canvas');this.ink=this.photo.getContext('2d');
 this.shape=[];
 }
 setSections(pixels,nodes){
@@ -1023,7 +1029,7 @@ return 0;
 }
 class OverheadCat {
 constructor(canvas){
-this.body=document.createElement('canvas');this.surface=new CoatSurface(this.body,nx,ny);
+this.body=doc.createElement('canvas');this.surface=new CoatSurface(this.body,nx,ny);
 this.canvas=canvas;this.ink=canvas.getContext('2d');this.tail=new CatTail();this.tailPhoto=new TailPhoto();
 this.state=neutral();this.time=0;this.thickness=1;
 this.vertices=[];this.xy=new Float32Array(2*(nx+1)*(ny+1));this.light=new Float32Array(this.xy.length);
@@ -1436,7 +1442,7 @@ return Math.max(0,view.height+3-minY);
 }
 class HandLayer{
 constructor(){
-this.skin=document.createElement('canvas');this.tint=document.createElement('canvas');
+this.skin=doc.createElement('canvas');this.tint=doc.createElement('canvas');
 this.ink=this.skin.getContext('2d');this.small=this.tint.getContext('2d');
 }
 draw(ctx,view,paint,altitude){
@@ -1472,7 +1478,7 @@ const xs = [0,62,101,146,193,247,317,381,453,538,638,785,916,1024];
 const ys = [0,67,91,113,137,169,213,278,351,434,522,618,729,854,1004,1191,1375,1536];
 const nx = xs.length, ny = ys.length;
 function canvas(w,h) {
-const c=document.createElement('canvas');c.width=w;c.height=h;return c;
+const c=doc.createElement('canvas');c.width=w;c.height=h;return c;
 }
 function shadowMasks(photo) {
 const w=300,h=450,margin=15;
@@ -1868,7 +1874,7 @@ knuckles:[[357,257],[458,239],[551,241],[640,267],[238,278]],
 arm:[[472,373],[544,623],[560,703],[608,1050],[629,1460],[296,392],[428,718],[676,679]]
 };
 function surface(w,h){
-const c=document.createElement('canvas');c.width=w;c.height=h;return c;
+const c=doc.createElement('canvas');c.width=w;c.height=h;return c;
 }
 const xs=[0,176,226,266,311,354,394,439,486,531,576,622,666,718,824,930,1024];
 const ys=[0,67,97,126,156,191,230,274,329,401,489,556,624,702,834,1040,1270,1536];
@@ -2088,7 +2094,7 @@ const t=Math.max(0,Math.min(1,(x-lo)/(hi-lo)));
 return t*t*(3-2*t);
 };
 function canvas(w,h){
-const c=document.createElement('canvas');c.width=w;c.height=h;return c;
+const c=doc.createElement('canvas');c.width=w;c.height=h;return c;
 }
 function coatFringe(surface){
 const {src,sw,sh}=surface,start=Math.floor(sw*.19),end=Math.ceil(sw*.74);
@@ -2289,7 +2295,7 @@ return this.enabled;
 }
 update(value, immediate=false) {
 if (!this.context) return;
-const target=this.enabled && !document.hidden ? .05+.58*value : 0;
+const target=this.enabled && !doc.hidden ? .05+.58*value : 0;
 if (immediate || Math.abs(target-(this.target??-1))>.008) {
 this.target=target;
 this.gain.gain.setTargetAtTime(target,this.context.currentTime,immediate?.10:.24);
@@ -2299,7 +2305,7 @@ this.gain.gain.setTargetAtTime(target,this.context.currentTime,immediate?.10:.24
 return {Purr};})();
 const {silverTabby}=(()=>{
 function silverTabby(photo,tail){
-const canvas=document.createElement('canvas');
+const canvas=doc.createElement('canvas');
 const w=canvas.width=photo.width,h=canvas.height=photo.height;
 const ctx=canvas.getContext('2d',{willReadFrequently:true});
 ctx.drawImage(photo,0,0);
@@ -2331,16 +2337,16 @@ ctx.putImageData(frame,0,0);return canvas;
 }
 return {silverTabby};})();
 const {readPhoto}=(()=>{
-const directory=window.PETCAT_DIRECTORY;
+
 const originals=new Map();
 async function decodePhoto(name){
 const [offset,count,x,y,w,h,W,H]=directory[name];
-const url='assets/'+name+'.avif';
+const url=new URL('assets/'+name+'.avif',import.meta.url).href;
 const img=new Image();
 try{img.src=url;await img.decode();}finally{URL.revokeObjectURL(url);}
 if(name==='room')return img;
 const body=!name.includes('-');
-const c=document.createElement('canvas'),scale=body?Math.min(1,img.width/w):1;
+const c=doc.createElement('canvas'),scale=body?Math.min(1,img.width/w):1;
 c.width=Math.round(W*scale);c.height=Math.round(H*scale);
 const g=c.getContext('2d');
 g.imageSmoothingQuality='high';
@@ -2362,7 +2368,7 @@ throw new Error('Unknown coat '+name);
 return {readPhoto};})();
 const {drawMoonlight}=(()=>{
 function makeLightField(){
-const lamp=document.createElement('canvas');
+const lamp=doc.createElement('canvas');
 lamp.width=320;lamp.height=197;
 const g=lamp.getContext('2d',{alpha:false});
 const pixels=g.createImageData(lamp.width,lamp.height),rgba=pixels.data;
@@ -2418,7 +2424,7 @@ Math.abs(stop - value) < Math.abs(stops[best] - value) ? i : best, 0);
 }
 class Proportions {
 constructor(onChange) {
-const find = id => document.getElementById(id);
+const find = id => doc.getElementById(id);
 this.onChange = onChange;
 this.dirty = false;
 this.toggle = find('proportions-toggle');
@@ -2432,9 +2438,9 @@ if (!this.panel.hidden && event.detail === 0) this.size.focus();
 const closeOutside = event => {
 if (!this.panel.hidden && !this.panel.contains(event.target) && !this.toggle.contains(event.target)) this.setOpen(false);
 };
-document.addEventListener('pointerdown', closeOutside, true);
-document.addEventListener('focusin', closeOutside);
-document.addEventListener('keydown', event => {
+doc.addEventListener('pointerdown', closeOutside, true);
+doc.addEventListener('focusin', closeOutside);
+doc.addEventListener('keydown', event => {
 if (event.key !== 'Escape' || this.panel.hidden) return;
 event.preventDefault();
 event.stopImmediatePropagation();
@@ -2445,7 +2451,7 @@ for (const input of [this.size, this.width]) {
 input.addEventListener('input', () => this.update());
 input.addEventListener('change', () => this.persist());
 }
-window.addEventListener('pagehide', () => this.persist());
+page.addEventListener('pagehide', () => this.persist());
 }
 restore(initialCat) {
 let saved = readSettings(storageKey);
@@ -2488,10 +2494,10 @@ this.dirty = false;
 }
 }
 return {Proportions};})();
-const stage=document.querySelector('#stage'), scene=document.querySelector('#scene');
-const viewer=document.querySelector('#viewer'), retry=document.querySelector('#retry');
-const soundButton=document.querySelector('#sound'), expand=document.querySelector('#expand');
-const themeButton=document.querySelector('#theme'),themeRoot=document.documentElement;
+const stage=doc.querySelector('#stage'), scene=doc.querySelector('#scene');
+const viewer=doc.querySelector('#viewer'), retry=doc.querySelector('#retry');
+const soundButton=doc.querySelector('#sound'), expand=doc.querySelector('#expand');
+const themeButton=doc.querySelector('#theme'),themeRoot=doc.documentElement;
 let moonlit=themeRoot.dataset.theme==='dark';
 themeButton.setAttribute('aria-checked',String(moonlit));
 themeButton.onclick=()=>{
@@ -2499,20 +2505,15 @@ moonlit=!moonlit;
 const theme=moonlit?'dark':'light';
 themeRoot.dataset.theme=theme;
 themeButton.setAttribute('aria-checked',String(moonlit));
-document.querySelector('meta[name="theme-color"]').content=moonlit?'#101722':'#fbf5ec';
+page.setThemeColor(moonlit?'#101722':'#fbf5ec');
 try{localStorage.setItem('pet-the-cat-theme',theme);}catch{}
-const url=new URL(location.href);
-if(url.searchParams.has('theme')){
-url.searchParams.set('theme',theme);
-try{history.replaceState(null,'',url);}catch{}
-}
 if(ready)paint(.001);
 };
-const choices=[...document.querySelectorAll('[data-cat]')], notice=document.querySelector('#notice');
+const choices=[...doc.querySelectorAll('[data-cat]')], notice=doc.querySelector('#notice');
 const ctx=scene.getContext('2d',{alpha:false});
-const layer=document.createElement('canvas'), shadow=document.createElement('canvas');
+const layer=doc.createElement('canvas'), shadow=doc.createElement('canvas');
 const shadowCtx=shadow.getContext('2d');
-const handChange=new HandChange(),posedHand=new HandLayer(),blendLayer=document.createElement('canvas');
+const handChange=new HandChange(),posedHand=new HandLayer(),blendLayer=doc.createElement('canvas');
 const blendCtx=blendLayer.getContext('2d',{alpha:false});
 const cat=new OverheadCat(layer),purr=new Purr();
 const furContact=new FurContact();
@@ -2548,18 +2549,7 @@ const r=turned()?{width:rect.height,height:rect.width}:rect;
 if(r.width<1 || r.height<1)return;
 const dpr=Math.min(devicePixelRatio||1,1.7,2350/Math.max(r.width,r.height));
 const topCrop=Number(getComputedStyle(stage).getPropertyValue('--top-crop'));
-const framedHeight=r.height/(1-topCrop);
-const zoom=Math.max(r.width/1517,framedHeight/935);
-const roomW=1517*zoom,roomH=935*zoom,roomX=(r.width-roomW)/2;
-const roomY=(framedHeight-roomH)/2-(framedHeight-r.height);
-const baseW=roomW*.831,baseH=roomH*.831;
-const w=baseW*catScale,h=baseH*catScale;
-const x=roomX+roomW*.006+(baseW-w)*.46;
-const y=roomY+(roomH-baseH)*.49+(baseH-h)*.51;
-const kittenAmount=clamp((.86-catScale)/(.86-.65));
-const upperNeckExtra=kittenAmount*clamp(baseW*.062,24,44)/w;
-view={width:r.width,height:r.height,dpr,x,y,w,h,roomX,roomY,roomW,roomH,baseW,kitten:catScale<=.79,
-upperNeckExtra,handWidth:baseW*.895,touchLift:Math.min(62,framedHeight*.215)+40};
+view=computeView({width:r.width,height:r.height,dpr,catScale,topCrop});
 const sw=Math.round(r.width*dpr),sh=Math.round(r.height*dpr);
 if(scene.width!==sw||scene.height!==sh){
 scene.width=sw;scene.height=sh;
@@ -2570,7 +2560,7 @@ reprojectPointer();paint(.001);
 }
 }
 proportions.restore(selected);
-new ResizeObserver(layout).observe(stage);
+const observer=new ResizeObserver(layout);observer.observe(stage);
 function reset(){
 handChange.reset();
 passedTip=false;tailAnchor=false;returningToBody=false;area='back';keyTailStart=null;edgePointer=null;edgeMoved=false;operator=null;previousInput=null;
@@ -2605,12 +2595,7 @@ retry.onclick=()=>ready?choose(selected):init();
 for(const b of choices)b.onclick=()=>{if(ready)choose(b.dataset.cat);else selected=b.dataset.cat;};
 function setOver(value){over=value;stage.dataset.over=String(value);stage.dataset.pressed=String(down && value);}
 function point(e){
-const r=stage.getBoundingClientRect();
-const rotated=turned();
-const x=rotated?e.clientY-r.top:e.clientX-r.left;
-const y=rotated?r.right-e.clientX:e.clientY-r.top;
-const lift=e.pointerType==='touch'?view.touchLift:0;
-return {u:(x-view.x)/view.w,v:(y-view.y-lift)/view.h};
+return pointerToStage({rect:stage.getBoundingClientRect(),rotated:turned(),clientX:e.clientX,clientY:e.clientY,lift:e.pointerType==='touch'?view.touchLift:0,view});
 }
 function track(p){
 const previous=mode;
@@ -2684,7 +2669,7 @@ if(!lastPointer || keyboard || (!down&&!over))return;
 route(point(lastPointer));
 if(mode==='stroke')pad={...target};
 }
-window.addEventListener('scroll',reprojectPointer,{passive:true});
+page.addEventListener('scroll',reprojectPointer,{passive:true});
 function handle(e){
 down=true;
 lastPointer={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType};
@@ -2731,8 +2716,8 @@ else{setOver(true);operator={u:.235,v:.55};track(operator);}
 });
 stage.addEventListener('keyup',e=>{if((keyboard==='back'&&['Enter',' '].includes(e.key))||(keyboard==='tail'&&e.key.toLowerCase()==='t')){end();e.preventDefault();}});
 stage.addEventListener('blur',()=>{if(keyboard)end();});
-window.addEventListener('blur',()=>end());
-document.addEventListener('visibilitychange',()=>{if(document.hidden){end();last=0;purr.update(0,true);}});
+page.addEventListener('blur',()=>end());
+doc.addEventListener('visibilitychange',()=>{if(doc.hidden){end();last=0;purr.update(0,true);}});
 function move(dt){
 age+=dt;
 if(edgePointer && !edgeMoved && over && (mode==='stroke')){
@@ -2875,8 +2860,9 @@ if(moonlit)drawMoonlight(ctx,view);
 purr.update(input?.pressure??0);
 }
 function frame(ms){
+if(!alive)return;
 requestAnimationFrame(frame);
-if(!ready||!view||document.hidden){last=0;return;}
+if(!ready||!view||doc.hidden){last=0;return;}
 const elapsed=ms-last;
 if(last && elapsed<32 && (mode==='rest'||mode==='away') && !cat.tailMoving(elapsed/1000))return;
 const dt=last?clamp(elapsed/1000,.001,.075):1/60;
@@ -2893,12 +2879,12 @@ soundButton.setAttribute('aria-checked',String(on));
 let mobileNative=false;
 function syncFull(){
 const landscape=viewer.classList.contains('landscape');
-const on=landscape || document.fullscreenElement===viewer || viewer.classList.contains('is-full');
+const on=landscape || doc.fullscreenElement===viewer || viewer.classList.contains('is-full');
 const mobile=landscape || (!on && touchDisplay.matches);
 const label=mobile?(on?'横画面を終了':'横画面にする'):(on?'全画面を終了':'全画面にする');
 expand.setAttribute('aria-pressed',String(on));expand.setAttribute('aria-label',label);
 expand.querySelector('use').setAttribute('href',on?'#exit':mobile?'#rotate':'#full');
-document.documentElement.classList.toggle('is-full-page',on);layout();
+page.setFullPage(on);layout();
 }
 function leaveLandscape(){
 viewer.classList.remove('landscape');
@@ -2911,19 +2897,19 @@ syncFull();
 expand.onclick=async()=>{
 if(viewer.classList.contains('landscape')){
 leaveLandscape();
-if(document.fullscreenElement===mobileRoot)await document.exitFullscreen().catch(()=>{});
-}else if(document.fullscreenElement===viewer)await document.exitFullscreen();
+if(doc.fullscreenElement===mobileRoot)await doc.exitFullscreen().catch(()=>{});
+}else if(doc.fullscreenElement===viewer)await doc.exitFullscreen();
 else if(viewer.classList.contains('is-full'))viewer.classList.remove('is-full');
 else if(touchDisplay.matches){
 viewer.classList.add('landscape');syncFull();
-if(document.fullscreenEnabled && typeof screen.orientation?.lock==='function'){
+if(doc.fullscreenEnabled && typeof screen.orientation?.lock==='function'){
 try{
 await mobileRoot.requestFullscreen();
 if(!viewer.classList.contains('landscape')){
-if(document.fullscreenElement===mobileRoot)await document.exitFullscreen();
+if(doc.fullscreenElement===mobileRoot)await doc.exitFullscreen();
 return;
 }
-if(document.fullscreenElement===mobileRoot){
+if(doc.fullscreenElement===mobileRoot){
 mobileNative=true;
 await screen.orientation.lock('landscape');
 }
@@ -2932,17 +2918,31 @@ await screen.orientation.lock('landscape');
 }else try{await viewer.requestFullscreen();}catch{viewer.classList.add('is-full');}
 syncFull();
 };
-document.addEventListener('fullscreenchange',()=>{
-if(mobileNative && document.fullscreenElement!==mobileRoot)leaveLandscape();
+doc.addEventListener('fullscreenchange',()=>{
+if(mobileNative && doc.fullscreenElement!==mobileRoot)leaveLandscape();
 else syncFull();
 });
-document.addEventListener('keydown',e=>{
+doc.addEventListener('keydown',e=>{
 if(e.key!=='Escape')return;
 if(viewer.classList.contains('landscape')){expand.click();return;}
 if(viewer.classList.contains('is-full')){viewer.classList.remove('is-full');syncFull();}
 });
-portrait.addEventListener('change',syncFull);
-touchDisplay.addEventListener('change',syncFull);
+page.watchQuery(portrait,'change',syncFull);
+page.watchQuery(touchDisplay,'change',syncFull);
 syncFull();
 init();requestAnimationFrame(frame);
-})()
+
+function restart() {
+  if (ready) choose(selected); else init();
+}
+function destroy() {
+  if (!alive) return;
+  alive = false;
+  try { observer.disconnect(); } catch { /* 还没开始观察 */ }
+  page.setFullPage(false);
+  page.release();
+  try { if (doc.fullscreenElement) doc.exitFullscreen(); } catch { /* 不在全屏 */ }
+  try { purr.dispose?.(); } catch { /* 声音已经关了 */ }
+}
+return { restart, destroy, get ready() { return ready; }, get coat() { return selected; } };
+}

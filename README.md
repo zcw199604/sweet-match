@@ -114,6 +114,17 @@ N×N 的池塘切成 N 块颜色，放 N 只鸭：每行、每列、每种颜色
 - **画面**（`wallshot.js`）：墙面贴图离屏画一次缓存，洞和窗口挖掉；狙击方看正面，躲的人和揭晓时看半透明「透视」墙，洞口描亮，身体露出来时头顶提示。Web Audio 合成枪声 / 命中 / 打钢板，右上角可静音。对电脑的战绩按难度存在本机（`pao-wallshot`），不上榜。
 
 测试：`test/wallshot.test.js`（计时、命中部位、换边、限速和冷却、钢板 / 窗口、视图裁剪、电脑对打）、`server/test/wallshot-room.test.js`（真实房间：计时推进、位置不外泄、爆头分胜负、超时换边）、`test/e2e/wallshot.spec.js`（单机三端 + 两个浏览器联机）。
+### 摸猫模拟器（ARCADE 42）
+
+一只猫趴在亚麻垫上晒太阳，指针（或手指）在它背上来回划就是摸它。这是原站 [pet-the-cat.pages.dev](https://pet-the-cat.pages.dev/)（作者 [@zubububu](https://x.com/zubububu)）的本地源码版：整站被三层打包（UTF-16LE 里的 14bit 定长编码 → 自带 LZMA 解码器的引导脚本 → 27 张 AVIF 精灵），`scripts/sync-petcat.mjs` 把三层全解开，并改写成街机厅的一个模块，素材和玩法数值都没有动。
+
+- **结构**（`petcat/`）：`petcat-core.js` 是纯逻辑（毛色表、精灵八元组校验、画布布局换算、指针映射、毛发法线表），`petcat-engine.js` 是原站那 125 KB 逻辑的生成物（只改了资源读取、DOM 门面、卸载三处，逐条写在生成脚本里），`petcat.js` 负责挂载：用 Shadow DOM 把整站的样式和 `#stage`/`#viewer` 关起来，再用 `doc`/`page` 两个门面把 DOM 查询限在影子树里、把监听和 `ResizeObserver` 记下来，退出时一次摘干净（`restart`/`destroy` 跟着 `KIT_GAMES` 走）。`atlas.js`、`room.js`、`style.css` 都是生成物，`npm run sync:petcat` 可重跑。
+- **玩法**：13 种毛色（银虎斑是拿橘虎斑的贴图现场算出来的，没有单独的画）；指针划过的位置会压出毛痕，手跟着指针走、手指按压力度不同；从尾根往外拉能把尾巴拉长，回头往回划是摸背；右边「调整体格」改猫的大小和身宽，喇叭开咕噜声，月亮切浅色/深色，最右边全屏（手机上会横过来）。键盘：空格摸背、T 摸尾巴、Esc 退全屏。
+- **画面**：房间、猫、手都是原站的照片级 AVIF 精灵，按裁剪块贴回 1517×935 的画布坐标；`computeView` 按容器宽高算缩放和居中，窄屏裁掉上方 10%（`--top-crop`），小猫会整体缩进去并补正脖子长度。
+- **舞台尺寸**：猫是横构图，模块给的容器宽 1180 px 封顶；画面高度由 CSS 变量 `--petcat-h` 决定（普通模式让出街机厅顶栏，全屏时铺满），阴影里的 `#viewer` 按这个高度反推宽度，所以窗口多高都不会把毛色条挤到屏幕外。
+
+测试：`test/petcat.test.js`（毛色表、27 张精灵的八元组与画布范围、毛发法线表的两段分布、布局换算的大/小猫与裁切、指针映射的触屏抬升与横屏换轴）。
+
 ### 经典小游戏的来源与结构
 
 通过 GitHub 插件检索候选，再用 `gh api` 核对许可证和固定提交。原项目界面多为传统棋盘或旧框架，本项目只复用适用规则/数据，四款 DOM/CSS 界面均按街机厅糖果色和暗色棋盘重新制作；无新增 npm 依赖，也不依赖上游在线服务。
@@ -124,6 +135,7 @@ N×N 的池塘切成 N 块颜色，放 N 只鸭：每行、每列、每种颜色
 | 斗地主 | [linzhipeng/doudizhu](https://github.com/linzhipeng/doudizhu) | MIT | 牌编号、牌权、洗牌和发牌 |
 | 军棋 | [samuelyuan/online-junqi](https://github.com/samuelyuan/online-junqi) | MIT | 棋盘点位和战斗优先级 |
 | 象棋 | [lengyanyu258/xiangqi.js](https://github.com/lengyanyu258/xiangqi.js) | BSD-2-Clause | 完整象棋规则引擎，补 ESM 导出 |
+| 摸猫模拟器 | 原站 pet-the-cat.pages.dev（@zubububu） | 未声明 | 整站素材与玩法逻辑，原样解包后改写成街机厅模块 |
 
 固定 SHA、实际修改范围和许可全文分别在 `third_party/minesweeper/`、`third_party/doudizhu/`、`third_party/junqi/`、`third_party/xiangqi/` 的 `SOURCE.md` 与 `LICENSE`。同时评估了 `DavidNHill/JSMinesweeper`（偏求解器）、`chengxg/junqi-client-vue`（工兵扛旗变体与旧后端）、`lengyanyu258/xiangqiboardjs`（只有棋盘界面），以及没有明确许可证的 `laivv/doudizhu`、`flymyd/DouJS`；未复制这些候选的代码或素材。
 
