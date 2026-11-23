@@ -2,7 +2,9 @@
 
 /* ---- 嵌进街机厅舞台后的尺寸：不再按整页视口算 ----
    --petcat-h 是「留给画面的高度」，街机厅按自己的顶栏高度改写它（全屏时会改大）。 */
-:host{display:block;--petcat-h:calc(100svh - 400px)}
+:host{display:block;--petcat-h:calc(100svh - 400px);background:var(--cloth)}
 main{padding:0}
 #viewer{max-width:min(100%,calc(max(300px,var(--petcat-h)) * 1.62246));margin:0 auto}
+/* 画面按高度收窄时两侧留出来的空白，用垫子的布料色接上，别露出纸白 */
+main{min-height:100%;background:var(--cloth)}
 #stage{max-height:none;border-radius:14px}
