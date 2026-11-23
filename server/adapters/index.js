@@ -8,10 +8,13 @@ import minesweeper from './minesweeper-race.js';
 import junqi from './junqi.js';
 import doudizhu from './doudizhu.js';
 import aeroplane from './aeroplane.js';
+import wallshot from './wallshot.js';
 
 // 房间名就是适配器的键。新游戏：写一个适配器、在这里注册一行。
 // 适配器契约：seats / init(options) / canAct(state, seat) / apply(state, seat, action) / view(state, seat) / result(state)
 // 可选：cantAct(state, seat) —— canAct 为假时给客户端看的原因，默认「还没轮到你」。
 // 可选：seatCount(options) —— 按（还没白名单过的）创建选项决定真人座位数，默认 seats；teamGame（布尔值或 (state) => 布尔值）—— 组队 / 合作局，有人离开时本局作废而不是判对方赢；
 //       auto(state) —— 电脑代打：轮到没有真人的座位时由房间定时调用，返回 { ok: true, state }，轮到真人就返回 null。
-export const adapters = { gomoku, reversi, draughts, jungle, xiangqi, g2048, minesweeper, junqi, doudizhu, aeroplane };
+// 可选：timer(state, now) / tick(state, now) —— 带计时的游戏：timer 返回离下一次自动推进还有多少毫秒（没有就 null），到点房间调 tick，返回 { ok: true, state } 或 null。
+// apply 和 view 的第 4 / 第 3 个参数是服务端当前时间（毫秒），不用计时的适配器忽略即可；apply 返回 { ok: false, silent: true } 表示悄悄丢掉、不回 reject。
+export const adapters = { gomoku, reversi, draughts, jungle, xiangqi, g2048, minesweeper, junqi, doudizhu, aeroplane, wallshot };

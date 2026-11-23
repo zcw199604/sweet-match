@@ -62,6 +62,7 @@ const MODE_META = {
   breakout: { label: 'ARCADE 38', title: '打砖块', help: '左右滑动（或按 ← → / A D）移动挡板，点一下发球，球在墙之间弹、把砖打掉。砖上的数字是它要打几下，越硬的颜色越深；全部打光就过关。一共 12 关，越往后砖越硬、球越快。掉下来的道具接住能加宽挡板，或者把球分成三个。球掉出画面少一条命，三条命用完本局结束；每过一关多送一条命（最多三条），分数一直累加。榜单按一局的总分排名。' },
   bubble: { label: 'ARCADE 39', title: '泡泡龙', help: '拖动瞄准、松手发射，彩球碰到墙上或别的球就粘住；三个以上同色连在一起会一起爆开，挂在上面的球也会掉下来。打空了才会把顶上压下来一排新的球（打中就不压），压到底就输。右边的球是下一颗，点它可以和手里这颗交换。每关颜色和行数都更多，一共 24 关；开局按一组至少三个发色，保证每个颜色都清得掉。进度保存在这台设备上，榜单记录通过的最高关卡。' },
   duck: { label: 'ARCADE 40', title: '数独鸭', help: '棋盘切成好几块颜色，要放的鸭子数和边长一样多：每一行、每一列、每一种颜色都恰好放一只鸭，而且两只鸭不能挨着，上下左右和斜对角都不行。点一下格子打 ✕（标记这里肯定没有鸭），再点一下放鸭，第三下清空；长按一格直接放鸭或拿走（手机上会轻震一下，电脑上右键也行）；按住拖动能一路打 ✕，从 ✕ 上开始拖就是一路擦掉。下面四个按钮：撤销、清空、提示（先纠正放错的地方，否则推出下一步并说明理由，用了提示的题不计入榜单）、自动✕（打开时，已经放下的鸭看得到的格子自动点上小点）。左上角是色弱模式，每种颜色多一个形状符号；右上角的小喇叭可以静音；点标题换难度。简单 6×6、普通 8×8、困难 10×10，题目随机生成，保证只有一个答案、不用猜就能推出来；每个难度各存一份没做完的题，榜单按用时排名。' },
+  wallshot: { label: 'ARCADE 41', title: '隔墙狙击', help: '两个木头人轮流：一个躲在墙后，一个隔着墙打。每回合先给躲的人 5 秒藏好，然后狙击的人有 12 秒、3 发子弹。子弹能打穿墙，没打中也会在墙上留个洞，透过洞（和窗口）就能看见后面的人，所以墙上的洞越打越多、越来越难躲。打中身体扣 30 血、打中手脚扣 10 血，打中就立刻换边；爆头直接获胜；三枪都没中或者时间到也换边。躲的人能看到一道红光，知道准星在哪一列，但不知道是瞄头还是瞄脚：站着跑得快但目标大，蹲下能躲过站姿的爆头线，趴下最安全但爬得慢，换姿势有一点冷却。狙击的人：躲藏阶段整面墙都看得见，开枪阶段只剩瞄准镜里一小块；手机上按住左下的区域（或者墙上）拖动移动准星，点「开火」，电脑上鼠标瞄准、点一下开火。钢板打不穿，竹篱笆和旧仓库本来就有小洞和窗户。20 回合打完还没分出胜负就比剩下的血。可以对电脑（三档难度，顶栏切换），也可以在「联机对战」里开房间和朋友打，命中由服务器判定。' },
   klotski: { label: 'ARCADE 36', title: '华容道', help: '4×5 的棋盘上挤着曹操、四位将军和四个小卒，每次只能把一块棋滑进相邻的空格（按住棋块拖动，横竖都能走，斜着不行）。把 2×2 的曹操挪到棋盘最下方正中的出口就过关，一共 39 关，按最少步数从少到多排。每拖动一次算一步，松手才计数；步数不超过盘面上标的最少步数就是三星，多三成以内两星。卡住了点「撤销」退回上一步，或者重新开始。进程保存在这台设备上，榜单记录通过的最高关卡。' },
   goose: { label: 'ARCADE 05', title: '抓大鹅', help: '点碗里的物品把它放进下方 7 格暂存栏，凑齐 3 个同样的就会消除。经典模式清空整碗即通关；无尽模式限时 60 秒，每消一组加 2 秒，碗里快空了会自动补货。暂存栏塞满 7 个就失败；够不着底下的东西时点「晃一下」。' }
 };
@@ -99,7 +100,9 @@ const KIT_GAMES = {
   snake: { load: () => import('./snake.js'), mount: 'mountSnake', canvas: true, board: true },
   breakout: { load: () => import('./breakout.js'), mount: 'mountBreakout', canvas: true, board: true },
   bubble: { load: () => import('./bubble.js'), mount: 'mountBubble', canvas: true, board: true },
-  duck: { load: () => import('./duck.js'), mount: 'mountDuck', canvas: true, board: true, buttons: { level: '换难度' } }
+  duck: { load: () => import('./duck.js'), mount: 'mountDuck', canvas: true, board: true, buttons: { level: '换难度' } },
+  // 联机（ONLINE_GAMES 里有）的 kit 游戏：顶栏多一个「本地 / 联机对战」切换，联机时同一个 mount 收 online 参数。
+  wallshot: { load: () => import('./wallshot.js'), mount: 'mountWallshot', canvas: true, seat: '对电脑', buttons: { level: '电脑：普通' } }
 };
 const SOLO_ONLY = ['blast', 'goose', 'quest', 'park', 'pour', 'g2048', 'suika', 'tetris', 'skychef', 'sudoku', ...Object.keys(CLASSIC_GAMES), ...Object.keys(EMBED_GAMES), ...Object.keys(KIT_GAMES)];
 const PLAYER_HEX = ['#58d4de', '#ff9d5c'];
@@ -710,6 +713,40 @@ async function buildKitStage(stage, meta) {
   stage.querySelectorAll('[data-kit-action]').forEach((node) => node.addEventListener('click', () => kit?.[node.dataset.kitAction]?.()));
   stage.querySelector('#restart-game').addEventListener('click', () => kit?.restart());
   const live = () => token === kitToken && mode === gameMode;
+  if (ONLINE_GAMES[gameMode]) return kitWithOnline(stage, meta, { gameMode, config, wrap, hud, live });
+  return mountKitLocal(stage, wrap, hud, config, live);
+}
+// 能联机的 kit 游戏：和 2048 一样，本地画布和联机外壳二选一，切换时卸掉另一个。
+function kitWithOnline(stage, meta, { gameMode, config, wrap, hud, live }) {
+  const seatText = stage.querySelector('#seat-text'), restart = stage.querySelector('#restart-game');
+  const actions = [...stage.querySelectorAll('[data-kit-action]')];
+  let onlineHost = null, epoch = 0;
+  const enterLocal = () => {
+    epoch += 1;
+    kit?.destroy(); kit = null;
+    onlineHost?.remove(); onlineHost = null;
+    wrap.hidden = false; restart.hidden = false; actions.forEach((node) => { node.hidden = false; });
+    seatText.textContent = `${meta.label} · ${config.seat ?? '单人'}`;
+    const mine = epoch;
+    mountKitLocal(stage, wrap, hud, config, () => live() && mine === epoch);
+  };
+  const enterOnline = (autoJoin = null) => {
+    epoch += 1;
+    kit?.destroy(); kit = null;
+    wrap.hidden = true; restart.hidden = true; actions.forEach((node) => { node.hidden = true; });
+    seatText.textContent = `${meta.label} · 联机对战`;
+    onlineHost = document.createElement('div');
+    onlineHost.className = 'classic-wrap';
+    wrap.after(onlineHost);
+    kit = mountOnlineShell(onlineHost, { game: gameMode, autoJoin, onHud: (text) => { if (live()) hud.textContent = text; } });
+  };
+  const invite = takeInvite(gameMode), startOnline = Boolean(invite) || hasResume(sessionStore(), gameMode);
+  const tabs = createModeTabs((tab) => (tab === 'online' ? enterOnline() : enterLocal()), startOnline ? 'online' : 'local');
+  $('.nav-buttons').prepend(tabs.el);
+  if (startOnline) enterOnline(invite);
+  else enterLocal();
+}
+async function mountKitLocal(stage, wrap, hud, config, live) {
   const onButtons = (labels) => {
     if (!live()) return;
     for (const [key, label] of Object.entries(labels)) {

@@ -125,4 +125,9 @@
 .kit-wrap[data-kit=duck] .game-canvas{background:linear-gradient(180deg,#f7f8fc,#eceef7)}
 .kit-wrap[data-kit=duck]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .recent-card[data-game=duck]{--c:#e8bf4f}
+.wallshot .art{background:radial-gradient(125% 125% at 20% 8%,#bfe9ff,#7ccfff 58%,#4aa6dc)}
+.art-wallshot{position:absolute;left:50%;top:50%;width:170px;height:128px;margin:-64px 0 0 -85px;border-radius:14px;border:5px solid #fff;box-shadow:0 8px 18px #2a4a6a40}
+.kit-wrap[data-kit=wallshot]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
+.kit-wrap[data-kit=wallshot] .game-canvas{background:#f4f6fc}
+.recent-card[data-game=wallshot]{--c:#e5484d}
 @media(max-width:800px){.art-duck{width:116px;height:116px;margin:-58px 0 0 -58px}}

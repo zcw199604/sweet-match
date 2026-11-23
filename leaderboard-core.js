@@ -107,6 +107,7 @@ export const GAMES = [
   { id: 'breakout', title: '打砖块' },
   { id: 'bubble', title: '泡泡龙' },
   { id: 'duck', title: '数独鸭' },
+  { id: 'wallshot', title: '隔墙狙击' },
   { id: 'soulforge', title: '灵魂锻炉' },
   { id: 'achroma', title: 'Achroma' }
 ];

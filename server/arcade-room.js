@@ -25,6 +25,7 @@ export class ArcadeRoom extends CodeRoom {
     this.rematch = null;                  // 再来一局的提议 { seat, swap, agreed? }，对局结束后才会有
     this.forfeited = null;
     this.autoTimer = null;
+    this.tickTimer = null;
     this.seatBySession = new Map();
     this.online = new Set();
     this.onMessage('action', (client, action) => this.handleAction(client, action));
@@ -37,6 +38,7 @@ export class ArcadeRoom extends CodeRoom {
 
   onDispose() {
     clearTimeout(this.autoTimer);
+    clearTimeout(this.tickTimer);
     super.onDispose();
   }
 
@@ -72,6 +74,7 @@ export class ArcadeRoom extends CodeRoom {
     if (this.result().over) return;
     this.forfeited = seat;
     clearTimeout(this.autoTimer);
+    clearTimeout(this.tickTimer);
     this.lock();
   }
 
@@ -92,15 +95,37 @@ export class ArcadeRoom extends CodeRoom {
     if (!this.adapter.canAct(this.game, seat)) return client.send('reject', { message: this.adapter.cantAct?.(this.game, seat) ?? '还没轮到你' });
     let next;
     try {
-      next = this.adapter.apply(this.game, seat, action);
+      next = this.adapter.apply(this.game, seat, action, Date.now());
     } catch {
       next = { ok: false, message: '无法识别的操作' };   // 客户端传来的东西不可信，核心抛错也只当作被拒绝
     }
-    if (!next.ok) return client.send('reject', { message: next.message || '非法操作' });
+    if (!next.ok) return next.silent ? undefined : client.send('reject', { message: next.message || '非法操作' });
     this.game = next.state;
     this.version += 1;
     this.pushAll();
     this.scheduleAuto();
+    this.scheduleTick();
+  }
+
+  // 带计时的游戏（适配器有 timer / tick）：到点自动推进一步（比如躲藏时间到了、瞄准超时），推完再排下一次。
+  scheduleTick() {
+    clearTimeout(this.tickTimer);
+    this.tickTimer = null;
+    if (!this.adapter.timer || this.result().over) return;
+    const wait = this.adapter.timer(this.game, Date.now());
+    if (wait === null || wait === undefined) return;
+    this.tickTimer = setTimeout(() => {
+      this.tickTimer = null;
+      if (this.result().over) return;
+      let next = null;
+      try { next = this.adapter.tick(this.game, Date.now()); } catch { /* 出错就当这次没推进 */ }
+      if (next?.ok) {
+        this.game = next.state;
+        this.version += 1;
+        this.pushAll();
+      }
+      this.scheduleTick();
+    }, Math.max(0, wait) + 5);
   }
 
   // 电脑代打：轮到没有真人的座位时，隔一会儿由适配器的 auto 走一步，直到轮回真人（auto 返回 null）或对局结束。
@@ -164,6 +189,7 @@ export class ArcadeRoom extends CodeRoom {
     if (swap && this.seatCount === 2) for (const [id, seat] of this.seatBySession) this.seatBySession.set(id, 1 - seat);
     this.pushAll();
     this.scheduleAuto();
+    this.scheduleTick();
   }
 
   pushAll() {
@@ -178,7 +204,7 @@ export class ArcadeRoom extends CodeRoom {
     });
     client.send('state', {
       game: this.adapter.id, code: this.code, version: this.version, round: this.round, rematch: this.rematch, seat, seats,
-      view: this.adapter.view(this.game, seat), result: this.result()
+      view: this.adapter.view(this.game, seat, Date.now()), result: this.result()
     });
   }
 }

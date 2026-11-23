@@ -69,7 +69,7 @@ test('randomKey：24 位十六进制，每次不同', () => {
 });
 
 test('ONLINE_GAMES：每个游戏都有座位称呼和挂载入口；选项有默认值', () => {
-  assert.deepEqual(Object.keys(ONLINE_GAMES).sort(), ['aeroplane', 'doudizhu', 'draughts', 'g2048', 'gomoku', 'jungle', 'junqi', 'minesweeper', 'reversi', 'xiangqi']);
+  assert.deepEqual(Object.keys(ONLINE_GAMES).sort(), ['aeroplane', 'doudizhu', 'draughts', 'g2048', 'gomoku', 'jungle', 'junqi', 'minesweeper', 'reversi', 'wallshot', 'xiangqi']);
   assert.deepEqual(Object.keys(ONLINE_GAMES).sort(), Object.keys(adapters).sort(), '客户端登记表和服务端适配器要一一对应');
   for (const [id, cfg] of Object.entries(ONLINE_GAMES)) {
     assert.equal(cfg.seats.length, adapters[id].seats, `${id} 的座位称呼数要和服务端最大座位数一致`);

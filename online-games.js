@@ -42,6 +42,12 @@ export const ONLINE_GAMES = {
     ],
     leaveWarning: (view) => (view?.mode === 'coop' ? '现在离开，这一局就作废了。确定要离开吗？' : null),
     load: () => import('./minesweeper.js'), mount: 'mountMinesweeper'
+  },
+  wallshot: {
+    seats: ['玩家 1', '玩家 2'], noSwap: true,
+    lead: '隔墙狙击：两人轮流，一个躲在墙后、一个隔着墙打三枪。躲的人在哪、打没打中都由服务器判定，谁也看不到对方屏幕上的东西。先手随机。',
+    boxClass: 'canvas-wrap',
+    load: () => import('./wallshot.js'), mount: 'mountWallshot'
   }
 };
 export const isOnlineGame = (id) => Object.hasOwn(ONLINE_GAMES, id);
